@@ -52,9 +52,9 @@ export function useOutbox(accountId: string | undefined) {
   }, [accountId, refresh, syncNow]);
 
   const add = useCallback(
-    async (kind: string, payload: unknown) => {
+    async (kind: string, payload: unknown, expectedVersion: number | null = null) => {
       if (!accountId) throw new Error("Not signed in");
-      const item = await enqueue(accountId, kind, payload);
+      const item = await enqueue(accountId, kind, payload, expectedVersion);
       void syncNow();
       return item;
     },
