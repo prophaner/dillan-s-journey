@@ -6,3 +6,7 @@
 - [x] Spikes: outbox, timer across lock, keyboard, push detection, SW update hold (/dev/spikes)
 - [x] Phase 0 tables + RLS applied, isolation test passing
 - [ ] Real-phone validation (owner, iPhone + Android)
+
+# Phase 1
+- [x] S12 Onboarding built (6 questions + summary, saves through the outbox)
+- [ ] S12 end-to-end check signed in — blocked: needs the owner to sign in once in the preview

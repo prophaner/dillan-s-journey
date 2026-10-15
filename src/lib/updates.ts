@@ -16,8 +16,9 @@ export class MissingVersionError extends Error {
   }
 }
 
+/** Outbox kinds that change an existing row and therefore must carry a version. */
 export function isUpdateKind(kind: string) {
-  return kind.startsWith("update:");
+  return kind.startsWith("update:") || kind === "onboarding:complete"; // onboarding updates the profile
 }
 
 export function assertVersion(table: string, version: unknown): asserts version is number {

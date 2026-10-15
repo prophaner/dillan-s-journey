@@ -20,7 +20,12 @@ export function useOutbox(accountId: string | undefined) {
       if (!navigator.onLine) return { ok: false, reason: "offline" };
       try {
         const res = await send({
-          data: { idempotencyKey: item.idempotencyKey, kind: item.kind, payload: item.payload },
+          data: {
+            idempotencyKey: item.idempotencyKey,
+            kind: item.kind,
+            payload: item.payload,
+            expectedVersion: item.expectedVersion,
+          },
         });
         return interpretAck(res, item.idempotencyKey);
       } catch (e) {

@@ -126,9 +126,12 @@ export type Database = {
           capacity: number | null
           capacity_unit: string | null
           created_at: string
+          detail: string | null
           id: string
+          idempotency_key: string | null
           increments: number[]
           is_demo: boolean
+          label: string | null
           owner_id: string
           quantity: number
           source: Database["public"]["Enums"]["record_source"]
@@ -143,9 +146,12 @@ export type Database = {
           capacity?: number | null
           capacity_unit?: string | null
           created_at?: string
+          detail?: string | null
           id?: string
+          idempotency_key?: string | null
           increments?: number[]
           is_demo?: boolean
+          label?: string | null
           owner_id: string
           quantity?: number
           source?: Database["public"]["Enums"]["record_source"]
@@ -160,9 +166,12 @@ export type Database = {
           capacity?: number | null
           capacity_unit?: string | null
           created_at?: string
+          detail?: string | null
           id?: string
+          idempotency_key?: string | null
           increments?: number[]
           is_demo?: boolean
+          label?: string | null
           owner_id?: string
           quantity?: number
           source?: Database["public"]["Enums"]["record_source"]
@@ -308,6 +317,7 @@ export type Database = {
           created_at: string
           deadline: string | null
           id: string
+          idempotency_key: string | null
           is_demo: boolean
           metric: string | null
           owner_id: string
@@ -319,6 +329,7 @@ export type Database = {
           target_unit: string | null
           title: string
           updated_at: string
+          user_words: string | null
           version: number
         }
         Insert: {
@@ -327,6 +338,7 @@ export type Database = {
           created_at?: string
           deadline?: string | null
           id?: string
+          idempotency_key?: string | null
           is_demo?: boolean
           metric?: string | null
           owner_id: string
@@ -338,6 +350,7 @@ export type Database = {
           target_unit?: string | null
           title: string
           updated_at?: string
+          user_words?: string | null
           version?: number
         }
         Update: {
@@ -346,6 +359,7 @@ export type Database = {
           created_at?: string
           deadline?: string | null
           id?: string
+          idempotency_key?: string | null
           is_demo?: boolean
           metric?: string | null
           owner_id?: string
@@ -357,6 +371,7 @@ export type Database = {
           target_unit?: string | null
           title?: string
           updated_at?: string
+          user_words?: string | null
           version?: number
         }
         Relationships: [
@@ -443,7 +458,9 @@ export type Database = {
           context: string | null
           created_at: string
           id: string
+          idempotency_key: string | null
           location: string | null
+          origin: string | null
           owner_id: string
           review_date: string | null
           side: string | null
@@ -459,7 +476,9 @@ export type Database = {
           context?: string | null
           created_at?: string
           id?: string
+          idempotency_key?: string | null
           location?: string | null
+          origin?: string | null
           owner_id: string
           review_date?: string | null
           side?: string | null
@@ -475,7 +494,9 @@ export type Database = {
           context?: string | null
           created_at?: string
           id?: string
+          idempotency_key?: string | null
           location?: string | null
+          origin?: string | null
           owner_id?: string
           review_date?: string | null
           side?: string | null
@@ -562,10 +583,15 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
+          days_per_week: number | null
           display_name: string | null
           id: string
           length_unit: string
+          limitations_answer: string | null
+          onboarding_status: string
+          onboarding_step: number
           preferences: Json
+          session_minutes: number | null
           timezone: string
           updated_at: string
           version: number
@@ -573,10 +599,15 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          days_per_week?: number | null
           display_name?: string | null
           id: string
           length_unit?: string
+          limitations_answer?: string | null
+          onboarding_status?: string
+          onboarding_step?: number
           preferences?: Json
+          session_minutes?: number | null
           timezone?: string
           updated_at?: string
           version?: number
@@ -584,10 +615,15 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          days_per_week?: number | null
           display_name?: string | null
           id?: string
           length_unit?: string
+          limitations_answer?: string | null
+          onboarding_status?: string
+          onboarding_step?: number
           preferences?: Json
+          session_minutes?: number | null
           timezone?: string
           updated_at?: string
           version?: number
@@ -664,6 +700,7 @@ export type Database = {
           archived_at: string | null
           created_at: string
           id: string
+          idempotency_key: string | null
           is_demo: boolean
           locked_at: string | null
           owner_id: string
@@ -681,6 +718,7 @@ export type Database = {
           archived_at?: string | null
           created_at?: string
           id?: string
+          idempotency_key?: string | null
           is_demo?: boolean
           locked_at?: string | null
           owner_id: string
@@ -698,6 +736,7 @@ export type Database = {
           archived_at?: string | null
           created_at?: string
           id?: string
+          idempotency_key?: string | null
           is_demo?: boolean
           locked_at?: string | null
           owner_id?: string
