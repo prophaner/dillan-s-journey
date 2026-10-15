@@ -1,4 +1,5 @@
 import { openDB, type IDBPDatabase } from "idb";
+import { assertVersion, isUpdateKind } from "./updates";
 
 /**
  * Local-first outbox (brief §10.2, 05-web-platform §2).
@@ -73,6 +74,8 @@ export async function enqueue(
   payload: unknown,
   expectedVersion: number | null = null,
 ): Promise<OutboxItem> {
+  // Updates ("update:<table>") must carry the version the app read.
+  if (isUpdateKind(kind)) assertVersion(kind.slice(7), expectedVersion);
   const item: OutboxItem = {
     localId: crypto.randomUUID(),
     accountId,
