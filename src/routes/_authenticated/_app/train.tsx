@@ -65,7 +65,7 @@ function Train() {
           {active.snapshot.isDemo && <DemoLabel className="mt-1" />}
           <p className="mt-1 text-subhead text-text-2">
             Started {time(active.startedAt)} · {active.logs.length} of {activeSteps.reduce((n, s) => n + s.sets, 0)} sets logged
-            {activeSteps[active.stepIndex] ? ` · you were on ${activeSteps[active.stepIndex].name.toLowerCase()}` : ""}
+            {activeSteps[active.stepIndex] ? ` · you were on ${activeSteps[active.stepIndex]?.name.toLowerCase()}` : ""}
           </p>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <DButton variant="primary" icon={<Play className="size-5" aria-hidden />} onClick={() => navigate({ to: "/session/$id", params: { id: active.id } })}>

@@ -17,7 +17,7 @@ import { Banner, Card, ScreenState } from "@/components/dillan/surfaces";
 import { SpotMark } from "@/components/dillan/spot-mark";
 
 export const Route = createFileRoute("/_authenticated/session/$id")({
-  validateSearch: (s: Record<string, unknown>): { finish?: boolean } => (s.finish ? { finish: true } : {}),
+  validateSearch: (s: Record<string, unknown>): { finish?: boolean } => (s["finish"] ? { finish: true } : {}),
   head: () => pageHead("Session", "Your training session."),
   component: Session,
 });
@@ -272,7 +272,7 @@ function Session() {
           <div className="mt-4 flex flex-wrap gap-2"><Chip>Set {Math.min(setNo, step.sets)} of {step.sets}</Chip></div>
           <div className="mt-5"><SetPips total={step.sets} done={shownDone} current={Math.min(setNo, step.sets)} /></div>
           <div className="mt-6 flex flex-col gap-5">
-            <NumericInput label="Reps" value={d.inputs.reps} onChange={(v) => update((c) => ({ inputs: { ...c.inputs, reps: Math.round(v) } }))} last={d.last[step.exerciseId] ? d.last[step.exerciseId].reps : null} />
+            <NumericInput label="Reps" value={d.inputs.reps} onChange={(v) => update((c) => ({ inputs: { ...c.inputs, reps: Math.round(v) } }))} last={d.last[step.exerciseId]?.reps ?? null} />
             <div className="border-t border-line" />
             {d.inputs.load === null ? (
               <div className="flex items-center justify-between gap-3">
@@ -280,7 +280,7 @@ function Session() {
                 <DButton size="sm" onClick={() => update((c) => ({ inputs: { ...c.inputs, load: d.last[step.exerciseId]?.load ?? 0 } }))}>Add weight</DButton>
               </div>
             ) : (
-              <NumericInput label="Load" unit={step.unit} decimal step={2.5} value={d.inputs.load} onChange={(v) => update((c) => ({ inputs: { ...c.inputs, load: v } }))} last={d.last[step.exerciseId] ? d.last[step.exerciseId].load : null} />
+              <NumericInput label="Load" unit={step.unit} decimal step={2.5} value={d.inputs.load} onChange={(v) => update((c) => ({ inputs: { ...c.inputs, load: v } }))} last={d.last[step.exerciseId]?.load ?? null} />
             )}
           </div>
           <fieldset className="mt-6">

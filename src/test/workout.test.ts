@@ -15,7 +15,7 @@ describe("workout rules", () => {
   it("every step keeps the exercise id from the plan, in block order", () => {
     const s = stepsOf(snap);
     expect(s.map((x) => x.exerciseId)).toEqual(["a", "b"]);
-    expect(s[1].restSeconds).toBe(90);
+    expect(s[1]?.restSeconds).toBe(90);
   });
   it("a second Log tap within 1 second is ignored", () => {
     expect(isDoubleTap(1000, 1500)).toBe(true);
@@ -27,7 +27,7 @@ describe("workout rules", () => {
     expect(completionOf(steps, all, false)).toBe("complete");
     expect(completionOf(steps, all.slice(0, 2), false)).toBe("partial");
     expect(completionOf(steps, all, true)).toBe("stopped");
-    expect(stepResult(steps[0], all.slice(0, 2))).toEqual({ kind: "partial", done: 2, of: 3 });
+    expect(stepResult(steps[0]!, all.slice(0, 2))).toEqual({ kind: "partial", done: 2, of: 3 });
   });
   it("finishing a session is an update and must carry a version", () => {
     expect(isUpdateKind("update:sessions")).toBe(true);

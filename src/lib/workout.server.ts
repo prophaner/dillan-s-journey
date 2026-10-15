@@ -30,7 +30,7 @@ export async function storeSessionStart(sb: SB, userId: string, key: string, raw
 }
 
 export async function storeSetLog(sb: SB, userId: string, key: string, raw: unknown) {
-  const p = raw as Record<string, unknown>;
+  const p = raw as { sessionId?: unknown; exerciseId?: unknown; ref?: unknown; setNo?: unknown; unit?: unknown; reps?: unknown; load?: unknown; rir?: unknown; loggedAt?: unknown; isDemo?: unknown };
   if (!uuid(p?.sessionId) || !uuid(p.exerciseId) || typeof p.ref !== "string") throw new Error("400 bad set");
   const setNo = Number(p.setNo);
   if (!Number.isInteger(setNo) || setNo < 1 || setNo > 50) throw new Error("400 bad set number");
