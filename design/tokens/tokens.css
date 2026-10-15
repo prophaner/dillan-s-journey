@@ -1,0 +1,115 @@
+/* =========================================================================
+   DILLAN — Design tokens v2.0 (web-first)
+   Three web fonts, self-hosted in production (woff2, font-display: swap):
+     Satoshi            UI, records, people        (Fontshare, free)
+     Newsreader         Dillan's voice             (Google Fonts, OFL)
+     M PLUS Rounded 1c  numerals you lift & count  (Google Fonts, OFL, latin subset)
+   ========================================================================= */
+
+:root {
+  /* ---- Type families ---- */
+  --font-ui:     "Satoshi", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-voice:  "Newsreader", Georgia, "Times New Roman", serif;          /* Dillan speaks in serif */
+  --font-num:    "M PLUS Rounded 1c", "Satoshi", system-ui, sans-serif;    /* tabular-nums always */
+
+  /* ---- Palette: materials of a home gym ---- */
+  --chalk:        #F6F3EC;  /* app background — gym chalk */
+  --paper:        #FFFDF8;  /* cards */
+  --oak:          #EEE7DA;  /* sunken surfaces, plyo-box oak */
+  --line:         #E3DCCD;  /* hairlines */
+  --iron:         #1A1A18;  /* primary text, primary dark surfaces */
+  --graphite:     #57544D;  /* secondary text (6.8:1 on chalk) */
+  --smoke:        #6F6B63;  /* tertiary text (4.8:1 on chalk) */
+
+  --spot:         #FF5A1F;  /* THE accent. Primary action + the brand dot. Iron text on it (5.6:1). Never white text (3.1:1) */
+  --spot-press:   #E84A12;
+  --spot-ink:     #B93A0B;  /* orange used as text on chalk (5.2:1) */
+  --spot-tint:    #FFE7DC;
+
+  --steady:       #276B4A;  /* done / applied (5.0:1 on its tint) */
+  --steady-tint:  #DDEFE4;
+  --hold:         #855610;  /* needs attention — never used for "missed" (5.3:1 on its tint) */
+  --hold-tint:    #FBEED3;
+  --unknown:      #8F8A80;  /* unknown / not yet measured — dashed borders only, never text (3.1:1) */
+
+  /* ---- Semantic aliases ---- */
+  --bg:           var(--chalk);
+  --surface:      var(--paper);
+  --surface-2:    var(--oak);
+  --text:         var(--iron);
+  --text-2:       var(--graphite);
+  --text-3:       var(--smoke);
+  --accent:       var(--spot);
+  --on-accent:    var(--iron);
+
+  /* ---- Type scale (rem-based; root stays 16px so browser zoom and text-size settings work) ---- */
+  --t-voice-xl: 1.875rem; /* 30px Dillan's daily sentence, Newsreader 400, lh 1.2 */
+  --t-voice:    1.1875rem;/* 19px Dillan body, lh 1.38 */
+  --t-title1:   1.75rem;  /* 28px Satoshi 700 */
+  --t-title2:   1.375rem; /* 22px Satoshi 700 */
+  --t-title3:   1.25rem;  /* 20px Satoshi 700 */
+  --t-headline: 1.0625rem;/* 17px Satoshi 700 */
+  --t-body:     1.0625rem;/* 17px */
+  --t-callout:  1rem;     /* 16px — minimum for <input> on iOS Safari to prevent focus zoom */
+  --t-subhead:  0.9375rem;/* 15px */
+  --t-footnote: 0.8125rem;/* 13px */
+  --t-caption:  0.75rem;  /* 12px floor */
+  --t-num-xl:   5.5rem;   /* 88px rest timer */
+  --t-num-l:    4rem;     /* 64px set reps / load */
+  --t-num-m:    2.75rem;  /* 44px progress headline */
+
+  /* ---- Space: 4pt grid ---- */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px;
+  --s6: 24px; --s8: 32px; --s10: 40px; --s14: 56px;
+  --margin: 20px;          /* screen side margin (16px below 360px wide) */
+  --nav-h: 64px;           /* bottom nav */
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+
+  /* ---- Shape ---- */
+  --r-chip: 999px;
+  --r-btn: 18px;
+  --r-card: 24px;
+  --r-sheet: 34px;
+
+  /* ---- Elevation: hairlines first, shadows only for floating layers ---- */
+  --shadow-float: 0 1px 0 rgba(26,26,24,.04), 0 12px 32px -8px rgba(26,26,24,.18);
+
+  /* ---- Motion ---- */
+  --ease-settle: cubic-bezier(.2,.9,.25,1);  /* "settle": arrive softly, come to rest */
+  --dur-quick: 160ms;
+  --dur-base: 280ms;
+  --dur-calm: 520ms;
+}
+
+/* ---- Night Gym (dark) ---- */
+[data-theme="dark"] {
+  --bg:        #121210;
+  --surface:   #1D1C1A;
+  --surface-2: #282724;
+  --line:      #33312C;
+  --text:      #F3EFE6;
+  --text-2:    #B3AEA3;
+  --text-3:    #8E897F;
+  --spot:      #FF6A30;
+  --spot-ink:  #FF8A5C;
+  --spot-tint: #3A2117;
+  --steady:    #62C190;
+  --steady-tint:#183326;
+  --hold:      #E6B04F;
+  --hold-tint: #352915;
+  --unknown:   #7D786F;
+  --accent:    var(--spot);
+}
+
+/* ---- Responsive breakpoints (min-width) ----
+   sm  360px  phones (validate 360–430)
+   md  768px  tablets: two-column cards, side sheets instead of bottom sheets
+   lg  1024px bottom nav becomes left sidebar; content max 1120px; desktop editors
+   Avoid any horizontal overflow at 320px. */
+@media (max-width: 359px) { :root { --margin: 16px; } }
+
+/* ---- User preferences ---- */
+@media (prefers-reduced-motion: reduce) { :root { --dur-quick: 0ms; --dur-base: 150ms; --dur-calm: 150ms; } }
+/* Theme: the app sets data-theme="light|dark" on <html> from the user's setting,
+   defaulting to prefers-color-scheme. Dark values live under [data-theme="dark"] above. */

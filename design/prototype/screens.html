@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dillan — Screen reference (web, v2)</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="app.css">
+<style>
+  body { padding: 60px; }
+  .wall { display: flex; flex-wrap: wrap; gap: 70px 60px; }
+  .frame { display: flex; flex-direction: column; gap: 22px; align-items: center; padding: 14px; }
+  .cap { font: 600 15px var(--font-ui); color: #3A3934; text-align: center; max-width: 393px; }
+  .cap span { display: block; font-weight: 400; color: #6F6B63; font-size: 13px; margin-top: 3px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="mark" viewBox="0 0 64 64">
+    <path d="M13 31a19 19 0 0 0 38 0" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="32" cy="27" r="7.5" fill="#FF5A1F"/>
+  </symbol>
+  <symbol id="markline" viewBox="0 0 64 64">
+    <path d="M13 31a19 19 0 0 0 38 0" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="32" cy="25" r="7" fill="none" stroke="currentColor" stroke-width="5"/>
+  </symbol>
+</svg>
+
+<div class="wall">
+
+<!-- ===================== 01 TODAY ===================== -->
+<div class="frame"><div class="phone" id="s01-today">
+  <div class="status" data-status></div>
+  <div class="urlbar"><i data-lucide="lock"></i>dillan.app</div>
+  <div class="scroll">
+    <div class="topline">
+      <div class="eyebrow">THU, OCT 15 · BLOCK 2, WEEK 3</div>
+      <div class="row" style="gap:10px"><span class="sync ok"><span class="dotp"></span>Synced</span><div class="avatar">AM</div></div>
+    </div>
+    <div class="voice" style="font-size:31px;line-height:1.16;letter-spacing:-.015em">Today is about your pull.</div>
+    <div class="voice muted" style="font-size:18px;line-height:1.42;margin-top:10px">Chin-up negatives and rows move you toward six strict chin-ups. Core work is optional.</div>
+    <div class="row small faint" style="margin-top:10px;gap:6px"><svg style="width:18px;height:18px;color:var(--text)"><use href="#mark"/></svg>Dillan · based on your plan v13</div>
+
+    <div class="course" style="margin:18px 0 16px">
+      <div><div class="d">M</div><div class="pip done"></div></div>
+      <div><div class="d">T</div><div class="pip rest"></div></div>
+      <div><div class="d">W</div><div class="pip short"></div></div>
+      <div><div class="d today">T</div><div class="pip today"></div></div>
+      <div><div class="d">F</div><div class="pip rest"></div></div>
+      <div><div class="d">S</div><div class="pip plan"></div></div>
+      <div><div class="d">S</div><div class="pip rest"></div></div>
+    </div>
+
+    <div class="card" style="padding:16px">
+      <div class="between" style="margin-bottom:12px"><div style="font-size:20px;font-weight:700">Pull + Core</div><div class="small faint">est. times</div></div>
+      <div class="seg">
+        <div class="on"><b>45</b>Full</div>
+        <div><b>25</b>Short</div>
+        <div><b>15</b>Priority only</div>
+      </div>
+      <div class="blocks">
+        <div class="blk"><span class="b-dot"></span><div><div class="b-name">Warm-up</div><div class="b-sub">Band pull-aparts, scap hangs</div></div><div class="b-time">6 min</div></div>
+        <div class="blk"><span class="b-dot pri"></span><div><div class="b-name">Priority <span class="tag spot" style="margin-left:4px;height:20px;font-size:11px">Main goal</span></div><div class="b-sub">Chin-up negatives · DB rows</div></div><div class="b-time">18 min</div></div>
+        <div class="blk"><span class="b-dot optional"></span><div><div class="b-name">Accessories</div><div class="b-sub">Face pulls · Hammer curls</div></div><div class="b-time">13 min</div></div>
+      </div>
+    </div>
+  </div>
+  <div style="position:absolute;left:20px;right:20px;bottom:92px;z-index:5">
+    <div class="btn primary"><i data-lucide="play"></i>Start session</div>
+  </div>
+  <div class="tabbar" data-tabbar="0"></div>
+  <div class="home-ind"></div>
+</div><div class="cap">01 · Today (in a browser tab)<span>Answers "What should I do today, and why?" in one sentence. Sync state is always visible. Works without installing anything.</span></div></div>
+
+<!-- ===================== 02 TODAY — SHORT ===================== -->
+<div class="frame"><div class="phone" id="s02-today-short">
+  <div class="status" data-status></div>
+  <div class="scroll">
+    <div class="topline">
+      <div class="eyebrow">THU, OCT 15 · BLOCK 2, WEEK 3</div>
+      <div class="row" style="gap:10px"><span class="sync ok"><span class="dotp"></span>Synced</span><div class="avatar">AM</div></div>
+    </div>
+    <div class="voice" style="font-size:31px;line-height:1.16;letter-spacing:-.015em">Short on time? We keep what matters.</div>
+
+    <div class="card" style="padding:16px;margin-top:18px">
+      <div class="between" style="margin-bottom:12px"><div style="font-size:20px;font-weight:700">Pull + Core</div><div class="small faint">est. times</div></div>
+      <div class="seg">
+        <div><b>45</b>Full</div>
+        <div class="on"><b>25</b>Short</div>
+        <div><b>15</b>Priority only</div>
+      </div>
+      <div class="blocks">
+        <div class="blk"><span class="b-dot"></span><div><div class="b-name">Warm-up</div><div class="b-sub">Scap hangs only</div></div><div class="b-time">4 min</div></div>
+        <div class="blk"><span class="b-dot pri"></span><div><div class="b-name">Priority <span class="tag spot" style="margin-left:4px;height:20px;font-size:11px">Kept whole</span></div><div class="b-sub">Chin-up negatives · DB rows</div></div><div class="b-time">18 min</div></div>
+        <div class="blk omitted"><span class="b-dot optional"></span><div><div class="b-name">Accessories</div><div class="b-sub">Face pulls · Hammer curls</div></div><div class="b-time">—</div></div>
+        <div class="blk omitted"><span class="b-dot optional"></span><div><div class="b-name">Core</div><div class="b-sub">Dead bug · Side plank</div></div><div class="b-time">—</div></div>
+      </div>
+      <div class="sunken small muted" style="margin-top:8px;line-height:1.45"><b style="color:var(--text)">Why this trade:</b> skipped blocks are "maintain" work. Nothing gets pushed into tomorrow.</div>
+    </div>
+  </div>
+  <div style="position:absolute;left:20px;right:20px;bottom:92px;z-index:5">
+    <div class="btn primary"><i data-lucide="play"></i>Start 25-min session</div>
+  </div>
+  <div class="tabbar" data-tabbar="0"></div>
+  <div class="home-ind"></div>
+</div><div class="cap">02 · Today, shortened<span>Switching time never deletes the plan. Omitted blocks stay visible with a plain reason (FR-06, AT-04).</span></div></div>
+
+<!-- ===================== 03 CHECK-IN ===================== -->
+<div class="frame"><div class="phone" id="s03-checkin">
+  <div class="status" data-status></div>
+  <div class="scroll" style="opacity:.9">
+    <div class="topline"><div class="eyebrow">THURSDAY, OCT 15</div><div class="avatar">AM</div></div>
+    <div class="voice" style="font-size:31px;line-height:1.16">Today is about your pull.</div>
+  </div>
+  <div class="dim"></div>
+  <div class="sheet">
+    <div class="grabber"></div>
+    <div class="between"><h2>How are you arriving?</h2><div class="textbtn">Skip</div></div>
+    <div class="muted" style="font-size:15px;margin:6px 0 18px">Optional. It only shapes today.</div>
+    <div class="opt"><div class="o-ic"><i data-lucide="battery-full"></i></div><div><div class="o-t">Ready</div><div class="o-s">Run the full plan</div></div><div class="radio"></div></div>
+    <div class="opt on"><div class="o-ic"><i data-lucide="battery-medium"></i></div><div><div class="o-t">Normal</div><div class="o-s">Run the plan as written</div></div><div class="radio on"></div></div>
+    <div class="opt"><div class="o-ic"><i data-lucide="battery-low"></i></div><div><div class="o-t">Running low</div><div class="o-s">Dillan suggests a lighter version</div></div><div class="radio"></div></div>
+    <div class="sectionlabel" style="margin-top:20px">Anything else? <span style="text-transform:none;font-weight:500">(tap any)</span></div>
+    <div class="chips">
+      <div class="chip">Slept badly</div><div class="chip on">Short on time</div><div class="chip">Sore</div><div class="chip">Stressed</div><div class="chip">Something hurts</div>
+    </div>
+    <div class="btn primary" style="margin-top:22px">Continue</div>
+    <div class="small faint" style="text-align:center;margin-top:12px">Saved to today's log only. Never turned into a diagnosis.</div>
+  </div>
+  <div class="home-ind"></div>
+</div><div class="cap">03 · Check-in sheet<span>One tap, skippable, and it explains its purpose. No 10-question surveys (FR-11).</span></div></div>
+
+<!-- ===================== 04 SET LOGGING ===================== -->
+<div class="frame"><div class="phone compact" id="s04-set">
+  <div class="status" data-status></div>
+  <div class="scroll">
+    <div class="runbar">
+      <div class="endbtn">End</div>
+      <div class="mid">Pull + Core<b>14:52</b></div>
+      <div class="iconbtn"><i data-lucide="ellipsis"></i></div>
+    </div>
+    <div class="rail"><span class="done"></span><span class="done"></span><span class="now"></span><span></span><span></span></div>
+    <div class="between" style="margin-bottom:10px"><div class="row" style="gap:8px"><span class="tag spot">Priority</span><span class="small faint" style="font-weight:600">Exercise 2 of 4</span></div><span class="sync local"><span class="dotp"></span>Saved on this device</span></div>
+    <div class="exname">One-arm dumbbell row</div>
+    <div class="muted" style="font-size:16px;margin-top:8px;line-height:1.4">Knee and hand on the bench. Pull your elbow toward your hip.</div>
+    <div class="chips" style="margin-top:14px">
+      <div class="chip sm"><i data-lucide="circle-help"></i>Why this?</div>
+      <div class="chip sm"><i data-lucide="repeat-2"></i>Swap</div>
+      <div class="chip sm"><i data-lucide="play-circle"></i>How-to</div>
+    </div>
+
+    <div class="setpips">
+      <div class="setpip done">✓</div><div class="setpip now">2</div><div class="setpip">3</div>
+    </div>
+    <div class="seg" style="grid-template-columns:1fr 1fr;margin:12px 0 4px">
+      <div style="height:40px;flex-direction:row;gap:6px;font-size:15px" ><span class="tag steady" style="height:20px;padding:0 6px">✓</span>Left</div>
+      <div class="on" style="height:40px;font-size:15px">Right</div>
+    </div>
+
+    <div class="measure">
+      <div class="stepper"><i data-lucide="minus"></i></div>
+      <div class="mval"><div class="v">10</div><div class="l">REPS · <b>last time 10</b></div></div>
+      <div class="stepper"><i data-lucide="plus"></i></div>
+    </div>
+    <div class="measure">
+      <div class="stepper"><i data-lucide="minus"></i></div>
+      <div class="mval"><div class="v">35<span class="u">lb</span></div><div class="l">PER DUMBBELL · <b>last time 35</b></div></div>
+      <div class="stepper"><i data-lucide="plus"></i></div>
+    </div>
+    <div class="between" style="margin:6px 0 8px"><div class="small" style="font-weight:600">Reps left in the tank <span class="faint" style="font-weight:500">· optional</span></div><i data-lucide="info" style="width:16px;color:var(--text-3)"></i></div>
+    <div class="rir"><div>0</div><div>1</div><div class="on">2</div><div>3</div><div>4+</div></div>
+  </div>
+  <div style="position:absolute;left:20px;right:20px;bottom:40px">
+    <div class="btn primary" style="height:64px;font-size:19px"><i data-lucide="check"></i>Log set</div>
+    <div class="offlink"><i data-lucide="hand"></i>Something feels off</div>
+  </div>
+  <div class="home-ind"></div>
+</div><div class="cap">04 · Set logging<span>Prefilled from last time, so a typical set is one tap. Tap a number to type it (see 17). "Something feels off" is always one tap away (FR-07).</span></div></div>
+
+<!-- ===================== 05 REST ===================== -->
+<div class="frame"><div class="phone" id="s05-rest" data-theme="dark">
+  <div class="status" data-status></div>
+  <div class="scroll">
+    <div class="runbar">
+      <div class="endbtn">End</div>
+      <div class="mid">Pull + Core<b>16:08</b></div>
+      <div class="iconbtn"><i data-lucide="ellipsis"></i></div>
+    </div>
+    <div class="rail"><span class="done"></span><span class="done"></span><span class="now"></span><span></span><span></span></div>
+
+    <div style="text-align:center;margin-top:34px">
+      <div class="small" style="font-weight:700;letter-spacing:.12em;color:var(--text-3)">REST</div>
+      <svg viewBox="0 0 300 200" style="width:280px;display:block;margin:6px auto 0">
+        <!-- cradle track -->
+        <path d="M40 80a110 110 0 0 0 220 0" fill="none" stroke="#33312C" stroke-width="16" stroke-linecap="round"/>
+        <!-- remaining time fills the cradle, draining toward the right -->
+        <path d="M40 80a110 110 0 0 0 220 0" fill="none" stroke="#F3EFE6" stroke-width="16" stroke-linecap="round" pathLength="100" stroke-dasharray="62 100"/>
+        <circle cx="150" cy="70" r="22" fill="#FF6A30"/>
+      </svg>
+      <div class="num" style="font-size:88px;font-weight:700;margin-top:-4px;line-height:1">0:56</div>
+      <div class="muted" style="font-size:15px;margin-top:6px">of 1:30 · your rest, your call</div>
+    </div>
+    <div class="btnrow" style="margin-top:28px">
+      <div class="btn secondary sm">−15s</div><div class="btn secondary sm">+15s</div><div class="btn secondary sm">Skip</div>
+    </div>
+    <div class="card" style="margin-top:22px;padding:14px 16px">
+      <div class="small faint" style="font-weight:600;letter-spacing:.04em">UP NEXT</div>
+      <div class="between" style="margin-top:4px"><div style="font-size:17px;font-weight:600">Set 3 · Left then right</div><div class="num" style="font-size:17px;font-weight:700">10 × 35 lb</div></div>
+    </div>
+    <div class="banner" style="margin-top:12px"><i data-lucide="lock"></i>Keeps correct time if your screen locks. No sound while the screen is off.</div>
+  </div>
+  <div class="home-ind"></div>
+</div><div class="cap">05 · Rest timer (Night Gym)<span>The brand mark becomes the timer: the cradle drains, the dot waits. Time comes from saved timestamps, so a locked screen can't break it (FR-07, AT-31).</span></div></div>
+
+<!-- ===================== 06 SUPERSET ===================== -->
+<div class="frame"><div class="phone" id="s06-superset">
+  <div class="status" data-status></div>
+  <div class="scroll">
+    <div class="runbar">
+      <div class="endbtn">End</div>
+      <div class="mid">Pull + Core<b>24:31</b></div>
+      <div class="iconbtn"><i data-lucide="ellipsis"></i></div>
+    </div>
+    <div class="rail"><span class="done"></span><span class="done"></span><span class="done"></span><span class="now"></span><span></span></div>
+    <div class="row" style="gap:8px;margin-bottom:10px"><span class="tag neutral">Superset</span><span class="small faint" style="font-weight:600">Round 2 of 3</span></div>
+    <div class="exname" style="font-size:26px">Face pulls + Hammer curls</div>
+    <div class="muted small" style="margin-top:6px">Go A → B · rest 20s between · 75s after the round</div>
+
+    <div class="ss" style="margin-top:20px">
+      <div class="ssitem card" data-k="A" style="padding:14px 16px">
+        <div class="between"><div><div class="small faint" style="font-weight:700">A · FACE PULL</div><div style="font-size:17px;font-weight:600;margin-top:2px">Band, medium</div></div><span class="tag steady"><i data-lucide="check"></i>15 reps</span></div>
+      </div>
+      <div class="ssitem now card" data-k="B" style="padding:16px;margin-top:10px;border:2px solid var(--text)">
+        <div class="small faint" style="font-weight:700">B · HAMMER CURL · NOW</div>
+        <div class="measure" style="padding:12px 0 6px;grid-template-columns:48px 1fr 48px">
+          <div class="stepper" style="width:48px;height:48px"><i data-lucide="minus"></i></div>
+          <div class="mval"><div class="v" style="font-size:52px">12</div><div class="l">REPS · <b>last 12</b></div></div>
+          <div class="stepper" style="width:48px;height:48px"><i data-lucide="plus"></i></div>
+        </div>
+        <div class="measure" style="padding:6px 0 0;grid-template-columns:48px 1fr 48px">
+          <div class="stepper" style="width:48px;height:48px"><i data-lucide="minus"></i></div>
+          <div class="mval"><div class="v" style="font-size:52px">20<span class="u">lb</span></div><div class="l">PER DUMBBELL</div></div>
+          <div class="stepper" style="width:48px;height:48px"><i data-lucide="plus"></i></div>
+        </div>
+      </div>
+    </div>
+    <div class="legend" style="margin-top:14px;justify-content:center"><span>Round 1 <b style="color:var(--steady)">✓</b></span><span style="color:var(--text);font-weight:700">Round 2 ·</span><span>Round 3</span></div>
+  </div>
+  <div style="position:absolute;left:20px;right:20px;bottom:40px">
+    <div class="btn primary" style="height:64px;font-size:19px"><i data-lucide="check"></i>Log B, finish round</div>
+  </div>
+  <div class="home-ind"></div>
+</div><div class="cap">06 · Superset<span>Grouping is structural: one rail, independent results per exercise, separate transition and round rest (FR-05, AT-02).</span></div></div>
+
+<!-- ===================== 07 SESSION COMPLETE ===================== -->
+<div class="frame"><div class="phone" id="s07-done">
+  <div class="status" data-status></div>
+  <div class="scroll">
+    <div style="text-align:center;margin-top:16px">
+      <svg style="width:64px;height:64px;color:var(--text)"><use href="#mark"/></svg>
+      <div class="voice" style="font-size:31px;line-height:1.15;margin-top:8px">You kept what mattered.</div>
+      <div class="voice muted" style="font-size:17px;line-height:1.45;margin-top:10px;padding:0 6px">You chose the short version and finished every priority set. That's the plan bending, not breaking.</div>
+    </div>
+    <div class="card" style="margin-top:22px;padding:6px 16px">
+      <div class="between" style="padding:12px 0"><div class="row" style="gap:10px"><span class="tag steady"><i data-lucide="check"></i>Done</span><span style="font-weight:600">Warm-up</span></div><span class="muted small">4 min</span></div>
+      <div class="hair" style="margin:0"></div>
+      <div class="between" style="padding:12px 0"><div class="row" style="gap:10px"><span class="tag steady"><i data-lucide="check"></i>Done</span><span style="font-weight:600">Priority</span></div><span class="muted small num" style="font-weight:700">7 of 7 sets</span></div>
+      <div class="hair" style="margin:0"></div>
+      <div class="between" style="padding:12px 0"><div class="row" style="gap:10px"><span class="tag neutral">Skipped</span><span style="font-weight:600;color:var(--text-2)">Accessories, Core</span></div><span class="faint small">by choice · time</span></div>
+    </div>
+    <div class="row" style="margin-top:12px;gap:10px">
+      <div class="sunken" style="flex:1"><div class="small faint" style="font-weight:600">TIME</div><div class="num" style="font-size:26px;font-weight:700">27<span style="font-size:15px;font-family:var(--font-ui);color:var(--text-2)"> min</span></div></div>
+      <div class="sunken" style="flex:1"><div class="small faint" style="font-weight:600">SETS LOGGED</div><div class="num" style="font-size:26px;font-weight:700">9</div><div class="small faint" style="margin-top:2px">Entered by you</div></div>
+    </div>
+    <div class="sectionlabel">How did it feel?</div>
+    <div class="chips"><div class="chip">Easy</div><div class="chip on">Solid</div><div class="chip">Hard</div><div class="chip">Too much</div><div class="chip ghost"><i data-lucide="pencil"></i>Add note</div></div>
+  </div>
+  <div style="position:absolute;left:20px;right:20px;bottom:40px">
+    <div class="btn primary">Save session</div>
+    <div class="row small" style="justify-content:center;margin-top:10px"><span class="sync ok"><span class="dotp"></span>9 sets synced · nothing waiting</span></div>
+  </div>
+  <div class="home-ind"></div>
+</div><div class="cap">07 · Session complete<span>Planned vs. actual, told honestly and kindly. Restraint gets praised. All data is user-entered and labeled so (FR-07, FR-15, AT-20).</span></div></div>
+
+<!-- ===================== 08 PROGRESS ===================== -->
+<div class="frame"><div class="phone" id="s08-progress">
+  <div class="status" data-status></div>
+  <div class="scroll">
+    <div class="largetitle">Progress</div>
+    <div class="dillan" style="margin-bottom:18px"><svg class="dmark" style="color:var(--text)"><use href="#mark"/></svg><div><div class="dsay s">You're on course. Chin-ups are up two reps in six weeks, and you haven't missed a planned week.</div></div></div>
+
+    <div class="card">
+      <div class="between"><span class="tag spot"><i data-lucide="arrow-up-right"></i>Improve</span><span class="small faint">Goal 1 of 3</span></div>
+      <div style="font-size:20px;font-weight:700;margin-top:10px">Six strict chin-ups</div>
+      <div class="row" style="margin-top:12px;gap:18px;align-items:flex-end">
+        <div><div class="bignum">5</div><div class="small faint" style="margin-top:4px">Oct 13</div></div>
+        <div class="small muted" style="padding-bottom:20px">from <b class="num" style="font-size:16px;color:var(--text)">3</b> on Sep 2 · target <b class="num" style="font-size:16px;color:var(--text)">6</b></div>
+      </div>
+      <svg viewBox="0 0 320 90" style="width:100%;margin-top:10px">
+        <line x1="0" y1="14" x2="320" y2="14" stroke="var(--spot)" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <text x="320" y="10" text-anchor="end" font-size="11" fill="var(--spot-ink)" font-weight="600" font-family="Inter">target 6</text>
+        <polyline points="10,74 70,60 120,60" fill="none" stroke="var(--text)" stroke-width="2.5" stroke-linecap="round"/>
+        <polyline points="120,60 200,60" fill="none" stroke="var(--text-3)" stroke-width="2" stroke-dasharray="2 5" stroke-linecap="round"/>
+        <polyline points="200,46 260,32 300,32" fill="none" stroke="var(--text)" stroke-width="2.5" stroke-linecap="round"/>
+        <g fill="var(--text)"><circle cx="10" cy="74" r="5"/><circle cx="70" cy="60" r="5"/><circle cx="120" cy="60" r="5"/><circle cx="200" cy="46" r="5"/><circle cx="260" cy="32" r="5"/><circle cx="300" cy="32" r="5"/></g>
+        <text x="160" y="80" text-anchor="middle" font-size="11" fill="var(--text-3)" font-family="Inter">no test · travel</text>
+      </svg>
+    </div>
+
+    <div class="card">
+      <div class="between"><span class="tag neutral"><i data-lucide="repeat"></i>Habit</span><span class="small faint">3 sessions a week</span></div>
+      <div style="font-size:20px;font-weight:700;margin-top:10px">Steady weeks <span class="num muted" style="font-size:18px">8 of 8</span></div>
+      <div class="weave">
+        <div class="col"><i class="wd"></i><i class="wd"></i><i class="wd"></i><span class="wk">8/24</span></div>
+        <div class="col"><i class="wd"></i><i class="ws"></i><i class="wd"></i><span class="wk">8/31</span></div>
+        <div class="col"><i class="wd"></i><i class="wd"></i><i class="wr"></i><span class="wk">9/7</span></div>
+        <div class="col"><i class="wd"></i><i class="wd"></i><i class="wd"></i><span class="wk">9/14</span></div>
+        <div class="col"><i class="wr"></i><i class="wr"></i><i class="wd"></i><span class="wk">9/21</span></div>
+        <div class="col"><i class="wd"></i><i class="wd"></i><i class="wd"></i><span class="wk">9/28</span></div>
+        <div class="col"><i class="wd"></i><i class="ws"></i><i class="wd"></i><span class="wk">10/5</span></div>
+        <div class="col"><i class="wd"></i><i class="ws"></i><i class="wp"></i><span class="wk">now</span></div>
+      </div>
+      <div class="legend"><span><i class="lp wd"></i>Done</span><span><i class="lp ws" style="width:12px;height:12px"></i>Shortened</span><span><i class="lp wr" style="width:12px;height:12px"></i>Rested on purpose</span></div>
+    </div>
+  </div>
+  <div class="tabbar" data-tabbar="2"></div>
+  <div class="home-ind"></div>
+</div><div class="cap">08 · Progress<span>No streaks. A shortened session or a planned rest counts as a steady week. Gaps in data stay visible (FR-10, metrics §13).</span></div></div>
+
+<!-- ===================== 09 DILLAN CHAT ===================== -->
+<div class="frame"><div class="phone" id="s09-chat">
+  <div class="status" data-status></div>
+  <div class="scroll">
+    <div class="navbar"><div class="row" style="gap:10px"><svg style="width:30px;height:30px;color:var(--text)"><use href="#mark"/></svg><div><div style="font-weight:700;font-size:17px">Dillan</div><div class="small faint" style="margin-top:-1px">Your gym coach · AI</div></div></div><div class="iconbtn"><i data-lucide="brain"></i></div></div>
+    <div class="ubub" style="margin-top:14px">Can I swap chin-up negatives for lat pulldowns? I really don't like negatives.</div>
+    <div class="dillan" style="margin-top:18px"><svg class="dmark" style="color:var(--text)"><use href="#mark"/></svg>
+      <div><div class="dsay s">Not liking it is a fair reason. You don't have a pulldown station, though. Band-assisted chin-ups keep the same purpose with what's in your room.</div></div>
+    </div>
+    <div class="proposal" style="margin-top:14px">
+      <div class="between"><div style="font-weight:700;font-size:16px">Proposed change</div><span class="tag hold"><i data-lucide="clock"></i>Waiting on you</span></div>
+      <div class="diff">
+        <div class="minus"><span class="sym">−</span>Chin-up negatives · 4 × 3</div>
+        <div class="plus"><span class="sym">+</span>Band-assisted chin-ups · 4 × 5</div>
+      </div>
+      <div class="basis"><b>Based on</b> Goal: six strict chin-ups · Equipment: medium band · Your preference, today<br><b>Trade-off</b> Comparing old and new results gets harder for 2 weeks.</div>
+      <div class="btnrow" style="margin-top:14px">
+        <div class="btn primary sm" style="flex:1.2">Apply to plan</div>
+        <div class="btn secondary sm" style="flex:1">Just today</div>
+      </div>
+      <div class="small faint" style="text-align:center;margin-top:10px">Nothing changes until you choose.</div>
+    </div>
+    <div class="chips" style="margin-top:18px;flex-wrap:nowrap;overflow:hidden">
+      <div class="chip sm">Only 20 min</div><div class="chip sm">Missed a week</div><div class="chip sm">What changed?</div>
+    </div>
+  </div>
+  <div style="padding:10px 20px 6px"><div class="composer">Ask Dillan…<div class="mic"><i data-lucide="mic"></i></div></div></div>
+  <div class="tabbar" data-tabbar="3"></div>
+  <div class="home-ind"></div>
+</div><div class="cap">09 · Dillan<span>Dillan speaks in serif; your words in sans. Every change is a visible card with a status, a basis, and a trade-off (FR-12, FR-15).</span></div></div>
+
+<!-- ===================== 10 OVERRIDE ===================== -->
+<div class="frame"><div class="phone" id="s10-override">
+  <div class="status" data-status></div>
+  <div class="scroll"><div class="largetitle">Plan</div></div>
+  <div class="dim"></div>
+  <div class="sheet" style="padding-bottom:36px">
+    <div class="grabber"></div>
+    <h2>Add a fourth day this week?</h2>
+    <div class="dillan" style="margin-top:14px"><svg class="dmark" style="color:var(--text)"><use href="#mark"/></svg>
+      <div><div class="dsay s">I'd hold at three until your review on Oct 27. You've noted short sleep twice this week. It's your call, though.</div><div class="dmeta">From: your notes Oct 12, Oct 14 · Directive: "Review before adding volume"</div></div>
+    </div>
+    <div class="sectionlabel">Your reason</div>
+    <div class="chips"><div class="chip on">I feel good</div><div class="chip">I prefer it</div><div class="chip">Schedule</div><div class="chip">Other</div></div>
+    <div class="sectionlabel">For how long</div>
+    <div class="opt on" style="padding:12px 14px"><div><div class="o-t" style="font-size:16px">This week only</div><div class="o-s">Back to three days next week</div></div><div class="radio on"></div></div>
+    <div class="opt" style="padding:12px 14px"><div><div class="o-t" style="font-size:16px">Until the Oct 27 review</div><div class="o-s">We'll compare both at review</div></div><div class="radio"></div></div>
+    <div class="opt" style="padding:12px 14px"><div><div class="o-t" style="font-size:16px">Make it permanent</div><div class="o-s">Opens a plan revision</div></div><i data-lucide="chevron-right" style="margin-left:auto;color:var(--text-3)"></i></div>
+    <div class="btnrow" style="margin-top:18px">
+      <div class="btn secondary" style="flex:1;font-size:16px">Keep three</div>
+      <div class="btn primary" style="flex:1.3;font-size:16px">Add it this week</div>
+    </div>
+    <div class="small faint" style="text-align:center;margin-top:10px">Logged as your override. Dillan won't bring it up again.</div>
+  </div>
+  <div class="home-ind"></div>
+</div><div class="cap">10 · Override<span>Disagreement is respectful and short. Override costs three taps, defaults to the narrowest scope, and never nags (FR-15, AT-08/09).</span></div></div>
+
+<!-- ===================== 11 SOMETHING FEELS OFF ===================== -->
+<div class="frame"><div class="phone" id="s11-off">
+  <div class="status" data-status></div>
+  <div class="scroll">
+    <div class="runbar"><div class="endbtn">End</div><div class="mid">Pull + Core<b>15:30</b></div><div class="iconbtn"><i data-lucide="ellipsis"></i></div></div>
+    <div class="exname" style="margin-top:20px">One-arm dumbbell row</div>
+  </div>
+  <div class="dim"></div>
+  <div class="sheet">
+    <div class="grabber"></div>
+    <h2>Stop or adjust. Your call.</h2>
+    <div class="muted" style="font-size:15px;margin:6px 0 16px">Your sets so far are saved.</div>
+    <div class="opt"><div class="o-ic"><i data-lucide="square"></i></div><div><div class="o-t">Stop this exercise</div><div class="o-s">Move to the next one</div></div></div>
+    <div class="opt"><div class="o-ic"><i data-lucide="repeat-2"></i></div><div><div class="o-t">Try a gentler option</div><div class="o-s">Chest-supported row, lighter</div></div></div>
+    <div class="opt"><div class="o-ic"><i data-lucide="flag"></i></div><div><div class="o-t">End the session</div><div class="o-s">Finish here, nothing lost</div></div></div>
+    <div class="sectionlabel">Where? <span style="text-transform:none;font-weight:500">(optional)</span></div>
+    <div class="chips"><div class="chip">Shoulder · L</div><div class="chip on">Shoulder · R</div><div class="chip">Elbow</div><div class="chip">Lower back</div><div class="chip">Other</div></div>
+    <div class="sunken small muted" style="margin-top:16px;line-height:1.45;display:flex;gap:10px"><i data-lucide="info" style="width:18px;flex:none;color:var(--text)"></i><span>Saved as a dated note, not a diagnosis. Sharp or sudden pain, chest pain, or dizziness: stop and get medical help. <i class="faint">[escalation copy pending review]</i></span></div>
+  </div>
+  <div class="home-ind"></div>
+</div><div class="cap">11 · Something feels off<span>Stop is instant and never questioned. The note keeps date, movement, and side and is not treated as a diagnosis (FR-09, AT-05).</span></div></div>
+
+<!-- ===================== 12 ONBOARDING ===================== -->
+<div class="frame"><div class="phone" id="s12-onboard">
+  <div class="status" data-status></div>
+  <div class="scroll">
+    <div class="navbar"><div class="iconbtn"><i data-lucide="chevron-left"></i></div><div class="row" style="gap:5px"><span class="lp" style="background:var(--text);width:8px;height:8px"></span><span class="lp" style="background:var(--text);width:8px;height:8px"></span><span class="lp" style="background:var(--text);width:8px;height:8px"></span><span class="lp" style="background:var(--spot);width:22px;height:8px;border-radius:4px"></span><span class="lp" style="background:var(--line);width:8px;height:8px"></span><span class="lp" style="background:var(--line);width:8px;height:8px"></span></div><div class="textbtn">Later</div></div>
+    <div class="voice" style="font-size:30px;line-height:1.16;margin-top:18px">What's actually in your gym?</div>
+    <div class="voice muted" style="font-size:17px;line-height:1.45;margin-top:10px">I'll only plan around what you have. You can change this anytime.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:22px">
+      <div class="opt on" style="flex-direction:column;align-items:flex-start;gap:8px;margin:0;padding:14px"><div class="between" style="width:100%"><i data-lucide="dumbbell"></i><span class="tag steady" style="height:20px;padding:0 6px"><i data-lucide="check"></i></span></div><div><div class="o-t" style="font-size:15px">Adjustable dumbbells</div><div class="o-s" style="font-size:13px">5–52.5 lb · 2.5 steps</div></div></div>
+      <div class="opt on" style="flex-direction:column;align-items:flex-start;gap:8px;margin:0;padding:14px"><div class="between" style="width:100%"><i data-lucide="minus"></i><span class="tag steady" style="height:20px;padding:0 6px"><i data-lucide="check"></i></span></div><div><div class="o-t" style="font-size:15px">Pull-up bar</div><div class="o-s" style="font-size:13px">Doorway</div></div></div>
+      <div class="opt on" style="flex-direction:column;align-items:flex-start;gap:8px;margin:0;padding:14px"><div class="between" style="width:100%"><i data-lucide="rectangle-horizontal"></i><span class="tag steady" style="height:20px;padding:0 6px"><i data-lucide="check"></i></span></div><div><div class="o-t" style="font-size:15px">Flat bench</div><div class="o-s" style="font-size:13px">Add incline?</div></div></div>
+      <div class="opt on" style="flex-direction:column;align-items:flex-start;gap:8px;margin:0;padding:14px"><div class="between" style="width:100%"><i data-lucide="infinity"></i><span class="tag steady" style="height:20px;padding:0 6px"><i data-lucide="check"></i></span></div><div><div class="o-t" style="font-size:15px">Bands</div><div class="o-s" style="font-size:13px">Light, medium</div></div></div>
+      <div class="opt" style="flex-direction:column;align-items:flex-start;gap:8px;margin:0;padding:14px"><i data-lucide="weight" style="color:var(--text-3)"></i><div><div class="o-t" style="font-size:15px">Kettlebell</div><div class="o-s" style="font-size:13px">Tap to add</div></div></div>
+      <div class="opt" style="flex-direction:column;align-items:flex-start;gap:8px;margin:0;padding:14px;border-style:dashed"><i data-lucide="plus" style="color:var(--text-3)"></i><div><div class="o-t" style="font-size:15px">Something else</div><div class="o-s" style="font-size:13px">Describe it</div></div></div>
+    </div>
+  </div>
+  <div style="position:absolute;left:20px;right:20px;bottom:40px">
+    <div class="btn primary">Continue</div>
+    <div class="btn quiet" style="margin-top:4px">I'm not sure yet</div>
+  </div>
+  <div class="home-ind"></div>
+</div><div class="cap">12 · Onboarding: equipment<span>One question per screen, always skippable, "not sure" is a real answer that stays visible as unknown (FR-01, FR-04).</span></div></div>
+
+<!-- ===================== 13 DIRECTIVES ===================== -->
+<div class="frame"><div class="phone" id="s13-directives">
+  <div class="status" data-status></div>
+  <div class="scroll">
+    <div class="navbar"><div class="iconbtn"><i data-lucide="chevron-left"></i></div><div class="t">How Dillan coaches you</div><div style="width:36px"></div></div>
+    <div class="muted" style="font-size:15px;line-height:1.45;margin:4px 0 4px">These rules shape every suggestion. Tap one to see where it's been used.</div>
+
+    <div class="sectionlabel">Set by you</div>
+    <div class="card" style="padding:4px 16px">
+      <div class="between" style="padding:12px 0"><div><div style="font-weight:600">Suggest, don't apply</div><div class="small muted">Dillan proposes. You decide.</div></div><i data-lucide="chevron-right" style="color:var(--text-3)"></i></div>
+      <div class="hair" style="margin:0"></div>
+      <div class="between" style="padding:12px 0"><div><div style="font-weight:600">Short and direct</div><div class="small muted">Details on request</div></div><i data-lucide="chevron-right" style="color:var(--text-3)"></i></div>
+      <div class="hair" style="margin:0"></div>
+      <div class="between" style="padding:12px 0"><div><div style="font-weight:600">Review every 6 weeks</div><div class="small muted">Next: Oct 27 · weekly reflection Sundays</div></div><i data-lucide="chevron-right" style="color:var(--text-3)"></i></div>
+    </div>
+
+    <div class="sectionlabel">From Coach Maria</div>
+    <div class="card" style="padding:14px 16px">
+      <div class="between"><div style="font-weight:600">Keep pressing to 2 days a week</div><span class="tag steady"><i data-lucide="check"></i>Active</span></div>
+      <div class="small muted" style="margin-top:4px">Until Nov 30 · Reason: shoulder comfort · v2</div>
+    </div>
+
+    <div class="sectionlabel">Always on</div>
+    <div class="card" style="padding:4px 16px">
+      <div class="row" style="padding:12px 0"><span class="lock"><i data-lucide="lock"></i></span><div style="font-weight:500">You can stop, skip, or reduce anytime</div></div>
+      <div class="hair" style="margin:0"></div>
+      <div class="row" style="padding:12px 0"><span class="lock"><i data-lucide="lock"></i></span><div style="font-weight:500">Dillan never diagnoses</div></div>
+      <div class="hair" style="margin:0"></div>
+      <div class="row" style="padding:12px 0"><span class="lock"><i data-lucide="lock"></i></span><div style="font-weight:500">Private notes stay private</div></div>
+    </div>
+  </div>
+  <div class="home-ind"></div>
+</div><div class="cap">13 · Directives<span>Three plain-language layers: yours (editable), your coach's (scoped and dated), and product safety (locked) (FR-13, §7.1).</span></div></div>
+
+<!-- ===================== 14 MEMORY ===================== -->
+<div class="frame"><div class="phone" id="s14-memory">
+  <div class="status" data-status></div>
+  <div class="scroll">
+    <div class="navbar"><div class="iconbtn"><i data-lucide="chevron-left"></i></div><div class="t">What Dillan remembers</div><div style="width:36px"></div></div>
+    <div class="chips" style="margin:8px 0 16px"><div class="chip sm on">All 14</div><div class="chip sm">Confirmed</div><div class="chip sm">Dillan's guesses · 2</div></div>
+
+    <div class="card">
+      <div class="between"><span class="tag steady"><i data-lucide="check"></i>Confirmed</span><span class="small faint">You said · Sep 30</span></div>
+      <div style="font-size:17px;font-weight:600;margin-top:10px">You prefer training before 8 am.</div>
+    </div>
+    <div class="card" style="border-style:dashed;border-width:1.5px">
+      <div class="between"><span class="tag guess">Dillan's guess</span><span class="small faint">From 3 sessions</span></div>
+      <div class="voice" style="font-size:18px;line-height:1.38;margin-top:10px">Chin-ups seem to go better the day after rest. That's only three sessions, so I'm not sure yet.</div>
+      <div class="btnrow" style="margin-top:12px"><div class="btn secondary sm" style="flex:1">That's right</div><div class="btn secondary sm" style="flex:1">Not true</div></div>
+    </div>
+    <div class="card">
+      <div class="between"><span class="tag neutral"><i data-lucide="eye-off"></i>Private note</span><span class="small faint">Session · Oct 8</span></div>
+      <div style="font-size:17px;font-weight:600;margin-top:10px">Right shoulder felt uncomfortable during overhead press.</div>
+      <div class="small muted" style="margin-top:6px">One-time note, not a diagnosis. Check again: Oct 22</div>
+      <div class="row small" style="margin-top:12px;gap:18px;font-weight:600"><span>Edit</span><span>Remove</span><span class="faint" style="font-weight:500">Not shared with Coach Maria</span></div>
+    </div>
+  </div>
+  <div class="home-ind"></div>
+</div><div class="cap">14 · Memory<span>Facts, guesses, and notes look different on purpose. Every item shows its source and can be fixed or removed (FR-08).</span></div></div>
+
+<!-- ===================== 16 TRAIN TAB ===================== -->
+<div class="frame"><div class="phone" id="s16-train">
+  <div class="status" data-status></div>
+  <div class="scroll">
+    <div class="largetitle">Train</div>
+    <div class="card" style="border:2px solid var(--text);padding:16px">
+      <div class="between"><span class="tag hold"><i data-lucide="pause"></i>In progress</span><span class="sync local"><span class="dotp"></span>Saved on this device</span></div>
+      <div style="font-size:20px;font-weight:700;margin-top:10px">Pull + Core</div>
+      <div class="muted small" style="margin-top:2px">Started 8:12 am · 7 of 12 sets logged · you were on set 2 of rows</div>
+      <div class="btnrow" style="margin-top:14px"><div class="btn primary sm" style="flex:1.4"><i data-lucide="play"></i>Resume</div><div class="btn secondary sm" style="flex:1">Finish here</div></div>
+    </div>
+    <div class="sectionlabel">Other ways to train</div>
+    <div class="opt"><div class="o-ic"><i data-lucide="calendar-check"></i></div><div><div class="o-t">Today's session</div><div class="o-s">Pull + Core · 45 / 25 / 15 min</div></div><i data-lucide="chevron-right" style="margin-left:auto;color:var(--text-3)"></i></div>
+    <div class="opt"><div class="o-ic"><i data-lucide="list"></i></div><div><div class="o-t">Pick a routine</div><div class="o-s">Lower + Press · Pull + Core · Mobility</div></div><i data-lucide="chevron-right" style="margin-left:auto;color:var(--text-3)"></i></div>
+    <div class="opt"><div class="o-ic"><i data-lucide="pencil-line"></i></div><div><div class="o-t">Log something I already did</div><div class="o-s">A walk, a class, yesterday's session</div></div><i data-lucide="chevron-right" style="margin-left:auto;color:var(--text-3)"></i></div>
+    <div class="sectionlabel">Recent</div>
+    <div class="card" style="padding:4px 16px">
+      <div class="between" style="padding:12px 0"><div><div style="font-weight:700">Lower + Press</div><div class="small muted">Yesterday · Full · 44 min</div></div><span class="tag steady"><i data-lucide="check"></i>Done</span></div>
+      <div class="hair" style="margin:0"></div>
+      <div class="between" style="padding:12px 0"><div><div style="font-weight:700">Pull + Core</div><div class="small muted">Oct 12 · Full · 41 min</div></div><span class="tag neutral">2 sets skipped</span></div>
+    </div>
+  </div>
+  <div class="tabbar" data-tabbar="1"></div>
+  <div class="home-ind"></div>
+</div><div class="cap">16 · Train tab<span>Home for training itself: resume what's open, start today's, pick a routine, or log something already done. Unsynced work is visible (brief §4.1, AT-17).</span></div></div>
+
+<!-- ===================== 17 KEYBOARD OPEN, 360px ===================== -->
+<div class="frame"><div class="phone narrow" id="s17-keyboard">
+  <div class="status" data-status></div>
+  <div class="scroll" style="padding:0 16px">
+    <div class="runbar">
+      <div class="endbtn">End</div>
+      <div class="mid">Pull + Core<b>14:52</b></div>
+      <div class="iconbtn"><i data-lucide="ellipsis"></i></div>
+    </div>
+    <div class="rail"><span class="done"></span><span class="done"></span><span class="now"></span><span></span><span></span></div>
+    <div class="exname" style="font-size:24px">One-arm dumbbell row</div>
+    <div class="small faint" style="margin-top:4px;font-weight:600">Set 2 · Right</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+      <div><div class="small faint" style="font-weight:700;margin-bottom:6px">REPS</div><div class="field">10</div></div>
+      <div><div class="small faint" style="font-weight:700;margin-bottom:6px">LB · PER DUMBBELL</div><div class="field focus">37.5<span style="width:2px;height:28px;background:var(--text);margin-left:2px;display:inline-block"></span></div></div>
+    </div>
+    <div class="small faint" style="margin-top:10px">Last time 35 · your dumbbells go in 2.5 steps</div>
+  </div>
+  <div class="sticky-actions">
+    <div class="btn secondary sm" style="width:auto;padding:0 14px;flex:none"><i data-lucide="hand"></i></div>
+    <div class="btn secondary sm" style="flex:1">Done</div>
+    <div class="btn primary sm" style="flex:1.6"><i data-lucide="check"></i>Log set</div>
+  </div>
+  <div class="kbd">
+    <div class="krow"><div class="k">1</div><div class="k">2</div><div class="k">3</div></div>
+    <div class="krow"><div class="k">4</div><div class="k">5</div><div class="k">6</div></div>
+    <div class="krow"><div class="k">7</div><div class="k">8</div><div class="k">9</div></div>
+    <div class="krow"><div class="k kdim">.</div><div class="k">0</div><div class="k kdim"><i data-lucide="delete"></i></div></div>
+  </div>
+</div><div class="cap">17 · Typing a value, 360px wide<span>Numeric keypad (inputmode="decimal"), 16px+ inputs so Safari doesn't zoom, and a sticky row above the keyboard keeps Log and Stop reachable (AT-35).</span></div></div>
+
+<!-- ===================== 18 REST AFTER SCREEN LOCK ===================== -->
+<div class="frame"><div class="phone" id="s18-rest-return" data-theme="dark">
+  <div class="status" data-status></div>
+  <div class="scroll">
+    <div class="runbar">
+      <div class="endbtn">End</div>
+      <div class="mid">Pull + Core<b>19:40</b></div>
+      <div class="iconbtn"><i data-lucide="ellipsis"></i></div>
+    </div>
+    <div class="rail"><span class="done"></span><span class="done"></span><span class="now"></span><span></span><span></span></div>
+    <div style="text-align:center;margin-top:34px">
+      <div class="small" style="font-weight:700;letter-spacing:.12em;color:var(--text-3)">REST ENDED</div>
+      <svg viewBox="0 0 300 200" style="width:280px;display:block;margin:6px auto 0">
+        <path d="M40 80a110 110 0 0 0 220 0" fill="none" stroke="#33312C" stroke-width="16" stroke-linecap="round"/>
+        <circle cx="150" cy="88" r="22" fill="#FF6A30"/>
+      </svg>
+      <div class="num" style="font-size:56px;font-weight:700;margin-top:-4px;line-height:1">2:14 ago</div>
+      <div class="muted" style="font-size:15px;margin-top:8px;padding:0 24px;line-height:1.4">Your screen was locked, so there was no sound. Ready when you are.</div>
+    </div>
+    <div class="btn primary" style="margin-top:28px"><i data-lucide="play"></i>Start set 3</div>
+    <div class="btn quiet" style="margin-top:4px">Add 30s more rest</div>
+    <div class="card" style="margin-top:14px;padding:14px 16px">
+      <div class="small faint" style="font-weight:600;letter-spacing:.04em">UP NEXT</div>
+      <div class="between" style="margin-top:4px"><div style="font-size:17px;font-weight:600">Set 3 · Left then right</div><div class="num" style="font-size:17px;font-weight:700">10 × 37.5 lb</div></div>
+    </div>
+  </div>
+  <div class="home-ind"></div>
+</div><div class="cap">18 · Back from a locked screen<span>Elapsed time is recalculated from saved timestamps. The dot has settled into the cradle. No fake alarm is promised (AT-31).</span></div></div>
+
+<!-- ===================== 19 INSTALL (optional) ===================== -->
+<div class="frame"><div class="phone" id="s19-install">
+  <div class="status" data-status></div>
+  <div class="urlbar"><i data-lucide="lock"></i>dillan.app</div>
+  <div class="scroll" style="opacity:.9">
+    <div style="text-align:center;margin-top:16px">
+      <svg style="width:64px;height:64px;color:var(--text)"><use href="#mark"/></svg>
+      <div class="voice" style="font-size:31px;line-height:1.15;margin-top:8px">You kept what mattered.</div>
+    </div>
+  </div>
+  <div class="dim"></div>
+  <div class="sheet">
+    <div class="grabber"></div>
+    <div class="row" style="gap:14px"><img alt="" src="../brand/app-icon.png" style="width:56px;height:56px;border-radius:14px"><div><h2 style="font-size:20px">Keep Dillan one tap away?</h2><div class="small muted">Optional. Adds an icon to your home screen.</div></div></div>
+    <div class="card" style="margin-top:16px;padding:4px 16px">
+      <div class="row" style="padding:11px 0;gap:12px"><i data-lucide="check" style="color:var(--steady);width:18px"></i><div style="font-size:15px">Opens full-screen, like an app</div></div>
+      <div class="hair" style="margin:0"></div>
+      <div class="row" style="padding:11px 0;gap:12px"><i data-lucide="check" style="color:var(--steady);width:18px"></i><div style="font-size:15px">Lets you turn on reminders later, if you want</div></div>
+      <div class="hair" style="margin:0"></div>
+      <div class="row" style="padding:11px 0;gap:12px"><i data-lucide="minus" style="color:var(--text-3);width:18px"></i><div style="font-size:15px;color:var(--text-2)">Doesn't change what Dillan can see. Same data, same privacy.</div></div>
+    </div>
+    <div class="sunken small muted" style="margin-top:12px;line-height:1.45">On iPhone: tap <b style="color:var(--text)">Share</b> <i data-lucide="share" style="width:14px;vertical-align:-2px"></i> then <b style="color:var(--text)">Add to Home Screen</b>.</div>
+    <div class="btn primary" style="margin-top:16px">Show me how</div>
+    <div class="btn quiet" style="margin-top:4px">Not now</div>
+    <div class="small faint" style="text-align:center;margin-top:4px">We'll ask once. You can always do it from Settings.</div>
+  </div>
+</div><div class="cap">19 · Install, offered once<span>Shown after the first completed session, never before. Declining changes nothing. Install adds convenience, not access (brief §4.1, AT-29).</span></div></div>
+
+<!-- ===================== 20 FIRST VISIT OFFLINE ===================== -->
+<div class="frame"><div class="phone" id="s20-offline-first">
+  <div class="status" data-status></div>
+  <div class="urlbar"><i data-lucide="wifi-off"></i>dillan.app</div>
+  <div class="scroll" style="display:flex;flex-direction:column;justify-content:center;text-align:center;padding-bottom:60px">
+    <svg style="width:72px;height:72px;color:var(--text);margin:0 auto"><use href="#mark"/></svg>
+    <div class="voice" style="font-size:28px;line-height:1.18;margin-top:16px">Dillan needs a connection the first time.</div>
+    <div class="muted" style="font-size:16px;line-height:1.45;margin-top:12px;padding:0 10px">Once your plan has loaded on this device, you can log a session offline and it will sync when you're back.</div>
+    <div class="btn secondary" style="margin-top:26px">Try again</div>
+    <div class="small faint" style="margin-top:14px">Nothing was lost. There's nothing saved here yet.</div>
+  </div>
+</div><div class="cap">20 · First visit without a connection<span>Says exactly what's possible and what isn't. No fake offline promise (AT-36).</span></div></div>
+
+<!-- ===================== 21 SAVE STATE + UPDATE ===================== -->
+<div class="frame"><div class="phone" id="s21-savestate">
+  <div class="status" data-status></div>
+  <div class="scroll">
+    <div class="banner" style="margin-top:6px;background:var(--surface);border:1px solid var(--line)"><i data-lucide="sparkle"></i><span style="flex:1">A new version of Dillan is ready.</span><b style="font-weight:700;color:var(--text)">Update</b></div>
+    <div class="topline" style="margin-top:14px">
+      <div class="eyebrow">THU, OCT 15 · BLOCK 2, WEEK 3</div>
+      <div class="row" style="gap:10px"><span class="sync local"><span class="dotp"></span>3 unsynced</span><div class="avatar">AM</div></div>
+    </div>
+    <div class="voice" style="font-size:31px;line-height:1.16">Today is about your pull.</div>
+  </div>
+  <div class="dim"></div>
+  <div class="sheet">
+    <div class="grabber"></div>
+    <h2>Your data on this phone</h2>
+    <div class="card" style="margin-top:14px;padding:4px 16px">
+      <div class="between" style="padding:12px 0"><div class="row" style="gap:10px"><span class="sync ok"><span class="dotp"></span></span><div><div style="font-weight:700">Synced</div><div class="small muted">Safe on the server · 2 min ago</div></div></div><span class="num" style="font-weight:700;font-size:18px">41</span></div>
+      <div class="hair" style="margin:0"></div>
+      <div class="between" style="padding:12px 0"><div class="row" style="gap:10px"><span class="sync local"><span class="dotp"></span></span><div><div style="font-weight:700">Saved on this device</div><div class="small muted">Will sync when you're online and Dillan is open</div></div></div><span class="num" style="font-weight:700;font-size:18px">3</span></div>
+      <div class="hair" style="margin:0"></div>
+      <div class="between" style="padding:12px 0"><div class="row" style="gap:10px"><span class="sync fail"><span class="dotp"></span></span><div><div style="font-weight:700">Didn't sync</div><div class="small muted">Nothing right now</div></div></div><span class="num" style="font-weight:700;font-size:18px;color:var(--text-3)">0</span></div>
+    </div>
+    <div class="sunken small muted" style="margin-top:12px;line-height:1.45;display:flex;gap:10px"><i data-lucide="info" style="width:18px;flex:none;color:var(--text)"></i><span>Clearing your browser data would remove the 3 unsynced sets. Sync first if you can.</span></div>
+    <div class="btn primary" style="margin-top:14px">Sync now</div>
+    <div class="small faint" style="text-align:center;margin-top:10px">Signed in as alex@… · Signing out clears this device's copy.</div>
+  </div>
+</div><div class="cap">21 · Honest save state and safe updates<span>Three states, counted. Updates are offered on Today, never mid-session. Storage risk is stated plainly (AT-32, AT-33, AT-34).</span></div></div>
+
+<!-- ===================== 22 REMINDERS ===================== -->
+<div class="frame"><div class="phone" id="s22-reminders">
+  <div class="status" data-status></div>
+  <div class="scroll">
+    <div class="navbar"><div class="iconbtn"><i data-lucide="chevron-left"></i></div><div class="t">Reminders</div><div style="width:36px"></div></div>
+    <div class="muted" style="font-size:15px;line-height:1.45;margin:4px 0 8px">Dillan reminds, never nags. A missed reminder is never followed up.</div>
+    <div class="sectionlabel">Where</div>
+    <div class="card" style="padding:4px 16px">
+      <div class="between" style="padding:12px 0"><div><div style="font-weight:700">In the app</div><div class="small muted">Shown when you open Dillan · always on</div></div><span class="tag steady"><i data-lucide="check"></i>On</span></div>
+      <div class="hair" style="margin:0"></div>
+      <div class="between" style="padding:12px 0"><div><div style="font-weight:700">Phone notifications</div><div class="small muted">On iPhone this needs Dillan on your home screen first</div></div><span class="tag unknown">Not available here</span></div>
+      <div class="hair" style="margin:0"></div>
+      <div class="between" style="padding:12px 0"><div><div style="font-weight:700">Email</div><div class="small muted">alex@… · one message, no health details</div></div><div style="width:46px;height:28px;border-radius:14px;background:var(--iron);position:relative"><div style="position:absolute;right:2px;top:2px;width:24px;height:24px;border-radius:50%;background:#fff"></div></div></div>
+    </div>
+    <div class="sectionlabel">When</div>
+    <div class="card" style="padding:4px 16px">
+      <div class="between" style="padding:12px 0"><div style="font-weight:600">Session days</div><div class="muted">7:00 am</div></div>
+      <div class="hair" style="margin:0"></div>
+      <div class="between" style="padding:12px 0"><div style="font-weight:600">Weekly reflection</div><div class="muted">Sun 6:00 pm</div></div>
+      <div class="hair" style="margin:0"></div>
+      <div class="between" style="padding:12px 0"><div style="font-weight:600">Quiet hours</div><div class="muted">10 pm – 7 am</div></div>
+    </div>
+    <div class="small faint" style="margin-top:14px;line-height:1.45">Delivery depends on your browser and phone settings, so timing is approximate. Your plan works the same either way.</div>
+  </div>
+</div><div class="cap">22 · Reminders<span>In-app is the baseline. Push is offered only where the browser supports it and is never nagged for. Email is an opt-in fallback (FR-11, AT-30).</span></div></div>
+
+<!-- ===================== 23 HEALTH DATA ===================== -->
+<div class="frame"><div class="phone" id="s23-health">
+  <div class="status" data-status></div>
+  <div class="scroll">
+    <div class="navbar"><div class="iconbtn"><i data-lucide="chevron-left"></i></div><div class="t">Health data</div><div style="width:36px"></div></div>
+    <div class="card">
+      <div class="between"><div style="font-weight:700;font-size:17px">Where your data comes from</div><span class="tag steady"><i data-lucide="check"></i>You</span></div>
+      <div class="muted small" style="margin-top:6px;line-height:1.45">Every set, measurement, and note in Dillan was entered by you. Each one keeps its date and source.</div>
+    </div>
+    <div class="sectionlabel">Connected sources</div>
+    <div class="card" style="padding:4px 16px">
+      <div class="between" style="padding:12px 0"><div><div style="font-weight:700">Apple Health / Watch</div><div class="small muted">A web browser can't read Apple Health. We're exploring a safe import for later.</div></div><span class="tag unknown">Not connected</span></div>
+      <div class="hair" style="margin:0"></div>
+      <div class="between" style="padding:12px 0"><div><div style="font-weight:700">File import</div><div class="small muted">Not available yet</div></div><span class="tag unknown">Later</span></div>
+    </div>
+    <div class="sectionlabel">What Dillan does without it</div>
+    <div class="card" style="padding:4px 16px">
+      <div class="row" style="padding:11px 0;gap:12px"><i data-lucide="check" style="color:var(--steady);width:18px"></i><div style="font-size:15px">Plans, logs, and reviews your training</div></div>
+      <div class="hair" style="margin:0"></div>
+      <div class="row" style="padding:11px 0;gap:12px"><i data-lucide="check" style="color:var(--steady);width:18px"></i><div style="font-size:15px">Tracks weight and measurements you enter</div></div>
+      <div class="hair" style="margin:0"></div>
+      <div class="row" style="padding:11px 0;gap:12px"><i data-lucide="minus" style="color:var(--text-3);width:18px"></i><div style="font-size:15px;color:var(--text-2)">Doesn't guess heart rate, sleep, or steps. Unknown stays unknown.</div></div>
+    </div>
+    <div class="btn secondary" style="margin-top:18px">Tell me when imports are ready</div>
+  </div>
+</div><div class="cap">23 · Health data<span>No "Connect Apple Health" button that can't work. Manual entry is first-class, and missing data stays unknown (FR-16, AT-20).</span></div></div>
+
+</div>
+<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script>
+  const status = `<span>9:41</span><span class="icons"><i data-lucide="wifi"></i><i data-lucide="battery-full"></i></span>`;
+  document.querySelectorAll('[data-status]').forEach(e => e.innerHTML = status);
+  const markTab = `<svg viewBox="0 0 64 64" style="width:27px;height:27px"><path d="M13 31a19 19 0 0 0 38 0" fill="none" stroke="currentColor" stroke-width="6.5" stroke-linecap="round"/><circle cx="32" cy="26" r="7.5" fill="currentColor"/></svg>`;
+  const tabs = [['sun','Today'],['dumbbell','Train'],['trending-up','Progress'],[null,'Dillan']];
+  document.querySelectorAll('[data-tabbar]').forEach(e => {
+    const a = +e.dataset.tabbar;
+    e.innerHTML = tabs.map(([ic,l],i)=>`<div class="tab ${i===a?'on':''}">${ic?`<i data-lucide="${ic}"></i>`:markTab}<span>${l}</span><span class="tabdot"></span></div>`).join('');
+  });
+  lucide.createIcons();
+</script>
+</body>
+</html>
