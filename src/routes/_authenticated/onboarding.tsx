@@ -306,7 +306,7 @@ function Onboarding() {
                   </div>
                   <p className="mt-1 text-subhead text-text-2">Not ready yet. Until then you can start with the demo routine.</p>
                 </div>
-                <DButton variant="outline" size="md" selected-demo={String(a.routineMode === "demo")}
+                <DButton variant="outline" size="md"
                   aria-pressed={a.routineMode === "demo"}
                   icon={a.routineMode === "demo" ? <Check className="size-4" aria-hidden /> : undefined}
                   onClick={() => answer({ routineMode: a.routineMode === "demo" ? null : "demo" })}>
@@ -360,8 +360,10 @@ function Onboarding() {
             if (step === 3) answer({ daysPerWeek: null, sessionMinutes: null });
             if (step === 4) answer({ equipment: [], equipmentUnsure: true });
             if (step === 5) answer({ limitations: [], limitationsAnswer: null });
-            if (step === 6) answer({ routineMode: a.routineMode === "own" ? null : a.routineMode });
-            if (step === 6 && a.routineMode === "own") return;
+            if (step === 6) {
+              if (a.routineMode === "own") return answer({ routineMode: null });
+              answer({ routineMode: null });
+            }
             next();
           }}>
             {step === 6 && a.routineMode === "own" ? "Back to options" : "I'm not sure yet"}
@@ -386,7 +388,7 @@ function ProgressDots({ step }: { step: number }) {
 function Question({ title, sub, children }: { title: string; sub: string; children: ReactNode }) {
   return (
     <section className="pt-4">
-      <h1 className="font-voice text-[2rem] leading-tight">{title}</h1>
+      <h1 className="font-voice text-voice-xl leading-tight">{title}</h1>
       <p className="mt-2 font-voice text-voice text-text-2">{sub}</p>
       <div className="mt-6">{children}</div>
     </section>
