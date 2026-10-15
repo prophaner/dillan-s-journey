@@ -59,7 +59,7 @@ export function useSignOut(accountId: string) {
 
 export function AppShell({ user, children }: { user: { id: string; email: string }; children: ReactNode }) {
   const [menu, setMenu] = useState(false);
-  const { state, pending, failed, syncNow, loaded } = useOutbox(user.id);
+  const { state, pending, failed, retryNow, loaded } = useOutbox(user.id);
   const sw = useServiceWorker();
   const signOut = useSignOut(user.id);
 
@@ -89,7 +89,7 @@ export function AppShell({ user, children }: { user: { id: string; email: string
           ))}
         </nav>
         <div className="mt-auto flex items-center justify-between px-2">
-          {loaded && <SaveState state={state} count={pending + failed} onRetry={syncNow} />}
+          {loaded && <SaveState state={state} count={pending + failed} onRetry={retryNow} />}
           <Avatar email={user.email} onClick={() => setMenu(true)} />
         </div>
       </aside>
@@ -129,7 +129,7 @@ export function AppShell({ user, children }: { user: { id: string; email: string
           ))}
         </nav>
         <div className="mt-4 border-t border-line pt-4">
-          {loaded && <SaveState state={state} count={pending + failed} onRetry={syncNow} />}
+          {loaded && <SaveState state={state} count={pending + failed} onRetry={retryNow} />}
           <DButton variant="secondary" size="md" className="mt-4 w-full" icon={<LogOut className="size-4" aria-hidden />} onClick={signOut}>
             Sign out
           </DButton>
