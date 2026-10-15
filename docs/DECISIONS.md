@@ -12,6 +12,12 @@ Decision:
 Consequence:
 ```
 
+## 2026-10-15 — Migration 0002 (exercise ids in prescriptions): approved with fixes
+Question: Accept migration 0002 as pushed, or require the schema-guardian's fixes first?
+Options: (a) accept as is and backfill later; (b) approve with fixes: null-owner guard, backfill of existing routine_blocks, two indexes, docs mirror.
+Decision: (b), decided by the owner. Fixes go to Lovable as a separate migration 0003 prompt after the five workout-slice fixes.
+Consequence: Accounts created before 0002 cannot log sets until 0003 lands. docs/phase0-schema.sql stops being the approved baseline on its own; a docs/s16-schema.sql mirrors 0002 and 0003.
+
 ## 2026-10-15 — Lovable is the only product coder
 Question: Should Claude Code subagents patch product code directly when Lovable fails a fix?
 Options: (a) a "patcher" agent on a claude/ branch; (b) Lovable only, Claude adds tests that pin the behavior.
