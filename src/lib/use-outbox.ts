@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { drain, enqueue, listItems, onOutboxChange, type OutboxItem } from "./outbox";
+import { drain, enqueue, interpretAck, listItems, onOutboxChange, type OutboxItem } from "./outbox";
 import { syncOutboxItem } from "./sync.functions";
 
 export type SaveState = "synced" | "local" | "failed";
@@ -22,9 +22,7 @@ export function useOutbox(accountId: string | undefined) {
         const res = await send({
           data: { idempotencyKey: item.idempotencyKey, kind: item.kind, payload: item.payload },
         });
-        return res.ack && res.idempotencyKey === item.idempotencyKey
-          ? { ok: true }
-          : { ok: false, reason: "retry" };
+        return interpretAck(res, item.idempotencyKey);
       } catch (e) {
         const msg = String(e);
         if (/409|conflict/i.test(msg)) return { ok: false, reason: "conflict", message: msg };

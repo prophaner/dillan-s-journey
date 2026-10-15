@@ -16,8 +16,10 @@ export const syncOutboxItem = createServerFn({ method: "POST" })
     return input;
   })
   .handler(async ({ data, context }) => {
+    // stored:false — nothing is durably saved yet, so the client must NOT show "Synced".
     return {
       ack: true as const,
+      stored: false as boolean,
       idempotencyKey: data.idempotencyKey,
       accountId: context.userId,
       receivedAt: new Date().toISOString(),

@@ -22,7 +22,24 @@ export interface OutboxItem {
 
 export type SendResult =
   | { ok: true }
-  | { ok: false; reason: "offline" | "retry" | "conflict" | "permanent"; message?: string };
+  | {
+      ok: false;
+      reason: "offline" | "retry" | "conflict" | "permanent" | "not_stored";
+      message?: string;
+    };
+
+/**
+ * "Synced" means the server durably stored the write — nothing less.
+ * An ack without stored === true keeps the item "Saved on this device".
+ */
+export function interpretAck(
+  res: { ack?: boolean; stored?: boolean; idempotencyKey?: string } | null | undefined,
+  idempotencyKey: string,
+): SendResult {
+  if (!res?.ack || res.idempotencyKey !== idempotencyKey) return { ok: false, reason: "retry" };
+  if (res.stored !== true) return { ok: false, reason: "not_stored" };
+  return { ok: true };
+}
 
 const MAX_ATTEMPTS = 8;
 const events = typeof EventTarget !== "undefined" ? new EventTarget() : null;
@@ -98,6 +115,9 @@ export async function drain(accountId: string, send: (item: OutboxItem) => Promi
         await d.put("outbox", { ...item, status: "synced", syncedAt: Date.now(), error: undefined });
       } else if (res.reason === "offline") {
         break;
+      } else if (res.reason === "not_stored") {
+        // Server reachable but no durable storage yet: stay local, don't burn retries.
+        continue;
       } else {
         const attempts = item.attempts + 1;
         const status: OutboxStatus =
