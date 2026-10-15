@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { drain, enqueue, interpretAck, listItems, onOutboxChange, retryAccount, sessionOf, type OutboxItem } from "./outbox";
+import { drain, enqueue, interpretAck, listItems, onOutboxChange, retryAccount, sessionOf, type OutboxItem, type SendResult } from "./outbox";
 import { syncOutboxItem } from "./sync.functions";
 
 export type SaveState = "synced" | "local" | "failed";
