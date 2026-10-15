@@ -92,7 +92,6 @@ create trigger grants_version before update on public.coach_access_grants
 create or replace function public.accept_grant(_grant_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
 begin
-  perform set_config('dillan.accepting', 'on', true);
   update public.coach_access_grants
      set coach_id = auth.uid(), status = 'accepted', accepted_at = now()
    where id = _grant_id
@@ -111,7 +110,7 @@ begin
     end if;
     return new;
   end if;
-  if coalesce(current_setting('dillan.accepting', true), '') <> 'on' and
+  if current_user not in ('postgres','supabase_admin') and
      (new.coach_id is distinct from old.coach_id or
       (new.status = 'accepted' and old.status <> 'accepted')) then
     raise exception 'only the invited coach can accept, via accept_grant()';
@@ -173,18 +172,35 @@ alter table public.audit_events enable row level security;
 create policy "audit: owner read" on public.audit_events for select to authenticated
   using (owner_id = auth.uid());
 
+-- Minimized payload (brief §12): only changed columns; never sessions.feedback or
+-- profiles.preferences; bookkeeping columns (version, updated_at) are left out.
 create or replace function public.write_audit()
 returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  o jsonb := to_jsonb(old) - 'feedback' - 'preferences';
+  n jsonb;
+  k text;
+  b jsonb := '{}';
+  a jsonb := '{}';
 begin
-  if tg_op = 'UPDATE' then
+  if tg_op = 'DELETE' then
+    -- account deletion: the profile is already gone, nothing to keep history for
+    if not exists (select 1 from public.profiles where id = old.owner_id) then return old; end if;
     insert into public.audit_events(owner_id, actor_id, action, target_table, target_id, target_version, before, after)
-    values (old.owner_id, auth.uid(), 'update', tg_table_name, old.id, new.version, to_jsonb(old), to_jsonb(new));
-    return new;
-  else
-    insert into public.audit_events(owner_id, actor_id, action, target_table, target_id, target_version, before, after)
-    values (old.owner_id, auth.uid(), 'delete', tg_table_name, old.id, old.version, to_jsonb(old), null);
+    values (old.owner_id, auth.uid(), 'delete', tg_table_name, old.id, old.version,
+            o - 'updated_at' - 'created_at', null);
     return old;
   end if;
+  n := to_jsonb(new) - 'feedback' - 'preferences';
+  for k in select jsonb_object_keys(n) loop
+    if k not in ('version','updated_at') and (n -> k) is distinct from (o -> k) then
+      b := b || jsonb_build_object(k, o -> k);
+      a := a || jsonb_build_object(k, n -> k);
+    end if;
+  end loop;
+  insert into public.audit_events(owner_id, actor_id, action, target_table, target_id, target_version, before, after)
+  values (old.owner_id, auth.uid(), 'update', tg_table_name, old.id, new.version, b, a);
+  return new;
 end $$;
 
 -- =========================================================================
@@ -472,7 +488,7 @@ create trigger scheduled_version before update on public.scheduled_sessions
 create table public.sessions (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references public.profiles(id) on delete cascade,
-  template_version_id uuid not null references public.routine_template_versions(id) on delete restrict,
+  template_version_id uuid not null references public.routine_template_versions(id),  -- no action: checked at end of statement
   scheduled_session_id uuid references public.scheduled_sessions(id) on delete set null,
   plan_snapshot jsonb not null,
   time_choice text,
@@ -617,6 +633,15 @@ create policy "measurements: coach read" on public.measurements for select to au
   using (public.coach_can_read(owner_id, 'measurements'));
 create trigger measurements_version before update on public.measurements
   for each row execute function public.bump_version();
+
+-- =========================================================================
+-- 14b. Indexes for the app's main reads and the coach check
+-- =========================================================================
+create index set_logs_session on public.set_logs (session_id);
+create index sessions_owner_date on public.sessions (owner_id, local_date desc);
+create index scheduled_owner_date on public.scheduled_sessions (owner_id, planned_date);
+create index grants_coach on public.coach_access_grants (coach_id);
+create index grants_owner on public.coach_access_grants (owner_id);
 
 -- =========================================================================
 -- 15. First sign-in: profile + synthetic demo routine owned by the user
