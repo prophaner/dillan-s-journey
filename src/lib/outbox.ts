@@ -162,3 +162,7 @@ export async function loadDraft<T>(key: string): Promise<T | undefined> {
   const row = (await (await db()).get("drafts", key)) as { value: T } | undefined;
   return row?.value;
 }
+
+export async function deleteDraft(key: string) {
+  await (await db()).delete("drafts", key);
+}
