@@ -1,13 +1,30 @@
 @import "tailwindcss" source(none);
-@import "@fontsource/m-plus-rounded-1c/latin-500.css";
-@import "@fontsource/m-plus-rounded-1c/latin-700.css";
-@import "@fontsource/m-plus-rounded-1c/latin-800.css";
 @import "tw-animate-css";
 @import "./styles/tokens.css";
 @source "../src";
 
 /* Night Gym follows [data-theme="dark"], set on <html> from prefers-color-scheme in __root. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* M PLUS Rounded 1c, latin subset, self-hosted in public/fonts. Numbers only. */
+@font-face {
+  font-family: "M PLUS Rounded 1c";
+  src: url("/fonts/MPLUSRounded1c-500-latin.woff2") format("woff2");
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "M PLUS Rounded 1c";
+  src: url("/fonts/MPLUSRounded1c-700-latin.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "M PLUS Rounded 1c";
+  src: url("/fonts/MPLUSRounded1c-800-latin.woff2") format("woff2");
+  font-weight: 800;
+  font-display: swap;
+}
 
 @font-face {
   font-family: "Newsreader";
