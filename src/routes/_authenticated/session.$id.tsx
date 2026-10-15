@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Check, Hand, Minus, Plus } from "lucide-react";
+import { Check, CircleAlert, Hand, Minus, Plus } from "lucide-react";
 import { pageHead } from "@/lib/head";
 import { sessionSaveState, useOutbox } from "@/lib/use-outbox";
 import { elapsedMs, formatClock, remainingMs, useNow, useWakeLock } from "@/lib/timer";
@@ -48,7 +48,7 @@ function Session() {
     void loadDraft<SessionDraft>(draftKey(user.id, id)).then((x) => {
       if (x && finish && x.phase === "training") {
         const next = { ...x, phase: "done" as const, endedAt: Date.now(), restStartedAt: null };
-        void saveSession(user.id, next);
+        void saveSession(user.id, next).then(() => setWriteFailed(false)).catch(() => setWriteFailed(true));
         setD(next);
       } else setD(x ?? null);
     });
@@ -58,7 +58,7 @@ function Session() {
     setD((cur) => {
       if (!cur) return cur;
       const next = { ...cur, ...(typeof patch === "function" ? patch(cur) : patch) };
-      saveSession(user.id, next).catch(() => setWriteFailed(true));
+      saveSession(user.id, next).then(() => setWriteFailed(false)).catch(() => setWriteFailed(true));
       return next;
     });
 
@@ -98,6 +98,10 @@ function Session() {
   const stepFinished = doneSets.length >= step.sets;
   const allDone = d.logs.length >= steps.reduce((n, s) => n + s.sets, 0);
   const isDemo = d.snapshot.isDemo;
+
+  const retryWrite = () => {
+    saveSession(user.id, d).then(() => setWriteFailed(false)).catch(() => setWriteFailed(true));
+  };
 
   const prefill = (i: number) => {
     const s = steps[i];
