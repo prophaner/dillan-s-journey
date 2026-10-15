@@ -19,3 +19,5 @@
 - Timers derive from stored timestamps (src/lib/timer.ts). Why: correct after a locked screen.
 - public/sw.js caches app shell only, never signed-in data, skips /~oauth and server functions; registered only in production outside iframes. Why: brief §10.2.
 - Schema changes must be shown to the owner and approved before applying; draft lives in docs/phase0-schema.sql.
+- Schema lives in docs/phase0-schema.sql (applied); every UPDATE must send the version it read, built via src/lib/updates.ts or outbox kind "update:<table>" with expectedVersion. Why: DB trigger enforces optimistic concurrency only when a version is sent.
+- The service-role key is read from the sandbox environment at test time only (RUN_RLS_TESTS=1); never write it to .env or any repo file. Why: repo is public.
