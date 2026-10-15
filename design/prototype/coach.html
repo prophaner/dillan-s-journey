@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><title>Dillan — Coach workspace</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="app.css">
+<style>
+  body { background: var(--bg); }
+  .portal { width: 1440px; height: 900px; display: grid; grid-template-columns: 240px 1fr 400px; background: var(--bg); }
+  .side { border-right: 1px solid var(--line); padding: 22px 16px; display:flex; flex-direction:column; gap: 4px; }
+  .brand { display:flex; align-items:center; gap:10px; padding: 0 8px 22px; }
+  .nav { height: 40px; border-radius: 12px; display:flex; align-items:center; gap: 10px; padding: 0 12px; font-size: 15px; font-weight: 500; color: var(--text-2); }
+  .nav.on { background: var(--surface-2); color: var(--text); font-weight: 600; }
+  .nav svg { width: 18px; height: 18px; }
+  .nav .count { margin-left:auto; font-size: 12px; font-weight: 700; background: var(--spot); color: #1A1A18; border-radius: 999px; padding: 1px 8px; }
+  .client { display:flex; gap:10px; align-items:center; padding: 10px 12px; border-radius: 12px; }
+  .client.on { background: var(--surface); border: 1px solid var(--line); }
+  main { padding: 26px 32px; overflow: hidden; }
+  .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+  .grid2 .card { margin-top: 0; }
+  aside { border-left: 1px solid var(--line); background: var(--surface); padding: 24px; overflow:hidden; }
+  .pfield { margin-top: 16px; }
+  .pfield label { display:block; font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: 6px; }
+  .input { min-height: 44px; border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; font-size: 15px; background: var(--bg); line-height: 1.4; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td, th { text-align: left; padding: 10px 0; border-top: 1px solid var(--line); }
+  th { font-size: 12px; color: var(--text-3); font-weight: 600; letter-spacing: .04em; border-top: 0; }
+</style>
+</head>
+<body>
+<div class="portal" id="coach">
+  <div class="side">
+    <div class="brand"><svg viewBox="0 0 64 64" style="width:30px;height:30px"><path d="M13 31a19 19 0 0 0 38 0" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="32" cy="27" r="7.5" fill="#FF5A1F"/></svg><div><div style="font-weight:700;font-size:17px">Dillan</div></div></div>
+    <div class="seg" style="grid-template-columns:1fr 1fr;margin:0 0 14px"><div style="height:36px;font-size:13px">My training</div><div class="on" style="height:36px;font-size:13px">Coaching</div></div>
+    <div class="nav on"><i data-lucide="users"></i>Clients</div>
+    <div class="nav"><i data-lucide="inbox"></i>Reviews<span class="count">2</span></div>
+    <div class="nav"><i data-lucide="file-pen-line"></i>Proposals</div>
+    <div class="sectionlabel" style="padding: 0 12px">Shared with you</div>
+    <div class="client on"><div class="avatar">AM</div><div><div style="font-weight:600;font-size:15px">Alex M.</div><div class="small faint">Last session today</div></div></div>
+    <div style="margin-top:auto" class="small faint">You see only what each client shares. <u>What you can see</u><div class="row" style="margin-top:12px;gap:8px"><span class="avatar" style="width:28px;height:28px;font-size:11px">MR</span>Maria R. · Coach</div></div>
+  </div>
+
+  <main>
+    <div class="between"><div><div class="eyebrow">CLIENT · SHARED SINCE SEP 2</div><div style="font-size:28px;font-weight:700;letter-spacing:-.02em;margin-top:4px">Alex M.</div></div>
+      <div class="row"><span class="tag neutral"><i data-lucide="eye"></i>Goals, sessions, measurements</span><span class="tag unknown"><i data-lucide="eye-off"></i>Private notes not shared</span></div></div>
+
+    <div class="grid2">
+      <div class="card">
+        <div class="between"><span class="tag spot"><i data-lucide="arrow-up-right"></i>Improve</span><span class="small faint">Block 2 · week 3 of 6</span></div>
+        <div style="font-size:18px;font-weight:700;margin-top:10px">Six strict chin-ups</div>
+        <div class="row" style="align-items:flex-end;gap:14px;margin-top:10px"><div class="bignum">5</div><div class="small muted" style="padding-bottom:6px">from 3 on Sep 2 · target 6 · last test Oct 13</div></div>
+        <svg viewBox="0 0 460 80" style="width:100%;margin-top:10px"><line x1="0" y1="12" x2="460" y2="12" stroke="var(--spot)" stroke-dasharray="4 4"/><polyline points="10,68 100,54 170,54" fill="none" stroke="var(--text)" stroke-width="2.5"/><polyline points="170,54 290,54" stroke="var(--text-3)" stroke-dasharray="2 5" fill="none" stroke-width="2"/><polyline points="290,40 370,26 440,26" fill="none" stroke="var(--text)" stroke-width="2.5"/><g fill="var(--text)"><circle cx="10" cy="68" r="5"/><circle cx="100" cy="54" r="5"/><circle cx="170" cy="54" r="5"/><circle cx="290" cy="40" r="5"/><circle cx="370" cy="26" r="5"/><circle cx="440" cy="26" r="5"/></g></svg>
+      </div>
+      <div class="card">
+        <div class="between"><span class="tag neutral"><i data-lucide="repeat"></i>Habit</span><span class="small faint">Planned 3 / week</span></div>
+        <div style="font-size:18px;font-weight:700;margin-top:10px">Adherence, last 8 weeks</div>
+        <div class="row" style="align-items:flex-end;gap:14px;margin-top:10px"><div class="bignum">22<span style="font-size:22px;color:var(--text-3)">/24</span></div><div class="small muted" style="padding-bottom:6px">done or intentionally adjusted · 4 shortened</div></div>
+        <div class="weave" style="max-width:340px"><div class="col"><i class="wd"></i><i class="wd"></i><i class="wd"></i></div><div class="col"><i class="wd"></i><i class="ws"></i><i class="wd"></i></div><div class="col"><i class="wd"></i><i class="wd"></i><i class="wr"></i></div><div class="col"><i class="wd"></i><i class="wd"></i><i class="wd"></i></div><div class="col"><i class="wr"></i><i class="wr"></i><i class="wd"></i></div><div class="col"><i class="wd"></i><i class="wd"></i><i class="wd"></i></div><div class="col"><i class="wd"></i><i class="ws"></i><i class="wd"></i></div><div class="col"><i class="wd"></i><i class="ws"></i><i class="wp"></i></div></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div class="between"><div style="font-size:18px;font-weight:700">Recent sessions</div><div class="small faint">Planned vs. actual</div></div>
+      <table style="margin-top:8px">
+        <tr><th>DATE</th><th>SESSION</th><th>VERSION</th><th>RESULT</th><th>FEEL</th></tr>
+        <tr><td>Oct 15</td><td style="font-weight:600">Pull + Core</td><td class="muted">Short · plan v13 · entered by Alex</td><td><span class="tag steady"><i data-lucide="check"></i>Priority 7/7</span></td><td>Solid</td></tr>
+        <tr><td>Oct 14</td><td style="font-weight:600">Lower + Press</td><td class="muted">Full · plan v13</td><td><span class="tag steady"><i data-lucide="check"></i>Complete</span></td><td>Hard</td></tr>
+        <tr><td>Oct 12</td><td style="font-weight:600">Pull + Core</td><td class="muted">Full · plan v13</td><td><span class="tag neutral">2 sets skipped</span></td><td>Solid</td></tr>
+      </table>
+    </div>
+  </main>
+
+  <aside>
+    <div class="between"><div style="font-size:20px;font-weight:700">New proposal</div><span class="tag neutral">Draft</span></div>
+    <div class="small muted" style="margin-top:4px">Dillan reviews it, then Alex decides.</div>
+    <div class="pfield"><label>What should change</label><div class="input">Add 1 set of band face pulls to every Pull session</div></div>
+    <div class="pfield"><label>Why</label><div class="input">Balance pulling volume while chin-up work is the priority.</div></div>
+    <div class="grid2" style="margin-top:0;gap:10px">
+      <div class="pfield"><label>Scope</label><div class="input">Pull sessions</div></div>
+      <div class="pfield"><label>How long</label><div class="input">Until Nov 30</div></div>
+    </div>
+    <div class="pfield"><label>Review trigger</label><div class="input">At the Oct 27 program review</div></div>
+    <div class="pfield"><label>Flexibility</label><div class="chips"><div class="chip sm on">Alex can skip it</div><div class="chip sm">Required</div></div></div>
+    <div class="card" style="margin-top:18px;background:var(--bg)">
+      <div class="dillan"><svg class="dmark"><use href="#m"/></svg><div><div class="dsay s" style="font-size:16px">This fits the active goal and the equipment. It adds about 3 minutes. One private constraint may apply. I'll check with Alex before this moves forward.</div><div class="dmeta">Dillan's review · preliminary</div></div></div>
+    </div>
+    <div class="btn primary sm" style="margin-top:16px">Submit for review</div>
+  </aside>
+</div>
+<svg width="0" height="0" style="position:absolute"><symbol id="m" viewBox="0 0 64 64"><path d="M13 31a19 19 0 0 0 38 0" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="32" cy="27" r="7.5" fill="#FF5A1F"/></symbol></svg>
+<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script>lucide.createIcons();</script>
+</body></html>

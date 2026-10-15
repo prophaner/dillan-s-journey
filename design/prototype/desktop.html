@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><title>Dillan — Desktop layouts</title>
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="app.css">
+<style>
+  body { background: #DCD6CA; padding: 40px; display: grid; gap: 60px; }
+  .desk { width: 1440px; height: 900px; background: var(--bg); color: var(--text); display: grid; grid-template-columns: 240px 1fr; border-radius: 14px; overflow: hidden; box-shadow: 0 30px 70px -30px rgba(0,0,0,.4); }
+  .side { border-right: 1px solid var(--line); padding: 22px 14px; display: flex; flex-direction: column; gap: 3px; }
+  .brand { display:flex; align-items:center; gap:10px; padding: 0 10px 20px; }
+  .nav { height: 42px; border-radius: 12px; display:flex; align-items:center; gap: 10px; padding: 0 12px; font-size: 15px; font-weight: 500; color: var(--text-2); }
+  .nav.on { background: var(--surface-2); color: var(--text); font-weight: 700; }
+  .nav svg { width: 18px; height: 18px; }
+  .nav .count { margin-left:auto; width: 8px; height: 8px; border-radius: 50%; background: var(--spot); }
+  .side .sectionlabel { padding: 0 12px; margin: 18px 0 6px; }
+  .side .foot { margin-top: auto; padding: 10px; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-2); }
+  main { padding: 28px 40px; overflow: hidden; }
+  .content { max-width: 1120px; }
+  .cols { display: grid; grid-template-columns: 1.25fr 1fr; gap: 20px; align-items: start; }
+  .card + .card { margin-top: 0; }
+  /* editor */
+  .ed { display: grid; grid-template-columns: 1fr 360px; gap: 20px; align-items: start; }
+  .exrow { display: grid; grid-template-columns: 22px 1fr 90px 90px 90px 90px 32px; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); font-size: 15px; }
+  .exrow .h { font-size: 12px; color: var(--text-3); font-weight: 700; letter-spacing: .04em; }
+  .exrow.head { border-top: 0; padding-bottom: 4px; }
+  .exrow .grip { color: var(--text-3); }
+  .exrow .grip svg { width: 16px; height: 16px; }
+  .cell { height: 36px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); display: flex; align-items: center; justify-content: center; font-family: var(--font-num); font-weight: 700; font-size: 15px; }
+  .blkhead { display: flex; align-items: center; gap: 10px; margin: 18px 0 6px; }
+  .blkhead .b-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--iron); }
+  .blkhead .b-dot.pri { background: var(--spot); }
+  .blkhead .b-dot.optional { background: transparent; border: 2px solid var(--text-3); }
+  .blkhead h3 { font-size: 17px; font-weight: 700; }
+  .ssgroup { border-left: 3px solid var(--spot); margin-left: 4px; padding-left: 14px; }
+</style>
+</head>
+<body>
+
+<!-- ===================== D01 TODAY, DESKTOP ===================== -->
+<div class="desk" id="d01-today-desktop">
+  <div class="side">
+    <div class="brand"><svg viewBox="0 0 64 64" style="width:30px;height:30px"><path d="M13 31a19 19 0 0 0 38 0" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="32" cy="27" r="7.5" fill="#FF5A1F"/></svg><div style="font-weight:700;font-size:17px">Dillan</div></div>
+    <div class="nav on"><i data-lucide="sun"></i>Today</div>
+    <div class="nav"><i data-lucide="dumbbell"></i>Train</div>
+    <div class="nav"><i data-lucide="trending-up"></i>Progress</div>
+    <div class="nav"><svg viewBox="0 0 64 64" style="width:18px;height:18px"><path d="M13 31a19 19 0 0 0 38 0" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="32" cy="27" r="7.5" fill="currentColor"/></svg>Dillan<span class="count"></span></div>
+    <div class="sectionlabel">More</div>
+    <div class="nav"><i data-lucide="clipboard-list"></i>Plan</div>
+    <div class="nav"><i data-lucide="user"></i>Profile</div>
+    <div class="nav"><i data-lucide="shield-check"></i>Coaching &amp; directives</div>
+    <div class="nav"><i data-lucide="settings"></i>Settings</div>
+    <div class="foot"><span class="sync ok"><span class="dotp"></span>Synced</span><span style="margin-left:auto" class="avatar">AM</span></div>
+  </div>
+  <main><div class="content">
+    <div class="between"><div class="eyebrow">THURSDAY, OCT 15 · BLOCK 2, WEEK 3</div><div class="course" style="width:300px"><div><div class="d">M</div><div class="pip done" style="width:20px;height:20px"></div></div><div><div class="d">T</div><div class="pip rest" style="width:20px;height:20px"></div></div><div><div class="d">W</div><div class="pip short" style="width:20px;height:20px"></div></div><div><div class="d today">T</div><div class="pip today" style="width:20px;height:20px"></div></div><div><div class="d">F</div><div class="pip rest" style="width:20px;height:20px"></div></div><div><div class="d">S</div><div class="pip plan" style="width:20px;height:20px"></div></div><div><div class="d">S</div><div class="pip rest" style="width:20px;height:20px"></div></div></div></div>
+    <div class="voice" style="font-size:44px;line-height:1.1;letter-spacing:-.02em;margin-top:18px;max-width:18ch">Today is about your pull.</div>
+    <div class="voice muted" style="font-size:21px;line-height:1.4;margin-top:12px;max-width:52ch">Chin-up negatives and rows move you toward six strict chin-ups. Core work is optional.</div>
+    <div class="row small faint" style="margin-top:10px;gap:6px"><svg viewBox="0 0 64 64" style="width:18px;height:18px"><path d="M13 31a19 19 0 0 0 38 0" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="32" cy="27" r="7.5" fill="#FF5A1F"/></svg>Dillan · based on your plan v13 · <u>Why this plan</u></div>
+
+    <div class="cols" style="margin-top:28px">
+      <div class="card" style="padding:20px">
+        <div class="between" style="margin-bottom:14px"><div style="font-size:22px;font-weight:700">Pull + Core</div><div class="small faint">est. times</div></div>
+        <div class="seg"><div class="on"><b>45</b>Full</div><div><b>25</b>Short</div><div><b>15</b>Priority only</div></div>
+        <div class="blocks">
+          <div class="blk"><span class="b-dot"></span><div><div class="b-name">Warm-up</div><div class="b-sub">Band pull-aparts, scap hangs</div></div><div class="b-time">6 min</div></div>
+          <div class="blk"><span class="b-dot pri"></span><div><div class="b-name">Priority <span class="tag spot" style="margin-left:4px;height:20px;font-size:11px">Main goal</span></div><div class="b-sub">Chin-up negatives · DB rows</div></div><div class="b-time">18 min</div></div>
+          <div class="blk"><span class="b-dot optional"></span><div><div class="b-name">Accessories</div><div class="b-sub">Face pulls · Hammer curls</div></div><div class="b-time">13 min</div></div>
+          <div class="blk"><span class="b-dot optional"></span><div><div class="b-name">Core</div><div class="b-sub">Dead bug · Side plank</div></div><div class="b-time">8 min</div></div>
+        </div>
+        <div class="btn primary" style="margin-top:14px;max-width:320px"><i data-lucide="play"></i>Start session</div>
+        <div class="small faint" style="margin-top:10px">Logging on a phone? Open dillan.app there and tap Train. Your session follows your account.</div>
+      </div>
+      <div>
+        <div class="card">
+          <div class="between"><div style="font-weight:700;font-size:16px">Waiting on you</div><span class="tag hold"><i data-lucide="clock"></i>1</span></div>
+          <div class="small muted" style="margin-top:4px">Coach Maria proposed adding face pulls to Pull days. Dillan reviewed it.</div>
+          <div class="btnrow" style="margin-top:12px"><div class="btn secondary sm">Review</div></div>
+        </div>
+        <div class="card" style="margin-top:14px">
+          <div class="dillan"><svg class="dmark" viewBox="0 0 64 64"><path d="M13 31a19 19 0 0 0 38 0" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="32" cy="27" r="7.5" fill="#FF5A1F"/></svg><div><div class="dsay s">Two weeks to your review on Oct 27. Rows are up a notch; chin-ups held. Nothing to change yet.</div><div class="dmeta">From: sessions Oct 8–14 · Next review Oct 27</div></div></div>
+        </div>
+        <div class="card" style="margin-top:14px;padding:14px 18px">
+          <div class="between"><div><div style="font-weight:700">Six strict chin-ups</div><div class="small muted">5 of 6 · last test Oct 13</div></div><span class="tag spot"><i data-lucide="arrow-up-right"></i>Improve</span></div>
+        </div>
+      </div>
+    </div>
+  </div></main>
+</div>
+
+<!-- ===================== D02 ROUTINE EDITOR, DESKTOP ===================== -->
+<div class="desk" id="d02-routine-editor">
+  <div class="side">
+    <div class="brand"><svg viewBox="0 0 64 64" style="width:30px;height:30px"><path d="M13 31a19 19 0 0 0 38 0" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="32" cy="27" r="7.5" fill="#FF5A1F"/></svg><div style="font-weight:700;font-size:17px">Dillan</div></div>
+    <div class="nav"><i data-lucide="sun"></i>Today</div>
+    <div class="nav"><i data-lucide="dumbbell"></i>Train</div>
+    <div class="nav"><i data-lucide="trending-up"></i>Progress</div>
+    <div class="nav"><svg viewBox="0 0 64 64" style="width:18px;height:18px"><path d="M13 31a19 19 0 0 0 38 0" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="32" cy="27" r="7.5" fill="currentColor"/></svg>Dillan</div>
+    <div class="sectionlabel">More</div>
+    <div class="nav on"><i data-lucide="clipboard-list"></i>Plan</div>
+    <div class="nav"><i data-lucide="user"></i>Profile</div>
+    <div class="nav"><i data-lucide="shield-check"></i>Coaching &amp; directives</div>
+    <div class="nav"><i data-lucide="settings"></i>Settings</div>
+    <div class="foot"><span class="sync ok"><span class="dotp"></span>Synced</span><span style="margin-left:auto" class="avatar">AM</span></div>
+  </div>
+  <main><div class="content">
+    <div class="between">
+      <div><div class="eyebrow">PLAN · ROUTINES · <span style="color:var(--text)">PULL + CORE</span></div><div style="font-size:28px;font-weight:700;letter-spacing:-.02em;margin-top:4px">Editing Pull + Core</div></div>
+      <div class="row"><span class="tag neutral">Draft of v14</span><div class="btn secondary sm" style="width:auto;padding:0 16px">Discard</div><div class="btn primary sm" style="width:auto;padding:0 18px">Save as v14</div></div>
+    </div>
+    <div class="banner" style="margin-top:14px;max-width:720px"><i data-lucide="history"></i>Saving creates version 14. Sessions you've already done keep version 13 exactly as it was.</div>
+
+    <div class="ed" style="margin-top:18px">
+      <div class="card" style="padding:18px 22px">
+        <div class="blkhead"><span class="b-dot"></span><h3>Warm-up</h3><span class="small faint">6 min est.</span></div>
+        <div class="exrow head"><div></div><div class="h">EXERCISE</div><div class="h">SETS</div><div class="h">REPS</div><div class="h">LOAD</div><div class="h">REST</div><div></div></div>
+        <div class="exrow"><span class="grip"><i data-lucide="grip-vertical"></i></span><div>Band pull-apart</div><div class="cell">2</div><div class="cell">15</div><div class="cell" style="color:var(--text-3)">band</div><div class="cell">0:30</div><i data-lucide="ellipsis" style="color:var(--text-3)"></i></div>
+        <div class="exrow"><span class="grip"><i data-lucide="grip-vertical"></i></span><div>Scap hang</div><div class="cell">2</div><div class="cell">20s</div><div class="cell" style="color:var(--text-3)">—</div><div class="cell">0:30</div><i data-lucide="ellipsis" style="color:var(--text-3)"></i></div>
+
+        <div class="blkhead" style="margin-top:26px"><span class="b-dot pri"></span><h3>Priority</h3><span class="tag spot">Main goal · six chin-ups</span></div>
+        <div class="exrow head"><div></div><div class="h">EXERCISE</div><div class="h">SETS</div><div class="h">REPS</div><div class="h">LOAD</div><div class="h">REST</div><div></div></div>
+        <div class="exrow"><span class="grip"><i data-lucide="grip-vertical"></i></span><div>Chin-up negative <span class="small faint">· 5s down</span></div><div class="cell">4</div><div class="cell">3</div><div class="cell" style="color:var(--text-3)">body</div><div class="cell">2:00</div><i data-lucide="ellipsis" style="color:var(--text-3)"></i></div>
+        <div class="exrow"><span class="grip"><i data-lucide="grip-vertical"></i></span><div>One-arm dumbbell row <span class="small faint">· each side</span></div><div class="cell">3</div><div class="cell">10</div><div class="cell">35 <span class="small" style="font-family:var(--font-ui);font-weight:500;color:var(--text-3);margin-left:3px">lb</span></div><div class="cell">1:30</div><i data-lucide="ellipsis" style="color:var(--text-3)"></i></div>
+
+        <div class="blkhead" style="margin-top:26px"><span class="b-dot optional"></span><h3>Accessories</h3><span class="tag neutral">Optional</span></div>
+        <div class="ssgroup">
+          <div class="row small" style="gap:8px;padding:6px 0 2px;font-weight:700;color:var(--spot-ink)">Superset · 3 rounds · 20s between · 75s after <span class="faint" style="font-weight:500">· Ungroup</span></div>
+          <div class="exrow head"><div></div><div class="h">EXERCISE</div><div class="h">ROUNDS</div><div class="h">REPS</div><div class="h">LOAD</div><div class="h">REST</div><div></div></div>
+          <div class="exrow"><span class="grip"><i data-lucide="grip-vertical"></i></span><div>A · Face pull</div><div class="cell" style="color:var(--text-3)">3</div><div class="cell">15</div><div class="cell" style="color:var(--text-3)">band</div><div class="cell">0:20</div><i data-lucide="ellipsis" style="color:var(--text-3)"></i></div>
+          <div class="exrow"><span class="grip"><i data-lucide="grip-vertical"></i></span><div>B · Hammer curl</div><div class="cell" style="color:var(--text-3)">3</div><div class="cell">12</div><div class="cell">20 <span class="small" style="font-family:var(--font-ui);font-weight:500;color:var(--text-3);margin-left:3px">lb</span></div><div class="cell">1:15</div><i data-lucide="ellipsis" style="color:var(--text-3)"></i></div>
+        </div>
+        <div class="row" style="gap:10px;margin-top:16px"><div class="chip"><i data-lucide="plus"></i>Add exercise</div><div class="chip"><i data-lucide="plus"></i>Add block</div><div class="chip"><i data-lucide="link"></i>Group as superset</div></div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="dillan"><svg class="dmark" viewBox="0 0 64 64"><path d="M13 31a19 19 0 0 0 38 0" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="32" cy="27" r="7.5" fill="#FF5A1F"/></svg><div><div class="dsay s">Nothing here conflicts with your goals or your right-shoulder note. If you add a pressing move, I'll flag it.</div><div class="dmeta">Checked against: goals v3 · limitations · equipment</div></div></div>
+        </div>
+        <div class="card" style="margin-top:14px">
+          <div style="font-weight:700;margin-bottom:10px">What changed from v13</div>
+          <div class="diff" style="margin:0"><div class="minus"><span class="sym">−</span>One-arm row · 3 × 10 · 35 lb</div><div class="plus"><span class="sym">+</span>One-arm row · 3 × 10 · 37.5 lb</div></div>
+          <div class="small muted" style="margin-top:8px">Reason <span class="faint">(optional for small changes)</span></div>
+          <div class="field" style="height:40px;font:500 14px var(--font-ui);justify-content:flex-start;padding:0 12px;color:var(--text-3);margin-top:6px">Last two sessions felt easy at 35</div>
+        </div>
+        <div class="card" style="margin-top:14px;padding:14px 18px">
+          <div class="small faint" style="font-weight:700;letter-spacing:.04em">ESTIMATE</div>
+          <div class="row" style="gap:16px;margin-top:6px"><div><div class="num" style="font-size:24px;font-weight:700">45<span class="small" style="font-family:var(--font-ui);color:var(--text-2)"> min</span></div><div class="small faint">Full</div></div><div><div class="num" style="font-size:24px;font-weight:700">25</div><div class="small faint">Short</div></div><div><div class="num" style="font-size:24px;font-weight:700">15</div><div class="small faint">Priority only</div></div></div>
+          <div class="small faint" style="margin-top:6px">Includes setup and rest at your usual pace.</div>
+        </div>
+      </div>
+    </div>
+  </div></main>
+</div>
+
+<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script>lucide.createIcons();</script>
+</body></html>
