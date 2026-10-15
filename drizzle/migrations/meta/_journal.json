@@ -8,6 +8,13 @@
       "when": 1792079317348,
       "tag": "0000_phase0_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792079883517,
+      "tag": "0001_s12_onboarding_columns",
+      "breakpoints": true
     }
   ]
 }
