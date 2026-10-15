@@ -224,7 +224,7 @@ function Session() {
         <div className="mt-auto pt-6">
           <DButton variant="primary" loading={saving} onClick={saveAndClose}>Save session</DButton>
           {outbox.loaded && <p className="mt-3 text-center text-footnote text-text-2">
-            {unsynced.length === 0
+            {saveState === "synced"
               ? `${d.logs.length} sets synced · nothing waiting`
               : `${unsynced.length} ${unsynced.length === 1 ? "change" : "changes"} saved on this device · will sync when you're online`}
           </p>}
