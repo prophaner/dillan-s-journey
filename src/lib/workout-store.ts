@@ -71,12 +71,13 @@ export async function saveSession(uid: string, d: SessionDraft) {
   await saveDraft(draftKey(uid, d.id), d);
 }
 
-/** Sign-out: remove every local session, active pointer and cached routine for this account. */
+/** Sign-out: remove every local session, active pointer, cached routine and onboarding draft for this account. */
 export async function clearDrafts(uid: string) {
   const prefix = `session:${uid}:`;
   for (const key of await listDraftKeys()) if (key.startsWith(prefix)) await deleteDraft(key);
   await deleteDraft(activeKey(uid));
   await deleteDraft(routineKey(uid));
+  await deleteDraft(`onboarding:${uid}`);
 }
 
 export async function closeSession(uid: string, id: string) {

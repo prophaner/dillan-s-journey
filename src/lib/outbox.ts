@@ -92,9 +92,11 @@ export async function enqueue(
   return item;
 }
 
-/** Session an item belongs to: "session:start" carries `id`, the rest carry `sessionId`. */
+/** Session an item belongs to: "session:start" carries `id`, the rest carry `sessionId`.
+ *  "update:sessions" edits the session row itself, so it carries `id` too. */
 export function sessionOf(item: Pick<OutboxItem, "kind" | "payload">): string | undefined {
   const p = item.payload as { sessionId?: string; id?: string } | null;
+  if (item.kind === "update:sessions") return p?.id;
   return p?.sessionId ?? (item.kind.startsWith("session:") ? p?.id : undefined);
 }
 
