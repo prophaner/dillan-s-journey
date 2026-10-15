@@ -567,10 +567,14 @@ create policy "set_logs: coach read" on public.set_logs for select to authentica
 create or replace function public.set_logs_correction_guard()
 returns trigger language plpgsql set search_path = public as $$
 begin
-  if (new.owner_id, new.session_id, new.exercise_id, new.set_no, new.prescription_ref,
+  -- exercise_id may only become NULL (library exercise deleted: ON DELETE SET NULL)
+  if new.exercise_id is distinct from old.exercise_id and new.exercise_id is not null then
+    raise exception 'only reps, load, unit, effort and side can be corrected';
+  end if;
+  if (new.owner_id, new.session_id, new.set_no, new.prescription_ref,
       new.idempotency_key, new.logged_at, new.source)
      is distinct from
-     (old.owner_id, old.session_id, old.exercise_id, old.set_no, old.prescription_ref,
+     (old.owner_id, old.session_id, old.set_no, old.prescription_ref,
       old.idempotency_key, old.logged_at, old.source) then
     raise exception 'only reps, load, unit, effort and side can be corrected';
   end if;
