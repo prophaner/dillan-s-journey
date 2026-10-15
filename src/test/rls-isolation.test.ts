@@ -7,10 +7,10 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-const run = process.env.RUN_RLS_TESTS === "1";
-const URL = process.env.SUPABASE_URL ?? "";
-const ANON = process.env.SUPABASE_ANON_KEY ?? "";
-const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+const run = process.env["RUN_RLS_TESTS"] === "1";
+const URL = process.env["SUPABASE_URL"] ?? "";
+const ANON = process.env["SUPABASE_ANON_KEY"] ?? "";
+const SERVICE = process.env["SUPABASE_SERVICE_ROLE_KEY"] ?? "";
 
 const opts = { auth: { persistSession: false, autoRefreshToken: false } };
 
