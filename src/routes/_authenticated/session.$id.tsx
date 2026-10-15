@@ -182,6 +182,15 @@ function Session() {
         <SpotMark size={64} className="text-text" />
         <p className="mt-5 font-voice text-voice-xl leading-[1.2]">{headlineFor(completion)}</p>
         {isDemo && <DemoLabel className="mt-3" />}
+        {writeFailed && (
+          <Banner
+            className="mt-3"
+            icon={<CircleAlert className="size-5 shrink-0 text-text-2" aria-hidden />}
+            action={<DButton size="sm" variant="secondary" onClick={retryWrite}>Try again</DButton>}
+          >
+            This browser isn't keeping data between visits (private mode or storage full).
+          </Banner>
+        )}
 
         <ul className="mt-6 flex flex-col gap-2">
           {steps.map((s) => {
@@ -227,11 +236,15 @@ function Session() {
 
         <div className="mt-auto pt-6">
           <DButton variant="primary" loading={saving} onClick={saveAndClose}>Save session</DButton>
-          {outbox.loaded && <p className="mt-3 text-center text-footnote text-text-2">
-            {saveState === "synced"
-              ? `${d.logs.length} sets synced · nothing waiting`
-              : `${unsynced.length} ${unsynced.length === 1 ? "change" : "changes"} saved on this device · will sync when you're online`}
-          </p>}
+          {outbox.loaded && (saveState === "failed" ? (
+            <div className="mt-3 flex justify-center"><SaveState state="failed" count={unsyncedCount} onRetry={outbox.retryNow} /></div>
+          ) : (
+            <p className="mt-3 text-center text-footnote text-text-2">
+              {saveState === "synced"
+                ? `${d.logs.length} sets synced · nothing waiting`
+                : `${unsynced.length} ${unsynced.length === 1 ? "change" : "changes"} saved on this device · will sync when you're online`}
+            </p>
+          ))}
         </div>
       </div>
     );
@@ -258,11 +271,17 @@ function Session() {
       <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
         {step.priority === "optional" ? <StatusTag kind="neutral" icon={false}>Optional</StatusTag> : <StatusTag kind="priority" icon={false}>Main</StatusTag>}
         <span className="text-subhead font-medium text-text-2">Exercise {d.stepIndex + 1} of {steps.length}</span>
-        <span className="ml-auto">{outbox.loaded && <SaveState state={saveState} count={unsynced.length} onRetry={outbox.syncNow} />}</span>
+        <span className="ml-auto">{outbox.loaded && <SaveState state={saveState} count={unsynced.length} onRetry={outbox.retryNow} />}</span>
       </div>
       {isDemo && <div className="mt-2"><DemoLabel /></div>}
       {writeFailed && (
-        <Banner className="mt-3">Couldn't save on this device. Your phone's storage may be full or blocked. That set wasn't logged; try again.</Banner>
+        <Banner
+          className="mt-3"
+          icon={<CircleAlert className="size-5 shrink-0 text-text-2" aria-hidden />}
+          action={<DButton size="sm" variant="secondary" onClick={retryWrite}>Try again</DButton>}
+        >
+          This browser isn't keeping data between visits (private mode or storage full).
+        </Banner>
       )}
 
       {resting ? (
