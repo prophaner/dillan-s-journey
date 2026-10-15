@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Dillan · Offline</title>
+<link rel="stylesheet" href="/tokens.css" />
+<style>
+  @font-face { font-family: "Satoshi"; src: url("/fonts/Satoshi-Variable.woff2") format("woff2"); font-weight: 300 900; }
+  @font-face { font-family: "Newsreader"; src: url("/fonts/Newsreader-Variable.woff2") format("woff2"); }
+  body { margin: 0; min-height: 100dvh; background: var(--bg); color: var(--text); font-family: var(--font-ui); display: grid; place-items: center; padding: var(--margin); box-sizing: border-box; }
+  main { max-width: 28rem; }
+  h1 { font-family: var(--font-voice); font-weight: 400; font-size: var(--t-voice-xl); line-height: 1.2; margin: 0 0 var(--s3); }
+  p { color: var(--text-2); font-size: var(--t-body); line-height: 1.45; }
+  button { margin-top: var(--s5); height: 58px; width: 100%; border: 0; border-radius: var(--r-btn); background: var(--surface-2); color: var(--text); font: 600 var(--t-headline) var(--font-ui); }
+</style>
+</head>
+<body>
+<main>
+  <h1>You're offline, and Dillan hasn't loaded on this device yet.</h1>
+  <p>Open Dillan once while you're online. After that, sessions you start keep working without a connection.</p>
+  <button onclick="location.reload()">Try again</button>
+</main>
+</body>
+</html>
