@@ -18,8 +18,15 @@ Options: (a) accept as is and backfill later; (b) approve with fixes: null-owner
 Decision: (b), decided by the owner. Fixes go to Lovable as a separate migration 0003 prompt after the five workout-slice fixes.
 Consequence: Accounts created before 0002 cannot log sets until 0003 lands. docs/phase0-schema.sql stops being the approved baseline on its own; a docs/s16-schema.sql mirrors 0002 and 0003.
 
-## 2026-10-15 — Lovable is the only product coder
+---
+
+# Proposed, not yet decided
+
+Entries here are the lead's recommendations. They become decisions only when the owner says
+so, and then move above this line with the date.
+
+## Lovable is the only product coder
 Question: Should Claude Code subagents patch product code directly when Lovable fails a fix?
 Options: (a) a "patcher" agent on a claude/ branch; (b) Lovable only, Claude adds tests that pin the behavior.
-Decision: (b), proposed by the lead, pending owner confirmation. Claude edits only tests, docs, roadmap and .claude/.
+Recommendation: (b). Claude edits only tests, docs, roadmap and .claude/.
 Consequence: Two writers on the same files would race through Lovable's two-way sync. Fixes may take an extra Lovable round; test-writer gives that round a red/green target.

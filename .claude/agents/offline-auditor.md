@@ -1,6 +1,6 @@
 ---
 name: offline-auditor
-description: Audits the offline and sync layer (IndexedDB outbox, idempotency, optimistic version, timestamp timers, service worker) against brief §10.2, AGENTS.md rules and AT-29…36. Use whenever src/lib/outbox.ts, sync*.ts, timer.ts, sw.ts, use-outbox.ts, workout-store.ts or public/sw.js change. Read-only.
+description: Audits the offline and sync layer (IndexedDB outbox, idempotency, optimistic version, timestamp timers, service worker, server-side write handlers) against brief §10.2, AGENTS.md rules and AT-29…36. Use whenever src/lib/outbox.ts, use-outbox.ts, sync*.ts, timer.ts, sw.ts, any src/lib/*-store.ts, any src/lib/*.server.ts or public/sw.js change. Read-only.
 tools: Read, Grep, Glob, Bash
 model: inherit
 ---
@@ -18,7 +18,7 @@ Check, with file:line for each finding:
    `update:<table>`. A conflict (version mismatch) surfaces to the user as a state, not a
    silent overwrite and not a silent drop.
 3. "Synced" is shown only after the server acknowledges `stored: true`. Before that the word
-   is "Saved on this device". A rejected write shows "Didn't save" with a retry.
+   is "Saved on this device". A rejected write shows "Didn't sync" with a Retry (design 05 §2 wording).
 4. Outbox replay is ordered per entity, survives a reload mid-replay, and does not duplicate
    on double-tap or on two tabs (`BroadcastChannel`, lock or single-flight).
 5. Timers derive from stored timestamps (`src/lib/timer.ts`), never from `setInterval` counts.

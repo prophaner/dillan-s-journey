@@ -15,7 +15,10 @@ Check, with file:line for each finding:
 2. Fonts: Newsreader only for Dillan's own words; Satoshi for UI; M PLUS Rounded 1c for
    numbers with `tabular-nums`. No other font-family.
 3. Color: at most one Spot-orange filled element per screen; text on orange is Iron, never
-   white. No red anywhere (grep `red`, `#e`, `destructive`). Night Gym via
+   white. No red anywhere: grep `\b(text|bg|border|ring|from|to)-red-`, `destructive`, and
+   any hex literal `#[0-9a-fA-F]{3,8}` or `rgb(` in the audited files (any hex outside
+   tokens.css is a hard-coded color whatever its hue; plain words like "required" or
+   "reduced-motion" are not findings). Night Gym via
    `prefers-color-scheme`, never a manual theme toggle unless the design says so.
 4. Status = icon + word, never color alone.
 5. Training screens: End / Stop / "Something feels off" reachable in one tap, no

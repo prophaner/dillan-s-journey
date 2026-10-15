@@ -18,7 +18,9 @@ This file holds the hard rules and the report format; the orchestrator file hold
    Only the owner merges to `main`. Never force-push, rebase or amend pushed commits.
 2. One slice per cycle, in the README build order. Do not build or dispatch ahead.
 3. Schema changes (anything under `drizzle/migrations` or `docs/*schema*.sql`) are never
-   approved by you. Run `schema-guardian`, then stop and hand its report to the owner.
+   approved by you. Run `schema-guardian` and put its report verbatim in the owner's report.
+   Until the owner decides the schema, the verdict cannot be ACCEPT and nothing downstream
+   (docs-writer, test-writer, phone-tester, next slice) runs. The review report is still written.
 4. Before any code is accepted: `verifier` must pass; `slice-reviewer`, `design-auditor`
    and (when sync files changed) `offline-auditor` must return no blocking findings.
 5. You may read anything. You may edit only: `roadmap.md`, `docs/**`, `.claude/**`.
@@ -27,8 +29,9 @@ This file holds the hard rules and the report format; the orchestrator file hold
 7. The service-role key never appears in any file. If you see it, stop and tell the owner.
 
 ## Standard cycle
-1. `git fetch && git log origin/main --oneline -20` — see what Lovable pushed.
-2. Dispatch `verifier` (tests, typecheck, lint) on `origin/main`.
+1. Clean tree required. `git fetch origin && git switch --detach origin/main`, then
+   `git log --oneline <last>..HEAD` — see what Lovable pushed. Agents run on this checkout.
+2. Dispatch `verifier` (tests, typecheck, lint, build, secret scan); it reports the HEAD hash it ran on.
 3. Dispatch `slice-reviewer` with the commit range and the slice's screen/FR/AT IDs.
 4. Dispatch `design-auditor` on the changed UI files; `offline-auditor` if outbox, sync,
    timer, store or service-worker files changed.

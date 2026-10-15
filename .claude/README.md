@@ -18,11 +18,11 @@ call) and `model`. The body is the agent's instructions.
 
 | Agent | Role | Tools | Model | May edit | Reads first |
 |---|---|---|---|---|---|
-| orchestrator | Lead: dispatches, decides, reports | Read, Grep, Glob, Bash, Agent, Edit, Write | inherit | roadmap.md, docs/**, .claude/** | CLAUDE.md, AGENTS.md, roadmap.md |
+| orchestrator | Lead (main session, never dispatched): dispatches, decides, reports | Read, Grep, Glob, Bash, Edit, Write (+ Agent in the main session) | inherit | roadmap.md, docs/**, .claude/** | CLAUDE.md, AGENTS.md, roadmap.md |
 | verifier | Typecheck, lint, tests, build, secret scan | Bash, Read, Grep, Glob | haiku | nothing | package.json scripts (bun) |
 | slice-reviewer | Did the slice meet the brief's FR/AT? | Read, Grep, Glob, Bash (read-only git) | inherit | nothing | docs/brief-v2.md FR/AT items, §9.1, §10.2 |
 | design-auditor | Does the UI follow the design system? | Read, Grep, Glob | inherit | nothing | design/README.md, design/docs/02, 04, 05; src/styles/tokens.css |
-| offline-auditor | Outbox, idempotency, version, timers, service worker | Read, Grep, Glob, Bash | inherit | nothing | brief §10.2, AT-29…36; design/docs/05; AGENTS.md |
+| offline-auditor | Outbox, idempotency, version, timers, service worker, *.server.ts write handlers | Read, Grep, Glob, Bash | inherit | nothing | brief §10.2, AT-29…36; design/docs/05; AGENTS.md |
 | schema-guardian | Is the migration / RLS safe? Owner approves | Read, Grep, Glob, Bash | inherit | nothing | brief §9, §9.1, §11, §12; docs/phase0-schema.sql |
 | test-writer | Vitest tests that pin a brief invariant | Read, Grep, Glob, Bash, Edit, Write | inherit | src/test/** | existing src/test/*, vitest.config.ts |
 | phone-tester | On-phone checklist for the owner per slice | Read, Grep, Glob, Write | inherit | docs/test-plans/** | design/docs/03-screens.md, brief §14, mockups |
@@ -32,7 +32,11 @@ call) and `model`. The body is the agent's instructions.
 Only three agents can write, and each is fenced to one area: test-writer to `src/test/`,
 phone-tester to `docs/test-plans/`, docs-writer to the three docs files and the roadmap.
 No agent edits `src/lib`, `src/routes`, `src/components`, migrations or config. That is
-Lovable's territory; see `docs/DECISIONS.md`.
+Lovable's territory. Whether Claude may ever patch product code is a proposal awaiting the
+owner in `docs/DECISIONS.md`; until decided, the answer is no.
+
+The orchestrator file describes the main session's role. It is not dispatched as a subagent,
+because subagents cannot spawn agents.
 
 ## Commands (`.claude/commands/`)
 - `/review <commit>` — full review cycle on Lovable's latest push: verifier, slice-reviewer,

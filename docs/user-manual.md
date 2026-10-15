@@ -1,20 +1,20 @@
 # Dillan — user manual
 
-Written for the trainee. One section per screen. Status words you will see:
+One section per screen. Status words you will see:
 
 - **Saved on this device** — your entry is stored on your phone and will sync when you are online.
 - **Synced** — the server has confirmed your entry.
-- **Didn't save** — the entry could not be stored. Try again.
+- **Didn't sync** — the entry could not be sent. Tap Retry.
 - **Not yet known** — there is no value yet. Shown as "—".
 
 ## Today
-(unverified) — to be written by the docs-writer agent when the slice is accepted.
+This section is not written yet.
 
 ## Train
-(unverified)
+This section is not written yet.
 
 ## Session
-(unverified)
+This section is not written yet.
 
 ## Progress
 Coming later.
@@ -26,10 +26,10 @@ Coming later.
 Coming later.
 
 ## Profile
-(unverified)
+This section is not written yet.
 
 ## Settings
-(unverified)
+This section is not written yet.
 
 ## Coaching
 Coming later.

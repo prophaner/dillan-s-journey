@@ -22,6 +22,8 @@ Never set, print or look for environment secrets.
 
 Output:
 ```
+checkout:  <git rev-parse --short HEAD> (<branch or "detached at origin/main">)
+runner:    bun | npm (bun missing)
 typecheck: PASS | FAIL (<n> errors)
 lint:      PASS | FAIL (<n>)
 tests:     PASS <n>/<n> | FAIL — <failing test names>

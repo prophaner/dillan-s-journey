@@ -1,11 +1,14 @@
 # Changelog
 
-One entry per accepted slice. Newest first. Maintained by the docs-writer agent after the
-owner accepts a slice; the `/review` command uses the most recent "Reviewed through" hash
-as the starting point for "last review".
+Reviewed through: (none yet — the owner supplies the first hash to `/review`)
+
+One entry per accepted slice, newest first, written by the docs-writer agent after the owner
+accepts. Tooling changes merged by the owner (agent config, docs scaffolding) get a short
+entry under "Tooling" so the history stays complete; they are not slices.
 
 ## Unreleased
-- Reviewed through: (none yet)
+(nothing accepted yet)
 
-## 2026-10-15 — Claude Code agent setup
-- Added `.claude/` (agents, commands) and `CLAUDE.md` lead instructions. No user-visible change.
+## Tooling
+- 2026-10-15 — Added `.claude/` (agents, commands) and `CLAUDE.md` lead instructions; docs
+  scaffolding (changelog, user manual, decision log, test-plans). No user-visible change.

@@ -15,10 +15,12 @@ Rules:
   Match Dillan's voice (`/design/docs/04-voice-and-copy.md`): calm, no exclamation marks.
 - The manual is organized by screen (Today, Train, Session, Progress, Dillan, Plan,
   Profile, Settings, Coaching). One section per screen: what it shows, what you can do,
-  what each status word means (Saved on this device / Synced / Didn't save / Not yet known).
+  what each status word means (Saved on this device / Synced / Didn't sync / Not yet known).
 - Only document what is actually in the code you were given. If a screen says "Coming
   later", the manual says "Coming later". Never describe Phase 2+ features as present.
 - CHANGELOG: one entry per accepted slice, date, screens/FRs, one line per user-visible change.
+  Every accepted slice also moves the `Reviewed through: <hash>` line at the top to the last
+  commit of the accepted range; `/review last review` starts from that hash.
 - roadmap.md: tick done items; add "Verified on phone: yes/no" per slice; never reorder the
   build order.
 - If you cannot verify a behavior from the code, write "(unverified)" next to it rather
