@@ -20,6 +20,9 @@ import { Route as AuthenticatedAppProgressRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAppSettingsRouteImport } from './routes/_authenticated/_app/settings'
 import { Route as AuthenticatedAppTodayRouteImport } from './routes/_authenticated/_app/today'
 import { Route as AuthenticatedAppTrainRouteImport } from './routes/_authenticated/_app/train'
+import { Route as AuthenticatedSessionIdRouteImport } from './routes/_authenticated/session.$id'
+import { Route as AuthenticatedAppDevComponentsRouteImport } from './routes/_authenticated/_app/dev.components'
+import { Route as AuthenticatedAppDevSpikesRouteImport } from './routes/_authenticated/_app/dev.spikes'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -76,6 +79,23 @@ const AuthenticatedAppTrainRoute = AuthenticatedAppTrainRouteImport.update({
   path: '/train',
   getParentRoute: () => AuthenticatedAppRouteRoute,
 } as any)
+const AuthenticatedSessionIdRoute = AuthenticatedSessionIdRouteImport.update({
+  id: '/session/$id',
+  path: '/session/$id',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedAppDevComponentsRoute =
+  AuthenticatedAppDevComponentsRouteImport.update({
+    id: '/dev/components',
+    path: '/dev/components',
+    getParentRoute: () => AuthenticatedAppRouteRoute,
+  } as any)
+const AuthenticatedAppDevSpikesRoute =
+  AuthenticatedAppDevSpikesRouteImport.update({
+    id: '/dev/spikes',
+    path: '/dev/spikes',
+    getParentRoute: () => AuthenticatedAppRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -87,6 +107,9 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedAppSettingsRoute
   '/today': typeof AuthenticatedAppTodayRoute
   '/train': typeof AuthenticatedAppTrainRoute
+  '/session/$id': typeof AuthenticatedSessionIdRoute
+  '/dev/components': typeof AuthenticatedAppDevComponentsRoute
+  '/dev/spikes': typeof AuthenticatedAppDevSpikesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -98,6 +121,9 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedAppSettingsRoute
   '/today': typeof AuthenticatedAppTodayRoute
   '/train': typeof AuthenticatedAppTrainRoute
+  '/session/$id': typeof AuthenticatedSessionIdRoute
+  '/dev/components': typeof AuthenticatedAppDevComponentsRoute
+  '/dev/spikes': typeof AuthenticatedAppDevSpikesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -112,6 +138,9 @@ export interface FileRoutesById {
   '/_authenticated/_app/settings': typeof AuthenticatedAppSettingsRoute
   '/_authenticated/_app/today': typeof AuthenticatedAppTodayRoute
   '/_authenticated/_app/train': typeof AuthenticatedAppTrainRoute
+  '/_authenticated/session/$id': typeof AuthenticatedSessionIdRoute
+  '/_authenticated/_app/dev/components': typeof AuthenticatedAppDevComponentsRoute
+  '/_authenticated/_app/dev/spikes': typeof AuthenticatedAppDevSpikesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -125,6 +154,9 @@ export interface FileRouteTypes {
     | '/settings'
     | '/today'
     | '/train'
+    | '/session/$id'
+    | '/dev/components'
+    | '/dev/spikes'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -136,6 +168,9 @@ export interface FileRouteTypes {
     | '/settings'
     | '/today'
     | '/train'
+    | '/session/$id'
+    | '/dev/components'
+    | '/dev/spikes'
   id:
     | '__root__'
     | '/'
@@ -149,6 +184,9 @@ export interface FileRouteTypes {
     | '/_authenticated/_app/settings'
     | '/_authenticated/_app/today'
     | '/_authenticated/_app/train'
+    | '/_authenticated/session/$id'
+    | '/_authenticated/_app/dev/components'
+    | '/_authenticated/_app/dev/spikes'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -236,6 +274,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppTrainRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
+    '/_authenticated/session/$id': {
+      id: '/_authenticated/session/$id'
+      path: '/session/$id'
+      fullPath: '/session/$id'
+      preLoaderRoute: typeof AuthenticatedSessionIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/_app/dev/components': {
+      id: '/_authenticated/_app/dev/components'
+      path: '/dev/components'
+      fullPath: '/dev/components'
+      preLoaderRoute: typeof AuthenticatedAppDevComponentsRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
+    '/_authenticated/_app/dev/spikes': {
+      id: '/_authenticated/_app/dev/spikes'
+      path: '/dev/spikes'
+      fullPath: '/dev/spikes'
+      preLoaderRoute: typeof AuthenticatedAppDevSpikesRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
   }
 }
 
@@ -247,6 +306,8 @@ interface AuthenticatedAppRouteRouteChildren {
   AuthenticatedAppSettingsRoute: typeof AuthenticatedAppSettingsRoute
   AuthenticatedAppTodayRoute: typeof AuthenticatedAppTodayRoute
   AuthenticatedAppTrainRoute: typeof AuthenticatedAppTrainRoute
+  AuthenticatedAppDevComponentsRoute: typeof AuthenticatedAppDevComponentsRoute
+  AuthenticatedAppDevSpikesRoute: typeof AuthenticatedAppDevSpikesRoute
 }
 
 const AuthenticatedAppRouteRouteChildren: AuthenticatedAppRouteRouteChildren = {
@@ -257,6 +318,8 @@ const AuthenticatedAppRouteRouteChildren: AuthenticatedAppRouteRouteChildren = {
   AuthenticatedAppSettingsRoute: AuthenticatedAppSettingsRoute,
   AuthenticatedAppTodayRoute: AuthenticatedAppTodayRoute,
   AuthenticatedAppTrainRoute: AuthenticatedAppTrainRoute,
+  AuthenticatedAppDevComponentsRoute: AuthenticatedAppDevComponentsRoute,
+  AuthenticatedAppDevSpikesRoute: AuthenticatedAppDevSpikesRoute,
 }
 
 const AuthenticatedAppRouteRouteWithChildren =
@@ -266,10 +329,12 @@ const AuthenticatedAppRouteRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAppRouteRoute: typeof AuthenticatedAppRouteRouteWithChildren
+  AuthenticatedSessionIdRoute: typeof AuthenticatedSessionIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAppRouteRoute: AuthenticatedAppRouteRouteWithChildren,
+  AuthenticatedSessionIdRoute: AuthenticatedSessionIdRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
