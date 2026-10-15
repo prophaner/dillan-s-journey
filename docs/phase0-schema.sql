@@ -1,4 +1,4 @@
--- Dillan · Phase 0 schema — FOR REVIEW, NOT YET APPLIED.
+-- Dillan · Phase 0 schema — approved by the owner and applied 2026-10-15.
 -- Brief §9 (data model), §9.1 (invariants), §11 (permission defaults).
 -- Rules in this file:
 --   * Every user table has owner_id → profiles(id) ON DELETE CASCADE (account deletion removes everything).
