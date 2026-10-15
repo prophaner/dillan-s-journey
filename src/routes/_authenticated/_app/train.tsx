@@ -6,7 +6,7 @@ import { pageHead } from "@/lib/head";
 import { Card, OptionRow, PageHeader, SectionLabel, ScreenState } from "@/components/dillan/surfaces";
 import { DemoLabel, SaveState, StatusTag } from "@/components/dillan/tags";
 import { DButton } from "@/components/dillan/button";
-import { useOutbox } from "@/lib/use-outbox";
+import { sessionSaveState, useOutbox } from "@/lib/use-outbox";
 import { onOutboxChange } from "@/lib/outbox";
 import { beginSession, getActiveSession, loadRecent, loadRoutine, type SessionDraft } from "@/lib/workout-store";
 import { stepsOf } from "@/lib/workout";
@@ -48,8 +48,7 @@ function Train() {
   const steps = r ? stepsOf(r) : [];
   const totalSets = steps.reduce((n, s) => n + s.sets, 0);
   const activeSteps = active ? stepsOf(active.snapshot) : [];
-  const sessionItems = active ? outbox.items.filter((i) => (i.payload as { sessionId?: string; id?: string })?.sessionId === active.id || (i.payload as { id?: string })?.id === active.id) : [];
-  const activeSave = sessionItems.some((i) => i.status === "failed" || i.status === "conflict") ? "failed" : sessionItems.some((i) => i.status === "local") ? "local" : "synced";
+  const activeSave = active ? sessionSaveState(outbox.items, active.id, active.logs.map((l) => l.key)).state : "local";
 
   return (
     <div>
@@ -59,7 +58,7 @@ function Train() {
         <Card className="mt-6 border-2 border-text">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <StatusTag kind="waiting">In progress</StatusTag>
-            <SaveState state={activeSave} onRetry={outbox.syncNow} />
+            {outbox.loaded && <SaveState state={activeSave} onRetry={outbox.syncNow} />}
           </div>
           <h2 className="mt-3 text-title2 font-bold">{active.snapshot.title}</h2>
           {active.snapshot.isDemo && <DemoLabel className="mt-1" />}

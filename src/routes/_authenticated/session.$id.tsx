@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Check, Hand, Minus, Plus } from "lucide-react";
 import { pageHead } from "@/lib/head";
-import { useOutbox } from "@/lib/use-outbox";
+import { sessionSaveState, useOutbox } from "@/lib/use-outbox";
 import { elapsedMs, formatClock, remainingMs, useNow, useWakeLock } from "@/lib/timer";
 import { closeSession, draftKey, saveSession, type SessionDraft } from "@/lib/workout-store";
 import { loadDraft } from "@/lib/outbox";
@@ -40,6 +40,7 @@ function Session() {
   const [d, setD] = useState<SessionDraft | null | undefined>(undefined);
   const [offSheet, setOffSheet] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [writeFailed, setWriteFailed] = useState(false);
   const lastTap = useRef<number | null>(null);
   useWakeLock(d?.phase === "training");
 
@@ -57,7 +58,7 @@ function Session() {
     setD((cur) => {
       if (!cur) return cur;
       const next = { ...cur, ...(typeof patch === "function" ? patch(cur) : patch) };
-      void saveSession(user.id, next);
+      saveSession(user.id, next).catch(() => setWriteFailed(true));
       return next;
     });
 
@@ -89,11 +90,8 @@ function Session() {
     );
   }
 
-  const sessionItems = outbox.items.filter(
-    (i) => (i.payload as { sessionId?: string })?.sessionId === id || (i.payload as { id?: string })?.id === id,
-  );
-  const unsynced = sessionItems.filter((i) => i.status !== "synced");
-  const saveState = sessionItems.some((i) => i.status === "failed" || i.status === "conflict") ? "failed" : unsynced.length ? "local" : "synced";
+  const { state: saveState, unsynced: unsyncedCount } = sessionSaveState(outbox.items, id, d.logs.map((l) => l.key));
+  const unsynced = { length: unsyncedCount };
 
   const doneSets = d.logs.filter((l) => l.ref === step.ref);
   const setNo = doneSets.length + 1;
@@ -112,29 +110,42 @@ function Session() {
     const t = Date.now();
     if (isDoubleTap(lastTap.current, t) || stepFinished) return;
     lastTap.current = t;
-    const t0 = performance.now();
-    const item = await outbox.add(SET_LOG, {
-      sessionId: id, exerciseId: step.exerciseId, ref: step.ref, setNo,
-      reps: d.inputs.reps, load: d.inputs.load, unit: step.unit, rir: d.inputs.rir,
-      loggedAt: new Date(t).toISOString(), isDemo,
-    });
+    let item;
+    try {
+      item = await outbox.add(SET_LOG, {
+        sessionId: id, exerciseId: step.exerciseId, ref: step.ref, setNo,
+        reps: d.inputs.reps, load: d.inputs.load, unit: step.unit, rir: d.inputs.rir,
+        loggedAt: new Date(t).toISOString(), isDemo,
+      });
+    } catch {
+      setWriteFailed(true);
+      return;
+    }
     const log: LoggedSet = {
       key: item.idempotencyKey, ref: step.ref, setNo, reps: d.inputs.reps, load: d.inputs.load,
       unit: step.unit, rir: d.inputs.rir, loggedAt: new Date(t).toISOString(),
     };
     const lastOfStep = setNo >= step.sets;
     const lastOfAll = lastOfStep && d.stepIndex >= steps.length - 1;
-    update((cur) => ({
-      logs: [...cur.logs, log],
+    const next: SessionDraft = {
+      ...d,
+      logs: [...d.logs, log],
       restStartedAt: lastOfAll ? null : Date.now(),
       restTotalMs: step.restSeconds * 1000,
-      ...(lastOfStep && !lastOfAll ? { stepIndex: cur.stepIndex + 1, inputs: prefill(cur.stepIndex + 1) } : {}),
-    }));
-    const ms = Math.round(performance.now() - t0);
+      ...(lastOfStep && !lastOfAll ? { stepIndex: d.stepIndex + 1, inputs: prefill(d.stepIndex + 1) } : {}),
+    };
+    try {
+      await saveSession(user.id, next);
+    } catch {
+      setWriteFailed(true);
+      return;
+    }
+    setWriteFailed(false);
+    setD(next);
     toast({
-      text: `Set ${setNo} logged · saved on this device in ${ms} ms`,
+      text: `Set ${setNo} logged · saved on this device`,
       undo: () => {
-        void outbox.add(SET_LOG_DELETE, { sessionId: id, setKey: log.key });
+        outbox.add(SET_LOG_DELETE, { sessionId: id, setKey: log.key }).catch(() => setWriteFailed(true));
         update((cur) => ({
           logs: cur.logs.filter((l) => l.key !== log.key),
           restStartedAt: null,
@@ -212,11 +223,11 @@ function Session() {
 
         <div className="mt-auto pt-6">
           <DButton variant="primary" loading={saving} onClick={saveAndClose}>Save session</DButton>
-          <p className="mt-3 text-center text-footnote text-text-2">
-            {unsynced.length === 0
+          {outbox.loaded && <p className="mt-3 text-center text-footnote text-text-2">
+            {saveState === "synced"
               ? `${d.logs.length} sets synced · nothing waiting`
               : `${unsynced.length} ${unsynced.length === 1 ? "change" : "changes"} saved on this device · will sync when you're online`}
-          </p>
+          </p>}
         </div>
       </div>
     );
@@ -243,9 +254,12 @@ function Session() {
       <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
         {step.priority === "optional" ? <StatusTag kind="neutral" icon={false}>Optional</StatusTag> : <StatusTag kind="priority" icon={false}>Main</StatusTag>}
         <span className="text-subhead font-medium text-text-2">Exercise {d.stepIndex + 1} of {steps.length}</span>
-        <span className="ml-auto"><SaveState state={saveState} count={unsynced.length} onRetry={outbox.syncNow} /></span>
+        <span className="ml-auto">{outbox.loaded && <SaveState state={saveState} count={unsynced.length} onRetry={outbox.syncNow} />}</span>
       </div>
       {isDemo && <div className="mt-2"><DemoLabel /></div>}
+      {writeFailed && (
+        <Banner className="mt-3">Couldn't save on this device. Your phone's storage may be full or blocked. That set wasn't logged; try again.</Banner>
+      )}
 
       {resting ? (
         <section className="flex flex-1 flex-col items-center justify-center py-6">
