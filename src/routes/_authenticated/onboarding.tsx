@@ -341,7 +341,7 @@ function Onboarding() {
             {!payload.routine && (
               <p className="mt-3 text-footnote text-text-2">You'll start with the demo routine. It's synthetic and labeled "Demo".</p>
             )}
-            {mine && <SaveState className="mt-3" state={mine.status === "synced" ? "synced" : mine.status === "local" ? "local" : "failed"} onRetry={outbox.syncNow} />}
+            {mine && <SaveState className="mt-3" state={mine.status === "synced" ? "synced" : mine.status === "local" ? "local" : "failed"} onRetry={outbox.retryNow} />}
           </section>
         )}
       </main>

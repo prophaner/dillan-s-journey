@@ -58,7 +58,7 @@ function Train() {
         <Card className="mt-6 border-2 border-text">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <StatusTag kind="waiting">In progress</StatusTag>
-            {outbox.loaded && <SaveState state={activeSave} onRetry={outbox.syncNow} />}
+            {outbox.loaded && <SaveState state={activeSave} onRetry={outbox.retryNow} />}
           </div>
           <h2 className="mt-3 text-title2 font-bold">{active.snapshot.title}</h2>
           {active.snapshot.isDemo && <DemoLabel className="mt-1" />}
