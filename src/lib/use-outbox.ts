@@ -14,7 +14,7 @@ export function useOutbox(accountId: string | undefined) {
     setItems(await listItems(accountId));
   }, [accountId]);
 
-  const sendItem = useCallback(async (item: OutboxItem) => {
+  const sendItem = useCallback(async (item: OutboxItem): Promise<SendResult> => {
     if (!navigator.onLine) return { ok: false, reason: "offline" };
     try {
       const res = await send({
