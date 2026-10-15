@@ -1,25 +1,35 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { ONBOARDING_KIND, validateOnboardingPayload } from "./onboarding";
 
 /**
- * Phase 0 sync endpoint. It authenticates the caller and acknowledges the
- * idempotency key. It does NOT store anything yet: real tables wait for the
- * owner's approval of the schema (docs/phase0-schema.sql).
+ * Outbox sync endpoint. Returns stored:true only when the write is durably saved.
+ * Kinds without real storage yet (e.g. set logs before the workout slice) return
+ * stored:false, so the device keeps showing "Saved on this device".
  */
 export const syncOutboxItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { idempotencyKey: string; kind: string; payload: unknown }) => {
-    if (typeof input?.idempotencyKey !== "string" || input.idempotencyKey.length < 8) {
-      throw new Error("idempotencyKey required");
-    }
-    if (typeof input.kind !== "string") throw new Error("kind required");
-    return input;
-  })
+  .inputValidator(
+    (input: { idempotencyKey: string; kind: string; payload: unknown; expectedVersion?: number | null }) => {
+      if (typeof input?.idempotencyKey !== "string" || input.idempotencyKey.length < 8) {
+        throw new Error("idempotencyKey required");
+      }
+      if (typeof input.kind !== "string") throw new Error("kind required");
+      return input;
+    },
+  )
   .handler(async ({ data, context }) => {
-    // stored:false — nothing is durably saved yet, so the client must NOT show "Synced".
+    let stored = false;
+    if (data.kind === ONBOARDING_KIND) {
+      const payload = validateOnboardingPayload(data.payload);
+      if (typeof data.expectedVersion !== "number") throw new Error("400 version required");
+      const { storeOnboarding } = await import("./onboarding.server");
+      await storeOnboarding(context.supabase, context.userId, data.idempotencyKey, data.expectedVersion, payload);
+      stored = true;
+    }
     return {
       ack: true as const,
-      stored: false as boolean,
+      stored,
       idempotencyKey: data.idempotencyKey,
       accountId: context.userId,
       receivedAt: new Date().toISOString(),
