@@ -59,11 +59,19 @@ export async function storeOnboarding(
     const { data: rtv, error: rErr } = await sb
       .from("routine_template_versions").select("id").eq("owner_id", userId).eq("idempotency_key", rk).single();
     if (rErr || !rtv) throw new Error("retry: routine read failed");
+    // Every prescription references an exercise by id: shared library match
+    // (case-insensitive) first, otherwise a custom exercise owned by the user.
+    const ids: string[] = [];
+    for (const r of p.routine.rows) {
+      const { data: exId, error: xErr } = await sb.rpc("resolve_exercise_id", { _name: r.name });
+      if (xErr || !exId) throw new Error(`retry: exercise lookup failed`);
+      ids.push(exId as string);
+    }
     const { error: bErr } = await sb.from("routine_blocks").upsert(
       p.routine.rows.map((r, i) => ({
         owner_id: userId, template_version_id: rtv.id, position: i + 1, block_type: "single",
-        rounds: 1, priority: "main",
-        prescriptions: [{ name: r.name, sets: r.sets, reps: r.reps, load: r.load, unit: r.unit }],
+        rounds: 1, priority: "main", rest_seconds: 90,
+        prescriptions: [{ exercise_id: ids[i], name: r.name.trim(), sets: r.sets, reps: r.reps, load: r.load, unit: r.unit }],
       })), { onConflict: "template_version_id,position", ignoreDuplicates: true });
     check(bErr);
     // A real routine replaces the synthetic demo in one action.
