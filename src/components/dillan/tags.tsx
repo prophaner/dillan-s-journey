@@ -36,7 +36,7 @@ export function StatusTag({
   kind: TagKind;
   children: ReactNode;
   icon?: ReactNode | false;
-  className?: string;
+  className?: string | undefined;
 }) {
   return (
     <span
