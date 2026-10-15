@@ -4,7 +4,7 @@ import { Check, Hand, Minus, Plus } from "lucide-react";
 import { pageHead } from "@/lib/head";
 import { useOutbox } from "@/lib/use-outbox";
 import { elapsedMs, formatClock, remainingMs, useNow, useWakeLock } from "@/lib/timer";
-import { closeSession, draftKey, saveSession, type SessionDraft } from "@/lib/workout.client";
+import { closeSession, draftKey, saveSession, type SessionDraft } from "@/lib/workout-store";
 import { loadDraft } from "@/lib/outbox";
 import {
   completionOf, headlineFor, isDoubleTap, SESSION_FINISH, SET_LOG, SET_LOG_DELETE, stepResult, stepsOf, type LoggedSet,
