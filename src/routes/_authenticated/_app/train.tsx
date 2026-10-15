@@ -8,7 +8,7 @@ import { DemoLabel, SaveState, StatusTag } from "@/components/dillan/tags";
 import { DButton } from "@/components/dillan/button";
 import { useOutbox } from "@/lib/use-outbox";
 import { onOutboxChange } from "@/lib/outbox";
-import { beginSession, getActiveSession, loadRecent, loadRoutine, type SessionDraft } from "@/lib/workout.client";
+import { beginSession, getActiveSession, loadRecent, loadRoutine, type SessionDraft } from "@/lib/workout-store";
 import { stepsOf } from "@/lib/workout";
 
 export const Route = createFileRoute("/_authenticated/_app/train")({
