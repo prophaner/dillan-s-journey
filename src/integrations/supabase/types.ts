@@ -998,6 +998,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      _resolve_exercise: {
+        Args: { _demo: boolean; _name: string; _owner: string }
+        Returns: string
+      }
       accept_grant: { Args: { _grant_id: string }; Returns: undefined }
       coach_can_read: {
         Args: {
@@ -1016,6 +1020,7 @@ export type Database = {
       }
       create_demo_routine: { Args: { _owner: string }; Returns: undefined }
       delete_my_demo_data: { Args: never; Returns: undefined }
+      resolve_exercise_id: { Args: { _name: string }; Returns: string }
     }
     Enums: {
       grant_scope: "progress" | "goals_plan" | "limitations" | "measurements"

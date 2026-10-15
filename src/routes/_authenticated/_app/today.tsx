@@ -67,7 +67,7 @@ function Today() {
               variant="primary"
               icon={<Play className="size-5" aria-hidden />}
               className="lg:max-w-[480px]"
-              onClick={() => navigate({ to: "/session/$id", params: { id: "demo" } })}
+              onClick={() => navigate({ to: "/train" })}
             >
               Start session
             </DButton>
