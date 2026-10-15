@@ -84,30 +84,6 @@ create policy "grants: owner all" on public.coach_access_grants for all to authe
 create policy "grants: coach read" on public.coach_access_grants for select to authenticated
   using (coach_id = auth.uid() or lower(invite_email) = lower(auth.jwt() ->> 'email'));
 
-create or replace function public.grants_guard()
-returns trigger language plpgsql set search_path = public as $$
-begin
-  if tg_op = 'INSERT' then
-    if new.coach_id is not null or new.status <> 'invited' then
-      raise exception 'new grants start as invited with no coach';
-    end if;
-    return new;
-  end if;
-  -- Owner may change scopes or revoke, never attach a coach or mark accepted.
-  if new.coach_id is distinct from old.coach_id or
-     (new.status = 'accepted' and old.status <> 'accepted') then
-    raise exception 'only the invited coach can accept, via accept_grant()';
-  end if;
-  if new.status = 'revoked' and old.status <> 'revoked' then
-    new.revoked_at := now();
-  end if;
-  if old.status = 'revoked' and new.status <> 'revoked' then
-    raise exception 'revoked grants cannot be reopened; create a new invite';
-  end if;
-  return new;
-end $$;
-create trigger grants_guard before insert or update on public.coach_access_grants
-  for each row execute function public.grants_guard();
 create trigger grants_version before update on public.coach_access_grants
   for each row execute function public.bump_version();
 
@@ -125,7 +101,7 @@ begin
      and owner_id <> auth.uid();
   if not found then raise exception 'invite not found'; end if;
 end $$;
--- grants_guard lets accept_grant through:
+-- Guard: only accept_grant() may attach a coach or mark accepted.
 create or replace function public.grants_guard()
 returns trigger language plpgsql set search_path = public as $$
 begin
@@ -137,8 +113,7 @@ begin
   end if;
   if coalesce(current_setting('dillan.accepting', true), '') <> 'on' and
      (new.coach_id is distinct from old.coach_id or
-      (new.status = 'accepted' and old.status <> 'accepted') or
-      new.scopes is distinct from old.scopes and false) then
+      (new.status = 'accepted' and old.status <> 'accepted')) then
     raise exception 'only the invited coach can accept, via accept_grant()';
   end if;
   if new.status = 'revoked' and old.status <> 'revoked' then
@@ -149,6 +124,8 @@ begin
   end if;
   return new;
 end $$;
+create trigger grants_guard before insert or update on public.coach_access_grants
+  for each row execute function public.grants_guard();
 revoke all on function public.accept_grant(uuid) from public, anon;
 grant execute on function public.accept_grant(uuid) to authenticated;
 
