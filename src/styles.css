@@ -1,5 +1,4 @@
 @import "tailwindcss" source(none);
-@import "@fontsource-variable/newsreader/opsz.css";
 @import "@fontsource/m-plus-rounded-1c/latin-500.css";
 @import "@fontsource/m-plus-rounded-1c/latin-700.css";
 @import "@fontsource/m-plus-rounded-1c/latin-800.css";
@@ -9,6 +8,13 @@
 
 /* Night Gym follows [data-theme="dark"], set on <html> from prefers-color-scheme in __root. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@font-face {
+  font-family: "Newsreader";
+  src: url("/fonts/Newsreader-Variable.woff2") format("woff2");
+  font-weight: 200 800;
+  font-display: swap;
+}
 
 @font-face {
   font-family: "Satoshi";
