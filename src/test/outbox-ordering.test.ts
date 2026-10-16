@@ -29,7 +29,7 @@
  * replaced with an in-memory store below. Product code is exercised unchanged.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { drain, enqueue, listItems, nextSeq, retryAccount, sessionOf, type OutboxItem, type SendResult } from "@/lib/outbox";
+import { drain, enqueue, listItems, nextSeq, retryAccount, retryItem, sessionOf, type OutboxItem, type SendResult } from "@/lib/outbox";
 import { sessionSaveState } from "@/lib/use-outbox";
 import { MEASUREMENT_ADD } from "@/lib/measurements";
 import { ROUTINE_SAVE } from "@/lib/plan";
@@ -257,17 +257,17 @@ describe("drain does not re-send failed or conflict items until Retry (§9.1 ide
 
     await retryAccount(acct);
     await drain(acct, send);
-    expect(send).toHaveBeenCalledTimes(2);
+    // Retry only re-queues "failed"; a conflict waits for the conflict card (keep yours / theirs).
+    expect(send).toHaveBeenCalledTimes(1);
     const calls = send.mock.calls.map((c) => c[0]);
-    const sentConflicting = calls.filter((i) => i.localId === conflicting.localId);
+    expect(calls.filter((i) => i.localId === conflicting.localId)).toHaveLength(0);
     const sentPermanent = calls.filter((i) => i.localId === permanent.localId);
-    expect(sentConflicting).toHaveLength(1);
     expect(sentPermanent).toHaveLength(1);
-    expect(sentConflicting[0]?.idempotencyKey).toBe(conflicting.idempotencyKey);
-    expect(sentConflicting[0]?.expectedVersion).toBe(3);
     expect(sentPermanent[0]?.idempotencyKey).toBe(permanent.idempotencyKey);
     expect(sentPermanent[0]?.expectedVersion).toBeNull();
-    expect((await listItems(acct)).every((i) => i.status === "synced")).toBe(true);
+    const after = Object.fromEntries((await listItems(acct)).map((i) => [i.localId, i.status]));
+    expect(after[conflicting.localId]).toBe("conflict");
+    expect(after[permanent.localId]).toBe("synced");
   });
 });
 
@@ -447,7 +447,7 @@ describe("a session started on a routine version that is not yet stored waits be
     expect(after4[start.localId]).toBe("local");
     expect(after4[log.localId]).toBe("local");
 
-    await retryAccount(acct);
+    await retryItem(save.localId); // conflicts are only re-sent by an explicit per-item choice, never by Retry-all
     await drain(acct, send);
     const order = send.mock.calls.map((c) => c[0].localId);
     expect(order).toEqual([save.localId, start.localId, log.localId]);

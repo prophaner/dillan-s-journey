@@ -126,10 +126,17 @@ describe("validateRoutineSave rejects non-integer and out-of-range numbers (FR-0
 });
 
 describe("diffPlans with the same exercise in two blocks", () => {
-  // diffPlans keys both sides by exercise_id (plan.ts idOf + Map), so a second block with the same exercise
-  // overwrites the first: a reps change on the first Squat yields [] and removing the second Squat yields
-  // "Squat: moved to position 1" instead of "Removed Squat". Needs a product change (e.g. key by id+occurrence).
-  it.todo("does not collapse two blocks that share an exercise_id into one diff entry");
+  const twoSquats = [
+    ...snap.blocks,
+    { position: 4, blockType: "single", priority: "main", rounds: 1, restSeconds: 90, prescriptions: [{ exercise_id: "a", name: "Squat", sets: 2, reps: 5, load: 70, unit: "lb" }] },
+  ] as PlanSnapshot["blocks"];
+  it("a reps change on the first Squat is reported", () => {
+    const next = twoSquats.map((b, i) => (i === 0 ? { ...b, prescriptions: [{ ...b.prescriptions[0]!, reps: 8 }] } : b));
+    expect(diffPlans(twoSquats, next)).toEqual(["Squat: reps 10 → 8"]);
+  });
+  it("removing the second Squat says Removed Squat", () => {
+    expect(diffPlans(twoSquats, twoSquats.slice(0, 3))).toEqual(["Removed Squat"]);
+  });
 });
 
 describe("toEdit then toBlocks preserves prescriptions (AT-03: the plan a session snapshots is the plan it ran)", () => {

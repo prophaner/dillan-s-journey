@@ -6,10 +6,12 @@ import { pageHead } from "@/lib/head";
 import { supabase } from "@/integrations/supabase/client";
 import { loadRoutine, planDraftKey } from "@/lib/workout-store";
 import { useToast } from "@/components/dillan/overlays";
-import { deleteDraft, onOutboxChange, removeIfLocal, saveDraft, type OutboxItem } from "@/lib/outbox";
+import { deleteDraft, onOutboxChange, removeIfLocal, type OutboxItem } from "@/lib/outbox";
+import { versionInUse } from "@/lib/conflicts";
+import { rebaseRoutineSave } from "@/lib/conflicts.client";
 import { useOutbox } from "@/lib/use-outbox";
 import { estimateMinutes, blockName } from "@/lib/time-plan";
-import { GOAL_LEVEL, GOAL_LEVELS, LEVEL_LABEL, ROUTINE_SAVE, toEdit, type GoalLevel, type RoutineSavePayload } from "@/lib/plan";
+import { GOAL_LEVEL, GOAL_LEVELS, LEVEL_LABEL, ROUTINE_SAVE, type GoalLevel, type RoutineSavePayload } from "@/lib/plan";
 import { Card, PageHeader, ScreenState, SectionLabel, VoiceBlock } from "@/components/dillan/surfaces";
 import { DButton } from "@/components/dillan/button";
 import { Chip, DemoLabel, SaveState, StatusTag, UnknownValue } from "@/components/dillan/tags";
@@ -78,6 +80,10 @@ function Plan() {
   };
 
   const discardSave = async (i: OutboxItem) => {
+    if (versionInUse(outbox.items, (i.payload as RoutineSavePayload).id)) {
+      toast({ text: "A session you started on this version hasn't synced yet, so this save has to stay until it does." });
+      return;
+    }
     try {
       if (!(await removeIfLocal(i.localId))) return;
       await deleteDraft(planDraftKey(user.id));
@@ -85,12 +91,9 @@ function Plan() {
     } catch { toast({ text: "Couldn't change this device's copy. Try again." }); }
   };
   const keepEditing = async (i: OutboxItem) => {
-    const p = i.payload as RoutineSavePayload;
     try {
-      const fresh = await loadRoutine(user.id);
-      if (!fresh) return;
-      if (!(await removeIfLocal(i.localId))) return;
-      await saveDraft(planDraftKey(user.id), { baseVersionId: fresh.templateVersionId, blocks: toEdit({ ...fresh, blocks: p.blocks }), reason: p.reason ?? "" });
+      // Draft first, then take the save back, so nothing is lost if the second step fails.
+      if (!(await rebaseRoutineSave(i))) return;
       await qc.invalidateQueries({ queryKey: ["routine", user.id] });
       void navigate({ to: "/plan/edit" });
     } catch { toast({ text: "Couldn't change this device's copy. Try again." }); }
