@@ -91,8 +91,18 @@ export function diffPlans(base: SnapshotBlock[], next: SnapshotBlock[]): string[
   const idOf = (p: Prescription) => p.exercise_id || `name:${p.name.trim().toLowerCase()}`;
   const flat = (bs: SnapshotBlock[]) => [...bs].sort((a, b) => a.position - b.position)
     .flatMap((b, bi) => b.prescriptions.map((p) => ({ p, b, bi })));
-  const before = new Map(flat(base).map((x) => [idOf(x.p), x]));
-  const after = new Map(flat(next).map((x) => [idOf(x.p), x]));
+  // Key = exercise + occurrence, so the same exercise in two blocks diffs as two entries.
+  const keyed = (bs: SnapshotBlock[]) => {
+    const seen = new Map<string, number>();
+    return flat(bs).map((x) => {
+      const id = idOf(x.p);
+      const n = seen.get(id) ?? 0;
+      seen.set(id, n + 1);
+      return [`${id}#${n}`, x] as const;
+    });
+  };
+  const before = new Map(keyed(base));
+  const after = new Map(keyed(next));
   for (const [id, x] of after) {
     const y = before.get(id);
     const nm = x.p.name;

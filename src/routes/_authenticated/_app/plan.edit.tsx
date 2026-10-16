@@ -305,6 +305,7 @@ function NumField({ label, value, onChange, decimal, hint }: { label: string; va
           else if ((decimal ? /^\d+([.,]\d+)?$/ : /^\d+$/).test(t.trim())) onChange(Number(t.trim().replace(",", ".")));
         }}
         className={cn("mt-1 h-12 w-full rounded-btn border bg-surface px-3 font-num text-[16px] font-bold tabular text-text", bad ? "border-text" : "border-line")} />
+      {hint && <span className="mt-1 block font-normal">{hint}</span>}
     </label>
   );
 }
