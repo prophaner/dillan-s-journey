@@ -36,9 +36,9 @@ const routineKey = (uid: string) => `routine:${uid}`;
 
 /** Current routine: newest approved version, your own before the demo. Cached for offline. */
 export async function loadRoutine(uid: string): Promise<PlanSnapshot | null> {
-  // A new version saved on this device but not yet stored wins: Train uses it right away.
+  // An unsent save (still "local") wins: Train uses it right away. Failed or conflicted saves never do.
   const pendingSave = (await listItems(uid).catch(() => []))
-    .filter((i) => i.kind === ROUTINE_SAVE && i.status !== "synced").at(-1)?.payload as RoutineSavePayload | undefined;
+    .filter((i) => i.kind === ROUTINE_SAVE && i.status === "local").at(-1)?.payload as RoutineSavePayload | undefined;
   if (pendingSave) {
     return {
       templateVersionId: pendingSave.id, routineId: pendingSave.routineId, versionNo: pendingSave.baseVersionNo + 1,

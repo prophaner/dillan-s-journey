@@ -38,7 +38,7 @@ export async function storeRoutineVersion(sb: SB, userId: string, key: string, r
   if (existing) await sb.from("routine_template_versions").delete().eq("id", existing.id).eq("owner_id", userId); // half-written earlier try
 
   const { data: base, error: bErr } = await sb.from("routine_template_versions")
-    .select("id, routine_id, version_no").eq("id", p.baseVersionId).eq("owner_id", userId).maybeSingle();
+    .select("id, routine_id, version_no, title, purpose, is_demo").eq("id", p.baseVersionId).eq("owner_id", userId).maybeSingle();
   fail(bErr, "base read");
   if (!base || base.routine_id !== p.routineId) throw new Error("400 base version not found");
   const { data: newest } = await sb.from("routine_template_versions").select("version_no")
@@ -62,16 +62,22 @@ export async function storeRoutineVersion(sb: SB, userId: string, key: string, r
   }
 
   const { error: iErr } = await sb.from("routine_template_versions").insert({
-    id: p.id, owner_id: userId, routine_id: p.routineId, version_no: p.baseVersionNo + 1, title: p.title,
-    purpose: p.purpose, status: "approved", source: "user", is_demo: p.isDemo, idempotency_key: key,
+    id: p.id, owner_id: userId, routine_id: p.routineId, version_no: p.baseVersionNo + 1, title: base.title,
+    purpose: base.purpose, status: "approved", source: "user", is_demo: base.is_demo, idempotency_key: key,
   });
   if (iErr) {
-    if (iErr.code === "23505") throw new Error("409 conflict: that version number already exists");
+    if (iErr.code === "23505") {
+      // A concurrent try of this same save may have won the race.
+      const { data: again } = await sb.from("routine_template_versions")
+        .select("id, locked_at").eq("owner_id", userId).eq("idempotency_key", key).maybeSingle();
+      if (again) return;
+      throw new Error("409 conflict: that version number already exists");
+    }
     fail(iErr, "version insert");
   }
   const { error: blErr } = await sb.from("routine_blocks").insert(blocks.map((b) => ({
     owner_id: userId, template_version_id: p.id, position: b.position, block_type: b.blockType, rounds: b.rounds,
-    rest_seconds: b.restSeconds, priority: b.priority, prescriptions: b.prescriptions as unknown as Json, is_demo: p.isDemo,
+    rest_seconds: b.restSeconds, priority: b.priority, prescriptions: b.prescriptions as unknown as Json, is_demo: base.is_demo,
   })));
   if (blErr) {
     await sb.from("routine_template_versions").delete().eq("id", p.id).eq("owner_id", userId);

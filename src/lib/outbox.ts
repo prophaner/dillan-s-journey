@@ -141,7 +141,11 @@ export async function drain(accountId: string, send: (item: OutboxItem) => Promi
   try {
     const d = await db();
     const blocked = new Set<string>();
-    for (const item of await listItems(accountId)) {
+    const items = await listItems(accountId);
+    // A session started on a routine version that isn't stored yet waits behind that save.
+    const unsentSaves = new Set(items.filter((i) => i.kind === "routine:save_version" && i.status !== "synced")
+      .map((i) => (i.payload as { id?: string } | null)?.id).filter((x): x is string => !!x));
+    for (const item of items) {
       if (item.status === "synced" || item.accountId !== accountId) continue;
       const sid = sessionOf(item);
       // Keep per-session order: nothing later for a session syncs ahead of an earlier unsent item.
@@ -150,6 +154,10 @@ export async function drain(accountId: string, send: (item: OutboxItem) => Promi
         continue;
       }
       if (sid && blocked.has(sid)) continue;
+      if (item.kind === "session:start") {
+        const tv = (item.payload as { snapshot?: { templateVersionId?: string } } | null)?.snapshot?.templateVersionId;
+        if (tv && unsentSaves.has(tv)) { if (sid) blocked.add(sid); continue; }
+      }
       if (item.kind === "delete:sessions" && Date.now() - item.createdAt < hold) {
         if (sid) blocked.add(sid);
         continue;
@@ -164,6 +172,7 @@ export async function drain(accountId: string, send: (item: OutboxItem) => Promi
       if (!res.ok && sid) blocked.add(sid);
       if (res.ok) {
         await d.put("outbox", { ...item, status: "synced", syncedAt: Date.now(), error: undefined });
+        if (item.kind === "routine:save_version") unsentSaves.delete((item.payload as { id?: string } | null)?.id ?? "");
       } else if (res.reason === "offline") {
         break;
       } else if (res.reason === "not_stored") {
