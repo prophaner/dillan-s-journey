@@ -229,7 +229,7 @@ export function reconcileLogs(logs: LoggedSet[], items: QueuedWrite[], sessionId
   for (const i of mine) {
     if (i.kind !== SET_LOG || have.has(i.idempotencyKey) || deleted.has(i.idempotencyKey)) continue;
     const p = i.payload as { ref: string; setNo: number; reps: number | null; load: number | null; unit: "lb" | "kg"; rir: number | null; loggedAt: string; exerciseId?: string };
-    out.push({ key: i.idempotencyKey, ref: p.ref, setNo: p.setNo, reps: p.reps, load: p.load, unit: p.unit, rir: p.rir, loggedAt: p.loggedAt, version: 1, exerciseId: p.exerciseId });
+    out.push({ key: i.idempotencyKey, ref: p.ref, setNo: p.setNo, reps: p.reps, load: p.load, unit: p.unit, rir: p.rir, loggedAt: p.loggedAt, version: 1, ...(p.exerciseId ? { exerciseId: p.exerciseId } : {}) });
     have.add(i.idempotencyKey);
     changed = true;
   }
