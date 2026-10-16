@@ -85,7 +85,7 @@ function Profile() {
   const removeEquipment = (row: { id: string; version?: number; label: string | null; type: string }) => {
     void setEquipment(row, { archived: true }).then(() => toast({
       text: `${row.label ?? row.type} removed`,
-      action: { label: "Undo", onClick: () => void setEquipment(row, { archived: false }) },
+      undo: () => void setEquipment(row, { archived: false }),
     }));
   };
 
@@ -152,7 +152,7 @@ function Profile() {
       ) : (
         <ul className="flex flex-col gap-3">
           {limRows.map((l) => <LimitationCard key={l.id} l={l} onChange={(patch) => setLimitation(l, patch)}
-            onRemove={() => { void setLimitation(l, { archived: true }).then(() => toast({ text: "Limitation removed", action: { label: "Undo", onClick: () => void setLimitation(l, { archived: false, status: l.status === "active" ? "pending" : l.status }) } })); }} />)}
+            onRemove={() => { void setLimitation(l, { archived: true }).then(() => toast({ text: "Limitation removed", undo: () => void setLimitation(l, { archived: false, status: l.status === "active" ? "pending" : l.status }) })); }} />)}
         </ul>
       )}
 
