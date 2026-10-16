@@ -588,6 +588,7 @@ export type Database = {
           created_at: string
           days_per_week: number | null
           display_name: string | null
+          experience: string | null
           id: string
           length_unit: string
           limitations_answer: string | null
@@ -596,14 +597,17 @@ export type Database = {
           preferences: Json
           session_minutes: number | null
           timezone: string
+          training_days: number[] | null
           updated_at: string
           version: number
+          week_start: number | null
           weight_unit: string
         }
         Insert: {
           created_at?: string
           days_per_week?: number | null
           display_name?: string | null
+          experience?: string | null
           id: string
           length_unit?: string
           limitations_answer?: string | null
@@ -612,14 +616,17 @@ export type Database = {
           preferences?: Json
           session_minutes?: number | null
           timezone?: string
+          training_days?: number[] | null
           updated_at?: string
           version?: number
+          week_start?: number | null
           weight_unit?: string
         }
         Update: {
           created_at?: string
           days_per_week?: number | null
           display_name?: string | null
+          experience?: string | null
           id?: string
           length_unit?: string
           limitations_answer?: string | null
@@ -628,8 +635,10 @@ export type Database = {
           preferences?: Json
           session_minutes?: number | null
           timezone?: string
+          training_days?: number[] | null
           updated_at?: string
           version?: number
+          week_start?: number | null
           weight_unit?: string
         }
         Relationships: []

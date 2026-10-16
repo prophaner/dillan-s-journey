@@ -36,6 +36,13 @@
       "when": 1792152869689,
       "tag": "0004_0004_goal_level_block_priority",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792156520784,
+      "tag": "0005_0005_profile_fields",
+      "breakpoints": true
     }
   ]
 }
