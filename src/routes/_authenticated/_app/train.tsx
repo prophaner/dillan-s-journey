@@ -52,7 +52,7 @@ function Train() {
 
   return (
     <div>
-      <PageHeader title="Train" />
+      <PageHeader title="Train" trailing={outbox.loaded && <SaveState className="mt-2" state={outbox.state} count={outbox.pending + outbox.failed} onRetry={outbox.retryNow} />} />
 
       {active && (
         <Card className="mt-6 border-2 border-text">

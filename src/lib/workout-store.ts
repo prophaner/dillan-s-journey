@@ -22,6 +22,10 @@ export interface SessionDraft {
   swaps?: Swaps;
   feeling: string | null;
   note: string;
+  /** S11 "Stop this exercise": refs whose remaining sets are dropped (done sets stay). */
+  skipped?: string[];
+  /** S11 reports made this session; status comes from the outbox item with this key. */
+  reports?: { key: string; exerciseName: string; area: string | null; side: string | null; action: string; at: number }[];
 }
 
 export const draftKey = (uid: string, id: string) => `session:${uid}:${id}`;
@@ -56,7 +60,7 @@ export async function loadRoutine(uid: string): Promise<PlanSnapshot | null> {
   }
 }
 
-async function lastValues(uid: string, ids: string[]) {
+export async function lastValues(uid: string, ids: string[]) {
   const out: SessionDraft["last"] = {};
   if (!ids.length || !navigator.onLine) return out;
   const { data } = await supabase.from("set_logs").select("exercise_id, reps, load")

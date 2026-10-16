@@ -56,6 +56,13 @@ function db() {
         s.createIndex("account", "accountId");
         d.createObjectStore("drafts", { keyPath: "key" });
       },
+    }).then(async (d) => {
+      // Seed from what is already stored so a fresh page never issues a seq below an older item's.
+      for (const k of await d.getAllKeys("outbox")) {
+        const row = (await d.get("outbox", k)) as OutboxItem | undefined;
+        if (row) lastSeq = Math.max(lastSeq, orderOf(row));
+      }
+      return d;
     });
   }
   return dbp;
@@ -86,6 +93,7 @@ export async function enqueue(
 ): Promise<OutboxItem> {
   // Updates ("update:<table>") must carry the version the app read.
   if (isUpdateKind(kind)) assertVersion(kind.slice(7), expectedVersion);
+  const store = await db(); // opening seeds lastSeq before the first nextSeq()
   const item: OutboxItem = {
     localId: crypto.randomUUID(),
     accountId,
@@ -98,7 +106,7 @@ export async function enqueue(
     createdAt: Date.now(),
     seq: nextSeq(),
   };
-  await (await db()).put("outbox", item);
+  await store.put("outbox", item);
   emit();
   return item;
 }
