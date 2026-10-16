@@ -324,3 +324,16 @@ describe("nextSeq never goes backwards across a module reload (§10.2 ordered re
     expect(newSeqs[1]).toBeGreaterThan(newSeqs[0]!);
   });
 });
+
+import { removeIfLocal } from "@/lib/outbox";
+describe("discard undo window (S07 'Session discarded · Undo')", () => {
+  it("a discard is held while young, and Undo removes it before it is sent", async () => {
+    const acct = "undo-acct";
+    const item = await enqueue(acct, SESSION_DISCARD, { sessionId: "s-undo" });
+    const sent: OutboxItem[] = [];
+    await drain(acct, async (i) => { sent.push(i); return { ok: true }; }, { discardHoldMs: 60_000 });
+    expect(sent.filter((i) => i.localId === item.localId)).toHaveLength(0);
+    expect(await removeIfLocal(item.localId)).toBe(true);
+    expect((await listItems(acct)).some((i) => i.localId === item.localId)).toBe(false);
+  });
+});
