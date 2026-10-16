@@ -25,6 +25,7 @@ import { Route as AuthenticatedAppDevComponentsRouteImport } from './routes/_aut
 import { Route as AuthenticatedAppDevSpikesRouteImport } from './routes/_authenticated/_app/dev.spikes'
 import { Route as AuthenticatedAppPlanIndexRouteImport } from './routes/_authenticated/_app/plan.index'
 import { Route as AuthenticatedAppPlanEditRouteImport } from './routes/_authenticated/_app/plan.edit'
+import { Route as AuthenticatedAppPlanExerciseIdRouteImport } from './routes/_authenticated/_app/plan.exercise.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -110,6 +111,12 @@ const AuthenticatedAppPlanEditRoute =
     path: '/plan/edit',
     getParentRoute: () => AuthenticatedAppRouteRoute,
   } as any)
+const AuthenticatedAppPlanExerciseIdRoute =
+  AuthenticatedAppPlanExerciseIdRouteImport.update({
+    id: '/plan/exercise/$id',
+    path: '/plan/exercise/$id',
+    getParentRoute: () => AuthenticatedAppRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -126,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/dev/spikes': typeof AuthenticatedAppDevSpikesRoute
   '/plan/edit': typeof AuthenticatedAppPlanEditRoute
   '/plan/': typeof AuthenticatedAppPlanIndexRoute
+  '/plan/exercise/$id': typeof AuthenticatedAppPlanExerciseIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -142,6 +150,7 @@ export interface FileRoutesByTo {
   '/dev/spikes': typeof AuthenticatedAppDevSpikesRoute
   '/plan/edit': typeof AuthenticatedAppPlanEditRoute
   '/plan': typeof AuthenticatedAppPlanIndexRoute
+  '/plan/exercise/$id': typeof AuthenticatedAppPlanExerciseIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -161,6 +170,7 @@ export interface FileRoutesById {
   '/_authenticated/_app/dev/spikes': typeof AuthenticatedAppDevSpikesRoute
   '/_authenticated/_app/plan/edit': typeof AuthenticatedAppPlanEditRoute
   '/_authenticated/_app/plan/': typeof AuthenticatedAppPlanIndexRoute
+  '/_authenticated/_app/plan/exercise/$id': typeof AuthenticatedAppPlanExerciseIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -179,6 +189,7 @@ export interface FileRouteTypes {
     | '/dev/spikes'
     | '/plan/edit'
     | '/plan/'
+    | '/plan/exercise/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -195,6 +206,7 @@ export interface FileRouteTypes {
     | '/dev/spikes'
     | '/plan/edit'
     | '/plan'
+    | '/plan/exercise/$id'
   id:
     | '__root__'
     | '/'
@@ -213,6 +225,7 @@ export interface FileRouteTypes {
     | '/_authenticated/_app/dev/spikes'
     | '/_authenticated/_app/plan/edit'
     | '/_authenticated/_app/plan/'
+    | '/_authenticated/_app/plan/exercise/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -335,6 +348,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppPlanEditRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
+    '/_authenticated/_app/plan/exercise/$id': {
+      id: '/_authenticated/_app/plan/exercise/$id'
+      path: '/plan/exercise/$id'
+      fullPath: '/plan/exercise/$id'
+      preLoaderRoute: typeof AuthenticatedAppPlanExerciseIdRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
   }
 }
 
@@ -349,6 +369,7 @@ interface AuthenticatedAppRouteRouteChildren {
   AuthenticatedAppDevSpikesRoute: typeof AuthenticatedAppDevSpikesRoute
   AuthenticatedAppPlanEditRoute: typeof AuthenticatedAppPlanEditRoute
   AuthenticatedAppPlanIndexRoute: typeof AuthenticatedAppPlanIndexRoute
+  AuthenticatedAppPlanExerciseIdRoute: typeof AuthenticatedAppPlanExerciseIdRoute
 }
 
 const AuthenticatedAppRouteRouteChildren: AuthenticatedAppRouteRouteChildren = {
@@ -362,6 +383,7 @@ const AuthenticatedAppRouteRouteChildren: AuthenticatedAppRouteRouteChildren = {
   AuthenticatedAppDevSpikesRoute: AuthenticatedAppDevSpikesRoute,
   AuthenticatedAppPlanEditRoute: AuthenticatedAppPlanEditRoute,
   AuthenticatedAppPlanIndexRoute: AuthenticatedAppPlanIndexRoute,
+  AuthenticatedAppPlanExerciseIdRoute: AuthenticatedAppPlanExerciseIdRoute,
 }
 
 const AuthenticatedAppRouteRouteWithChildren =

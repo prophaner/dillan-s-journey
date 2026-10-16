@@ -32,7 +32,7 @@ describe("measurements (FR-10)", () => {
     expect(parseValue("0")).toBeNull();
   });
   it("conversion round-trips without changing meaning", () => {
-    expect(convert(convert(180, "lb", "kg"), "kg", "lb")).toBeCloseTo(180, 6);
+    expect(convert(convert(180, "lb", "kg")!, "kg", "lb")).toBeCloseTo(180, 6);
   });
   it("BMI is unknown without both weight and height", () => {
     expect(bmi({ value: 180, unit: "lb" }, null)).toBeNull();
@@ -83,7 +83,7 @@ describe("convert: display-only conversion (AT-22)", () => {
     expect(convert(80, "kg", "kg")).toBe(80);
   });
   it("length round-trips without changing meaning", () => {
-    expect(convert(convert(86.4, "cm", "in"), "in", "cm")).toBeCloseTo(86.4, 6);
+    expect(convert(convert(86.4, "cm", "in")!, "in", "cm")).toBeCloseTo(86.4, 6);
   });
   // Flipped deliberately (S08 review): an unknown pair is unknown, never the raw number.
   it("an unknown unit pair returns null", () => {
