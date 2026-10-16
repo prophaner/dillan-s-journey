@@ -115,7 +115,7 @@ export interface WeekSession { local_date: string; completion: string; shortened
 /** This week's sessions (Mon–Sun, your local dates) for the Course strip. */
 export async function loadWeek(uid: string, monday: string, sunday: string): Promise<WeekSession[]> {
   const { data, error } = await supabase.from("sessions").select("local_date, completion, plan_snapshot")
-    .eq("owner_id", uid).gte("local_date", monday).lte("local_date", sunday).limit(30);
+    .eq("owner_id", uid).gte("local_date", monday).lte("local_date", sunday).limit(100);
   if (error) throw error;
   return (data ?? []).map((s) => ({
     local_date: s.local_date, completion: s.completion,
