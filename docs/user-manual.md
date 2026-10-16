@@ -16,7 +16,9 @@ Train is where you start a session, pick up one you left open, and see what you 
 
 ### What it shows
 
-**A session in progress.** If you left a session open, it sits at the top with an "In progress" tag, the routine name, when you started, how many sets you have logged, and which exercise you were on. Next to the tag you see the save word for that session (Saved on this device, Synced, or Didn't sync with Retry).
+**The save word in the header.** Next to the Train title sits the save word for everything waiting on this device, across all your sessions and notes: Saved on this device · N, Synced, or Didn't sync · N with **Retry**. Retry sends every change that failed again. When it reads Synced, nothing is waiting.
+
+**A session in progress.** If you left a session open, it sits at the top with an "In progress" tag, the routine name, when you started, how many sets you have logged, and which exercise you were on. Next to the tag you see the save word for that session alone (Saved on this device, Synced, or Didn't sync with Retry).
 
 **Your routine.** When nothing is in progress, you see your routine: its name, how many exercises and sets it has, the plan version, and one line per exercise (sets × reps, and the weight if the plan has one). Dillan uses your own approved routine. If you do not have one yet, he uses a sample routine and marks it "Demo data". Anything you log against the sample routine is marked the same way.
 
@@ -55,23 +57,40 @@ If the exercise has no weight, the Load row says "No weight · bodyweight" with 
 
 **Pause** is not available yet. The session clock keeps running until you end the session.
 
-**Something feels off** opens a sheet: "Thanks for telling me. You can stop right now, and what you did still counts." You can **Stop the session here**, which ends it as stopped and keeps every set, or **Keep going, lighter**, which closes the sheet and leaves the session as it is.
+**Something feels off** sits under Log set. It opens a sheet where you can stop the exercise or end the session, and leave a dated note. See Something feels off below.
 
-**End** (top left) ends the session in one tap. There is no confirmation. You go to the Done screen, where you can save the session or discard it. Nothing you logged is lost unless you choose Discard.
+**End** (top left) ends the session in one tap. There is no confirmation. You go to the Done screen, where you can finish and save the session or discard it. Nothing you logged is lost unless you choose Discard.
 
 When you type a number, the Log set button moves up to stay above the keyboard. The exercise card does not shrink to make room, so on a small screen you may need to scroll (unverified on a phone).
 
 Dillan asks your browser to keep the screen awake during a session. Not every browser allows this (unverified on a phone).
 
+### Something feels off
+
+The **Something feels off** button is on every training screen: while you log a set, during rest, inside a superset round, and while you are changing a set. One tap opens the sheet "Stop or adjust. Your call." with the line "Your sets so far are saved." What you pick here happens at once; there is no confirmation.
+
+- **Stop this exercise** drops the sets you have not done yet for this exercise and keeps the ones you did. Any rest is cancelled and the next exercise starts. On the Done screen the exercise shows as Partial or Skipped. This button is not shown once every set in the session is done.
+- **End the session** ends it as stopped and takes you to the Done screen. The headline reads "Stopping was the right call. Your sets are saved."
+- **Try a gentler option** is not shown yet. It appears only once there are reviewed alternatives for the exercise, and none are stored yet.
+- **Keep going** closes the sheet and changes nothing. Nothing is saved.
+
+**Where?** is optional. Pick an area (Shoulder, Elbow, Wrist, Neck, Back, Hip, Knee, Ankle, Other), then Left, Right or Both. Tap a chip again to clear it. **Note** is optional, up to 140 characters, with the prompt "What did you notice?".
+
+When you tap Stop this exercise or End the session, the area, side and note are saved as a dated note on that exercise: a limitation dated today and linked to the exercise, marked as coming from a session. It is not a diagnosis. The note goes through the same queue as your sets, so it saves offline and syncs later. Two fast taps make one note. If the note could not be stored on this device, the storage banner adds "Your note wasn't saved."; tap **Try again**.
+
+The sheet also carries a message about pain: "Saved as a dated note on <exercise>, not a diagnosis. If pain is sharp, getting worse, or comes with numbness or swelling, stop and get it checked by a clinician." In the app this message is marked "Placeholder wording · to be reviewed before release"; the final wording comes before release.
+
+On the Done screen, a **Noted today** card lists each note from this session: the exercise, and the area and side if you picked them, each with its own save word (Saved on this device, Synced, or Didn't sync with Retry). Under the list: "A dated note, not a diagnosis." The chips and the card fit a narrow screen without sideways scrolling (unverified on a phone).
+
 ### Changing a set
 
-Tap a done pip to reopen that set. The chip reads "Changing set N", and Reps, Load and Reps left in the tank show what you logged for it. Change what you need and tap **Save change**. You see "Set N changed · saved on this device". A change corrects the same set; it does not add a new one, and there is no Undo on a change. To put it back, tap the pip again and change it again. **Cancel** closes the set as it was.
+Tap a done pip to reopen that set. The chip reads "Changing set N", and Reps, Load and Reps left in the tank show what you logged for it. Change what you need and tap **Save change**. You see "Set N changed · saved on this device". A change corrects the same set; it does not add a new one, and there is no Undo on a change. To put it back, tap the pip again and change it again. **Cancel** sits under Save change, one button above the other, and closes the set as it was.
 
 You can change a set only while you are still on its exercise and not resting. Once Dillan moves you to the next exercise, the sets of the one before are no longer on screen; to change a set during rest, Skip the rest first. While you are changing a set, Log set and Swap are hidden. If the change could not be stored on this device, the storage banner appears; tap **Try again**. On a small screen the numbers may sit under the keyboard while you type (unverified on a phone).
 
 ### Swapping an exercise
 
-**Swap** opens a sheet, "Swap <exercise>", with the exercises you can do instead: the shared library and the ones you added. Tap one and it takes the exercise's place for this session only. Your plan stays the same. Under the name you see "Swapped for <planned exercise> · this session only", and the Done screen says the same. Reps and load start again from the plan, or from what you logged last time for the new exercise.
+**Swap** opens a sheet, "Swap <exercise>", with the exercises you can do instead: the shared library and the ones you added. Tap one and it takes the exercise's place for this session only. Your plan stays the same. Under the name you see "Swapped for <planned exercise> · this session only", and the Done screen says the same. Reps and load start from what you logged last time for the new exercise; if there is no last time, they start from the plan.
 
 The alternatives are not yet matched to your equipment or limitations; the sheet says so. To go back, open Swap again and tap **Back to <planned exercise>**. Once a set of the exercise is logged, Swap goes away; the swap is settled for that exercise.
 
@@ -95,7 +114,7 @@ The timer counts from the clock, not from ticks, so it stays correct if your scr
 
 ### If the device cannot save
 
-If this browser is not keeping data, you see a banner: "This browser isn't keeping data between visits (private mode or storage full)." While nothing is waiting, it adds "Logging still works while this tab is open." If a set or an undo could not be stored, the banner says "That set wasn't logged." or "That undo didn't go through." Tap **Try again** to send it again. A set that was queued but could not be stored on this device still shows as logged, so it is never logged twice.
+If this browser is not keeping data, you see a banner: "This browser isn't keeping data between visits (private mode or storage full)." While nothing is waiting, it adds "Logging still works while this tab is open." If a set or an undo could not be stored, the banner says "That set wasn't logged." or "That undo didn't go through." Tap **Try again** to send it again. A set that was queued but could not be stored on this device still shows as logged, so it is never logged twice. If you close the tab at that point, the queued set comes back when you reopen the session, and it shows once; an undo or change you had queued is applied to it.
 
 ### Save words on the Session screen
 
@@ -111,17 +130,17 @@ When the session ends you see one of three headlines:
 - "Logged as you did it. What you did still counts." — you ended with some sets left.
 - "Stopping was the right call. Your sets are saved." — you stopped from the Something feels off sheet.
 
-Below it: each exercise with Done, "Partial · x of y sets", or Skipped; the time in minutes; and the number of sets logged, entered by you.
+Below it: each exercise with Done, "Partial · x of y sets", or Skipped. If you left a note from the Something feels off sheet, the **Noted today** card follows; see Something feels off above. Then the time in minutes, and the number of sets logged, entered by you.
 
 **How did it feel?** is optional: Easy, Solid, Hard, or Too much. Tap again to clear. **Note** is optional, up to 1000 characters.
 
-**Save session** finishes the session, removes the working copy from this device, and returns you to Train. It saves once, even if you tap it twice or come back after a reload. Under it sits **Discard session**; see Discarding a session below. Under the buttons you see the footer: "N sets synced · nothing waiting", "N changes saved on this device · will sync when you're online", or "Didn't sync · N" with **Retry**. You can save while offline; the finish syncs later with the rest.
+**Finish and save** finishes the session, removes the working copy from this device, and returns you to Train. It saves once, even if you tap it twice or come back after a reload. Under it sits **Discard session**; see Discarding a session below. Under the buttons you see the footer: "N sets synced · nothing waiting", "N changes saved on this device · will sync when you're online", or "Didn't sync · N" with **Retry**. You can save while offline; the finish syncs later with the rest.
 
 ### Discarding a session
 
-On the Done screen, **Discard session** throws the session away instead of saving it. Dillan asks once more, inline: "This removes the session and its N sets from your history." with **Discard** and **Keep it**. Keep it closes the question and changes nothing. Discard removes the session and every set in it, shows "Session discarded", and returns you to Train. There is no Undo on a discard.
+On the Done screen, **Discard session** throws the session away instead of saving it, in one tap. There is no question first and no Undo. It removes the session and every set in it, shows "Session discarded", and returns you to Train. Once Finish and save has been tapped, Discard session is no longer offered.
 
-Discard works offline; the removal is queued and sent with the rest of your changes. While a discard is waiting to be stored, Save session is greyed out, so a session is never both saved and removed.
+Discard works offline; the removal is queued and sent with the rest of your changes. While a discard is waiting to be stored, Finish and save is greyed out, so a session is never both saved and removed.
 
 ### If a session is not on this device
 

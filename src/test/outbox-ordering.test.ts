@@ -324,3 +324,31 @@ describe("nextSeq never goes backwards across a module reload (§10.2 ordered re
     expect(newSeqs[1]).toBeGreaterThan(newSeqs[0]!);
   });
 });
+
+// Also after the reload above: this one needs the previous tests' rows to still sit in the shared
+// in-memory store, which the hoisted `mem` keeps across vi.resetModules.
+describe("db open seeds lastSeq from stored rows (§10.2 ordered replay)", () => {
+  it("a fresh page whose clock runs 10 s behind still enqueues after the stored items", async () => {
+    const acct = "acct-seed";
+    const a = await enqueue(acct, SESSION_START, { id: "Z" });
+    const b = await enqueue(acct, SET_LOG, { sessionId: "Z", id: "Z1", reps: 8 });
+    const c = await enqueue(acct, SET_LOG, { sessionId: "Z", id: "Z2", reps: 8 });
+    const maxOld = Math.max(a.seq!, b.seq!, c.seq!);
+
+    // The device clock is set back (NTP correction, time-zone fix, manual change) before the page reopens.
+    clock -= 10_000;
+    vi.resetModules();
+    const fresh = await import("@/lib/outbox");
+    expect(fresh.enqueue).not.toBe(enqueue);
+
+    const d = await fresh.enqueue(acct, SET_LOG, { sessionId: "Z", id: "Z3", reps: 8 });
+    // The clock really did go backwards: a seq derived from it alone would sort first.
+    expect(d.createdAt).toBeLessThan(a.createdAt);
+    expect(d.createdAt * 1000).toBeLessThan(maxOld);
+    // The open-time seed (outbox.ts db()) lifted lastSeq above every stored row.
+    expect(d.seq!).toBeGreaterThan(maxOld);
+
+    const ids = (await fresh.listItems(acct)).map((i) => i.localId);
+    expect(ids).toEqual([a.localId, b.localId, c.localId, d.localId]);
+  });
+});
