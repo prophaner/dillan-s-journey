@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { ONBOARDING_KIND, validateOnboardingPayload } from "./onboarding";
-import { SESSION_DISCARD, SESSION_FINISH, SESSION_START, SET_LOG, SET_LOG_DELETE, SET_LOG_EDIT } from "./workout";
+import { SESSION_DISCARD, SESSION_FINISH, SESSION_START, SET_LOG, SET_LOG_DELETE, SET_LOG_EDIT, SESSION_OFF_REPORT } from "./workout";
 
 /**
  * Outbox sync endpoint. Returns stored:true only when the write is durably saved.
@@ -28,11 +28,12 @@ export const syncOutboxItem = createServerFn({ method: "POST" })
       const { storeOnboarding } = await import("./onboarding.server");
       await storeOnboarding(sb, userId, data.idempotencyKey, data.expectedVersion, payload);
       stored = true;
-    } else if ([SESSION_START, SET_LOG, SET_LOG_DELETE, SESSION_FINISH, SET_LOG_EDIT, SESSION_DISCARD].includes(data.kind)) {
+    } else if ([SESSION_START, SET_LOG, SET_LOG_DELETE, SESSION_FINISH, SET_LOG_EDIT, SESSION_DISCARD, SESSION_OFF_REPORT].includes(data.kind)) {
       const w = await import("./workout.server");
       if (data.kind === SESSION_START) await w.storeSessionStart(sb, userId, data.idempotencyKey, data.payload);
       if (data.kind === SET_LOG) await w.storeSetLog(sb, userId, data.idempotencyKey, data.payload);
       if (data.kind === SET_LOG_DELETE) await w.deleteSetLog(sb, userId, data.payload);
+      if (data.kind === SESSION_OFF_REPORT) await w.storeOffReport(sb, userId, data.idempotencyKey, data.payload);
       if (data.kind === SESSION_DISCARD) await w.discardSession(sb, userId, data.payload);
       if (data.kind === SET_LOG_EDIT) {
         if (typeof data.expectedVersion !== "number") throw new Error("400 version required");

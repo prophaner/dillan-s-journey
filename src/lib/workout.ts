@@ -189,3 +189,59 @@ export function supersetPattern(group: Step[]) {
   const after = group[group.length - 1]?.restSeconds ?? DEFAULT_REST_SECONDS;
   return `Go ${letters} · rest ${between}s between · ${after}s after the round.`;
 }
+
+/** S11: a "Something feels off" report, saved as a dated limitation linked to the exercise. */
+export const SESSION_OFF_REPORT = "limitation:session_report";
+export const OFF_AREAS = ["Shoulder", "Elbow", "Wrist", "Neck", "Back", "Hip", "Knee", "Ankle", "Other"] as const;
+export const OFF_SIDES = [
+  { id: "left", label: "Left" },
+  { id: "right", label: "Right" },
+  { id: "both", label: "Both" },
+] as const;
+export type OffAction = "stop_exercise" | "gentler" | "end_session";
+
+/** "Stop this exercise": its remaining sets drop out; sets already done are kept. */
+export function activeTurns(turns: Turn[], skipped: string[] | undefined): Turn[] {
+  if (!skipped?.length) return turns;
+  const out = turns.filter((t) => !skipped.includes(t.step.ref));
+  if (out.length) out[out.length - 1] = { ...out[out.length - 1]!, restAfter: 0 };
+  return out;
+}
+
+/** Minimal outbox item shape, so this stays a pure function. */
+export interface QueuedWrite {
+  kind: string;
+  idempotencyKey: string;
+  payload: unknown;
+  expectedVersion: number | null;
+}
+
+/**
+ * Draft load: the outbox is the record of what was logged. A set queued before a failed
+ * draft save shows once (never re-logged); an undo or edit already queued is applied.
+ */
+export function reconcileLogs(logs: LoggedSet[], items: QueuedWrite[], sessionId: string): LoggedSet[] {
+  const mine = items.filter((i) => (i.payload as { sessionId?: string } | null)?.sessionId === sessionId);
+  const deleted = new Set(mine.filter((i) => i.kind === SET_LOG_DELETE).map((i) => (i.payload as { setKey: string }).setKey));
+  const have = new Set(logs.map((l) => l.key));
+  let out = logs.filter((l) => !deleted.has(l.key));
+  let changed = out.length !== logs.length;
+  for (const i of mine) {
+    if (i.kind !== SET_LOG || have.has(i.idempotencyKey) || deleted.has(i.idempotencyKey)) continue;
+    const p = i.payload as { ref: string; setNo: number; reps: number | null; load: number | null; unit: "lb" | "kg"; rir: number | null; loggedAt: string; exerciseId?: string };
+    out.push({ key: i.idempotencyKey, ref: p.ref, setNo: p.setNo, reps: p.reps, load: p.load, unit: p.unit, rir: p.rir, loggedAt: p.loggedAt, version: 1, ...(p.exerciseId ? { exerciseId: p.exerciseId } : {}) });
+    have.add(i.idempotencyKey);
+    changed = true;
+  }
+  for (const i of mine) {
+    if (i.kind !== SET_LOG_EDIT) continue;
+    const p = i.payload as { setKey: string; reps: number | null; load: number | null; rir: number | null };
+    const v = (i.expectedVersion ?? 1) + 1;
+    out = out.map((l) => {
+      if (l.key !== p.setKey || (l.version ?? 1) >= v) return l;
+      changed = true;
+      return { ...l, reps: p.reps, load: p.load, rir: p.rir, version: v };
+    });
+  }
+  return changed ? out : logs;
+}

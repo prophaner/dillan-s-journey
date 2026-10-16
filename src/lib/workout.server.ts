@@ -109,3 +109,42 @@ export async function discardSession(sb: SB, userId: string, raw: unknown) {
   const { error } = await sb.from("sessions").delete().eq("owner_id", userId).eq("id", id as string);
   fail(error, "session discard");
 }
+
+const AREAS = ["shoulder", "elbow", "wrist", "neck", "back", "hip", "knee", "ankle", "other"];
+const ACTION_WORDS: Record<string, string> = { stop_exercise: "stopped this exercise", gentler: "tried a gentler option", end_session: "ended the session" };
+
+/**
+ * S11 "Something feels off": a dated note (never a diagnosis) saved as a limitation with
+ * origin "session", linked to the exercise. Replays of the same key store nothing new.
+ */
+export async function storeOffReport(sb: SB, userId: string, key: string, raw: unknown) {
+  const p = raw as { sessionId?: unknown; exerciseId?: unknown; area?: unknown; side?: unknown; note?: unknown; action?: unknown; reportedAt?: unknown };
+  if (!uuid(p?.sessionId) || !uuid(p.exerciseId) || typeof p.action !== "string" || !ACTION_WORDS[p.action]) throw new Error("400 bad report");
+  const area = typeof p.area === "string" && AREAS.includes(p.area.toLowerCase()) ? p.area.toLowerCase() : null;
+  const side = p.side === "left" || p.side === "right" || p.side === "both" ? p.side : null;
+  const note = typeof p.note === "string" ? p.note.trim().slice(0, 140) : "";
+  const at = typeof p.reportedAt === "string" && !Number.isNaN(Date.parse(p.reportedAt)) ? p.reportedAt : new Date().toISOString();
+  const { data: ex, error: exErr } = await sb.from("exercises").select("id").eq("id", p.exerciseId as string).maybeSingle();
+  fail(exErr, "exercise read");
+  if (!ex) throw new Error("400 exercise not found");
+
+  const { error } = await sb.from("limitations").upsert({
+    owner_id: userId, category: "discomfort", location: area, side, context: note || null,
+    status: "active", origin: "session", source: "user", idempotency_key: key,
+  }, idem);
+  fail(error, "limitation insert");
+  const { data: lim, error: lErr } = await sb.from("limitations").select("id")
+    .eq("owner_id", userId).eq("idempotency_key", key).maybeSingle();
+  fail(lErr, "limitation read");
+  if (!lim) throw new Error("retry: limitation not stored yet");
+
+  const { data: link, error: kErr } = await sb.from("limitation_links").select("id")
+    .eq("limitation_id", lim.id).eq("exercise_id", ex.id).maybeSingle();
+  fail(kErr, "link read");
+  if (link) return;
+  const { error: iErr } = await sb.from("limitation_links").insert({
+    owner_id: userId, limitation_id: lim.id, exercise_id: ex.id,
+    relationship_note: `Felt off on ${at.slice(0, 10)} · you ${ACTION_WORDS[p.action]}.`,
+  });
+  fail(iErr, "link insert");
+}

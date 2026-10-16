@@ -4,10 +4,10 @@ import { ArrowLeftRight, Check, CircleAlert, Hand, Minus, Pencil, Plus, Trash2 }
 import { pageHead } from "@/lib/head";
 import { sessionSaveState, useOutbox } from "@/lib/use-outbox";
 import { elapsedMs, formatClock, remainingMs, useNow, useWakeLock } from "@/lib/timer";
-import { closeSession, draftKey, loadExercises, saveSession, type SessionDraft } from "@/lib/workout-store";
-import { loadDraft, sessionOf } from "@/lib/outbox";
+import { closeSession, draftKey, lastValues, loadExercises, saveSession, type SessionDraft } from "@/lib/workout-store";
+import { listItems, loadDraft, sessionOf } from "@/lib/outbox";
 import {
-  applySwaps, completionOf, headlineFor, isDoubleTap, nextTurn, SESSION_DISCARD, SESSION_FINISH, SET_LOG, SET_LOG_DELETE,
+  activeTurns, applySwaps, completionOf, OFF_AREAS, OFF_SIDES, reconcileLogs, SESSION_OFF_REPORT, type OffAction, headlineFor, isDoubleTap, nextTurn, SESSION_DISCARD, SESSION_FINISH, SET_LOG, SET_LOG_DELETE,
   SET_LOG_EDIT, stepResult, stepsOf, supersetPattern, turnsOf, type LoggedSet, type Step,
 } from "@/lib/workout";
 import { DButton } from "@/components/dillan/button";
@@ -55,14 +55,28 @@ function Session() {
   const [editVals, setEditVals] = useState<Vals>({ reps: 0, load: null, rir: null });
   const [swapOpen, setSwapOpen] = useState(false);
   const [swapList, setSwapList] = useState<{ id: string; name: string }[] | "loading" | "offline" | "failed">("loading");
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [offArea, setOffArea] = useState<string | null>(null);
+  const [offSide, setOffSide] = useState<string | null>(null);
+  const [offNote, setOffNote] = useState("");
+  const [pendingReport, setPendingReportState] = useState<{ payload: Record<string, unknown>; exerciseName: string } | null>(null);
+  const pendingReportRef = useRef<typeof pendingReport>(null);
+  const setPendingReport = (v: typeof pendingReport) => { pendingReportRef.current = v; setPendingReportState(v); };
   const finishKey = useRef<string | null>(null);
   /** Clear the warning only when no set or undo is waiting to be retried. */
-  const draftSaved = () => { if (!pendingRef.current && !pendingUndoRef.current) setWriteFailed(false); };
+  const draftSaved = () => { if (!pendingRef.current && !pendingUndoRef.current && !pendingReportRef.current) setWriteFailed(false); };
   useWakeLock(d?.phase === "training");
 
   useEffect(() => {
-    void loadDraft<SessionDraft>(draftKey(user.id, id)).then((x) => {
+    void Promise.all([loadDraft<SessionDraft>(draftKey(user.id, id)), listItems(user.id).catch(() => [])]).then(([raw, items]) => {
+      let x = raw;
+      // A set queued before a failed draft save shows once; it is never logged again.
+      if (x) {
+        const logs = reconcileLogs(x.logs, items, id);
+        if (logs !== x.logs) {
+          x = { ...x, logs };
+          void saveSession(user.id, x).catch(() => setWriteFailed(true));
+        }
+      }
       if (x && finish && x.phase === "training") {
         const next = { ...x, phase: "done" as const, endedAt: Date.now(), restStartedAt: null };
         void saveSession(user.id, next).then(draftSaved).catch(() => setWriteFailed(true));
@@ -80,7 +94,7 @@ function Session() {
     });
 
   const steps = d ? applySwaps(stepsOf(d.snapshot), d.swaps) : [];
-  const turns = turnsOf(steps);
+  const turns = activeTurns(turnsOf(steps), d?.skipped);
   const turn = d ? nextTurn(turns, d.logs) : undefined;
   const step: Step | undefined = turn?.step ?? steps[steps.length - 1];
   const stepIndex = turn?.stepIndex ?? steps.length - 1;
@@ -123,7 +137,8 @@ function Session() {
 
   const bannerText =
     "This browser isn't keeping data between visits (private mode or storage full)." +
-    (pendingSet || pendingUndo ? "" : " Logging still works while this tab is open.") +
+    (pendingSet || pendingUndo || pendingReport ? "" : " Logging still works while this tab is open.") +
+    (pendingReport ? " Your note wasn't saved." : "") +
     (pendingSet ? " That set wasn't logged." : "") +
     (pendingUndo ? " That undo didn't go through." : "");
 
@@ -131,11 +146,14 @@ function Session() {
     if (editing) { void saveEdit(); return; }
     if (pendingUndoRef.current) { void undoSet(pendingUndoRef.current); return; }
     if (pendingRef.current) { void logSet(pendingRef.current); return; }
+    if (pendingReportRef.current) { void queueReport(pendingReportRef.current); return; }
     saveSession(user.id, d).then(draftSaved).catch(() => setWriteFailed(true));
   };
 
   const prefill = (s: Step): Vals => {
     const last = d.last[s.exerciseId];
+    // A swapped exercise starts from its own last values, not the original's plan.
+    if (s.name !== s.plannedName) return { reps: last?.reps ?? s.reps ?? 0, load: last?.load ?? s.load ?? null, rir: null };
     return { reps: s.reps ?? last?.reps ?? 0, load: s.load ?? last?.load ?? null, rir: null };
   };
   const inputs: Vals = d.inputsByRef?.[step.ref] ?? prefill(step);
@@ -274,6 +292,40 @@ function Session() {
       delete by[step.ref];
       return { swaps, inputsByRef: by };
     });
+    if (ex && !d.last[ex.id]) {
+      void lastValues(user.id, [ex.id]).then((l) => { if (l[ex.id]) update((c) => ({ last: { ...c.last, ...l } })); }).catch(() => {});
+    }
+  };
+
+  /** S11: queue the dated note. The chosen action has already happened. */
+  const queueReport = async (r: { payload: Record<string, unknown>; exerciseName: string }) => {
+    let item;
+    try {
+      item = await outbox.add(SESSION_OFF_REPORT, r.payload);
+    } catch {
+      setPendingReport(r);
+      setWriteFailed(true);
+      return;
+    }
+    setPendingReport(null);
+    const p = r.payload as { area: string | null; side: string | null; action: string };
+    update((c) => ({ reports: [...(c.reports ?? []), { key: item.idempotencyKey, exerciseName: r.exerciseName, area: p.area, side: p.side, action: p.action, at: Date.now() }] }));
+  };
+
+  /** Takes effect on tap: no confirmation (S11, AT-05). */
+  const offAction = (action: OffAction) => {
+    setOffSheet(false);
+    const r = {
+      exerciseName: step.name,
+      payload: { sessionId: id, exerciseId: step.exerciseId, area: offArea, side: offArea ? offSide : null, note: offNote.trim(), action, reportedAt: new Date().toISOString() },
+    };
+    if (action === "end_session") end(true);
+    else if (action === "stop_exercise") {
+      update((c) => ({ skipped: [...new Set([...(c.skipped ?? []), step.ref])], restStartedAt: null }));
+      if (editing) setEditing(null);
+    }
+    setOffArea(null); setOffSide(null); setOffNote("");
+    void queueReport(r);
   };
 
   /** Discard: queued like every write; the server removes the session and its sets. */
@@ -354,6 +406,25 @@ function Session() {
           })}
         </ul>
 
+        {(d.reports?.length ?? 0) > 0 && (
+          <Card className="mt-4">
+            <p className="text-footnote font-bold uppercase tracking-wide text-text-2">Noted today</p>
+            <ul className="mt-2 flex flex-col gap-2">
+              {d.reports!.map((rep) => {
+                const it = outbox.items.find((i) => i.idempotencyKey === rep.key);
+                const st = !it ? "local" : it.status === "synced" ? "synced" : it.status === "local" ? "local" : "failed";
+                return (
+                  <li key={rep.key} className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-subhead">{rep.exerciseName}{rep.area ? ` · ${rep.area}${rep.side ? ` (${rep.side})` : ""}` : ""}</span>
+                    <SaveState state={st} onRetry={outbox.retryNow} />
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="mt-2 text-footnote text-text-2">A dated note, not a diagnosis.</p>
+          </Card>
+        )}
+
         <div className="mt-4 grid grid-cols-2 gap-3">
           <Card>
             <p className="text-footnote font-bold uppercase tracking-wide text-text-2">Time</p>
@@ -383,18 +454,12 @@ function Session() {
         </fieldset>
 
         <div className="mt-auto pt-6">
-          <DButton variant="primary" loading={saving} disabled={saving || !outbox.loaded || !!discardItem} onClick={saveAndClose}>Save session</DButton>
-          {!finishItem && !finishKey.current && (confirmDiscard ? (
-            <div className="mt-3 rounded-btn bg-surface-2 p-3">
-              <p className="text-subhead">This removes the session and its {d.logs.length} {d.logs.length === 1 ? "set" : "sets"} from your history.</p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <DButton size="md" variant="secondary" disabled={saving || !outbox.loaded} onClick={discard}>Discard</DButton>
-                <DButton size="md" variant="quiet" onClick={() => setConfirmDiscard(false)}>Keep it</DButton>
-              </div>
-            </div>
-          ) : (
-            <DButton variant="quiet" size="md" className="mt-2 w-full" icon={<Trash2 className="size-5" aria-hidden />} onClick={() => setConfirmDiscard(true)}>Discard session</DButton>
-          ))}
+          <DButton variant="primary" loading={saving} disabled={saving || !outbox.loaded || !!discardItem} onClick={saveAndClose}>Finish and save</DButton>
+          {!finishItem && !finishKey.current && (
+            <DButton variant="quiet" size="md" className="mt-2 w-full text-text" icon={<Trash2 className="size-5" aria-hidden />} disabled={saving || !outbox.loaded} onClick={() => void discard()}>
+              Discard session
+            </DButton>
+          )}
           {outbox.loaded && (saveState === "failed" ? (
             <div className="mt-3 flex justify-center"><SaveState state="failed" count={unsyncedCount} onRetry={outbox.retryNow} /></div>
           ) : (
@@ -536,9 +601,9 @@ function Session() {
 
       <StickyActions className="mt-6">
         {!resting && editing ? (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="flex flex-col gap-1">
             <DButton variant="primary" size="log" icon={<Check className="size-6" aria-hidden />} onClick={() => void saveEdit()}>Save change</DButton>
-            <DButton variant="secondary" size="log" onClick={() => setEditing(null)}>Cancel</DButton>
+            <DButton variant="quiet" size="md" className="w-full" onClick={() => setEditing(null)}>Cancel</DButton>
           </div>
         ) : !resting && (allDone ? (
           <DButton variant="primary" size="log" icon={<Check className="size-6" aria-hidden />} onClick={() => end(false)}>Finish session</DButton>
@@ -574,12 +639,36 @@ function Session() {
         </div>
       </Sheet>
 
-      <Sheet open={offSheet} onClose={() => setOffSheet(false)} title="Something feels off">
-        <p className="font-voice text-voice text-text">Thanks for telling me. You can stop right now, and what you did still counts.</p>
-        <div className="mt-5 flex flex-col gap-2">
-          <DButton variant="secondary" onClick={() => { setOffSheet(false); end(true); }}>Stop the session here</DButton>
-          <DButton variant="quiet" size="md" onClick={() => setOffSheet(false)}>Keep going, lighter</DButton>
+      <Sheet open={offSheet} onClose={() => setOffSheet(false)} title="Stop or adjust. Your call.">
+        <p className="text-subhead text-text-2">Your sets so far are saved.</p>
+        <div className="mt-4 flex flex-col gap-2">
+          {!allDone && <DButton variant="secondary" onClick={() => offAction("stop_exercise")}>Stop this exercise</DButton>}
+          {/* "Try a gentler option" appears only when a reviewed alternative exists; none are stored yet. */}
+          <DButton variant="secondary" onClick={() => offAction("end_session")}>End the session</DButton>
         </div>
+        <fieldset className="mt-5">
+          <legend className="text-subhead font-bold">Where? <span className="font-normal text-text-2">· optional</span></legend>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {OFF_AREAS.map((a) => (
+              <Chip key={a} small selected={offArea === a} aria-pressed={offArea === a} onClick={() => setOffArea(offArea === a ? null : a)}>{a}</Chip>
+            ))}
+          </div>
+          {offArea && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {OFF_SIDES.map((x) => (
+                <Chip key={x.id} small selected={offSide === x.id} aria-pressed={offSide === x.id} onClick={() => setOffSide(offSide === x.id ? null : x.id)}>{x.label}</Chip>
+              ))}
+            </div>
+          )}
+        </fieldset>
+        <label className="mt-4 block text-subhead font-bold" htmlFor="off-note">Note <span className="font-normal text-text-2">· optional</span></label>
+        <input id="off-note" type="text" maxLength={140} value={offNote} onChange={(e) => setOffNote(e.target.value)} placeholder="What did you notice?"
+          className="mt-2 h-12 w-full rounded-btn border border-line bg-surface px-3 text-body" />
+        <Banner className="mt-4">
+          Saved as a dated note on {step.name}, not a diagnosis. If pain is sharp, getting worse, or comes with numbness or swelling, stop and get it checked by a clinician.
+          <span className="mt-1 block text-footnote font-bold">Placeholder wording · to be reviewed before release</span>
+        </Banner>
+        <DButton variant="quiet" size="md" className="mt-2 w-full" onClick={() => setOffSheet(false)}>Keep going</DButton>
       </Sheet>
     </div>
   );
