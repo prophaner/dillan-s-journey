@@ -12,6 +12,12 @@ Decision:
 Consequence:
 ```
 
+## 2026-10-16 — Lead runs the cycle standalone through Phase 3
+Question: How much of the review–fix–accept loop does the owner want to approve by hand?
+Options: (a) owner approves each verdict, merge and prompt; (b) lead decides and acts, stopping only for schema rejects, secrets, and decisions only the owner can make.
+Decision: (b), decided by the owner on 2026-10-16: "focus on working standalone until phase 4".
+Consequence: Faster cycles. Lovable credits are spent without per-prompt approval (2–4 per slice plus fix rounds); the owner reviews outcomes via CHANGELOG, test plans and pull requests.
+
 ## 2026-10-15 — Migration 0002 (exercise ids in prescriptions): approved with fixes
 Question: Accept migration 0002 as pushed, or require the schema-guardian's fixes first?
 Options: (a) accept as is and backfill later; (b) approve with fixes: null-owner guard, backfill of existing routine_blocks, two indexes, docs mirror.
