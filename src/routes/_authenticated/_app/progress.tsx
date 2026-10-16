@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CircleAlert, Plus, Repeat2 } from "lucide-react";
+import { Calculator, CircleAlert, Plus, Repeat2 } from "lucide-react";
+import { LEVEL_LABEL, type GoalLevel } from "@/lib/plan";
 import { pageHead } from "@/lib/head";
 import { supabase } from "@/integrations/supabase/client";
 import { localDate } from "@/lib/workout";
@@ -50,10 +51,19 @@ function Progress() {
   const goals = useQuery({
     queryKey: ["goals-active", user.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("goals").select("id, title, user_words, priority, metric, target, target_unit, baseline_ref, is_demo")
+      const { data, error } = await supabase.from("goals").select("id, title, user_words, priority, metric, target, target_unit, baseline_ref, is_demo, level")
         .eq("owner_id", user.id).eq("status", "active").is("archived_at", null).order("priority");
       if (error) throw error;
       return data ?? [];
+    },
+  });
+  const firstSession = useQuery({
+    queryKey: ["first-session", user.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("sessions").select("local_date").eq("owner_id", user.id)
+        .neq("completion", "in_progress").order("local_date").limit(1);
+      if (error) throw error;
+      return data?.[0]?.local_date ?? null;
     },
   });
   const measures = useQuery({
@@ -76,10 +86,10 @@ function Progress() {
     const local = outbox.items
       .filter((i) => i.kind === MEASUREMENT_ADD && i.status !== "synced")
       .map((i) => i.payload as MeasurementInput)
-      .filter((p) => !ids.has(p.id))
+      .filter((p) => !ids.has(p.id) && parseValue(p.enteredValue) !== null) // never shown as 0
       .map((p): MRow => {
         const it = outbox.items.find((i) => (i.payload as MeasurementInput)?.id === p.id)!;
-        return { id: p.id, type: p.type, site: p.site, side: p.side, value: parseValue(p.enteredValue) ?? 0, unit: p.unit, observed_at: p.observedAt, method: p.method,
+        return { id: p.id, type: p.type, site: p.site, side: p.side, value: parseValue(p.enteredValue)!, unit: p.unit, observed_at: p.observedAt, method: p.method,
           local: it.status === "local" ? "local" : "failed" };
       });
     return [...server, ...local].sort((a, b) => a.observed_at.localeCompare(b.observed_at));
@@ -115,7 +125,7 @@ function Progress() {
           ) : (
             goals.data.map((g, i) => <ObjectiveCard key={g.id} goal={g} n={i + 1} of={goals.data.length} rows={rows} measuresFailed={measures.isError} />)
           )}
-          <SteadyCard sessions={sessions} target={profile.data?.days_per_week ?? null} today={today} />
+          <SteadyCard sessions={sessions} target={profile.data?.days_per_week ?? null} today={today} since={firstSession.isSuccess ? firstSession.data : undefined} sinceKnown={firstSession.isSuccess} />
         </div>
       )}
 
@@ -142,37 +152,39 @@ function Progress() {
 }
 
 function ObjectiveCard({ goal, n, of, rows, measuresFailed }: {
-  goal: { title: string; user_words: string | null; metric: string | null; target: number | null; target_unit: string | null; baseline_ref: string | null; is_demo: boolean };
+  goal: { title: string; user_words: string | null; metric: string | null; target: number | null; target_unit: string | null; baseline_ref: string | null; is_demo: boolean; level: string | null };
   n: number; of: number; rows: MRow[]; measuresFailed: boolean;
 }) {
   const metric = goal.metric?.trim().toLowerCase() ?? "";
   const series = metric ? rows.filter((r) => r.type === metric && (!r.side || r.side === "none")) : [];
   const unit = goal.target_unit ?? series.at(-1)?.unit ?? "";
-  const val = (r: MRow) => round1(convert(r.value, r.unit, unit || r.unit));
+  const val = (r: MRow) => { const c = convert(r.value, r.unit, unit || r.unit); return c === null ? null : round1(c); };
   const current = series.at(-1);
+  const curVal = current ? val(current) : null;
+  const baseVal = (b: MRow | undefined) => (b ? val(b) : null);
+  const level = goal.level as GoalLevel | null;
   const baseline = series.find((r) => r.id === goal.baseline_ref) ?? (series.length > 1 ? series[0] : undefined);
   return (
     <Card>
       <div className="flex items-center justify-between gap-2">
-        {/* Improve / Maintain / Defer has no stored field yet: shown as not known, never guessed. */}
-        <StatusTag kind="unknown">Level not yet known</StatusTag>
+        {level && LEVEL_LABEL[level] ? <StatusTag kind={level === "improve" ? "priority" : "neutral"}>{LEVEL_LABEL[level]}</StatusTag> : <StatusTag kind="unknown">Level not yet known</StatusTag>}
         <span className="text-footnote text-text-2">Goal {n} of {of}</span>
       </div>
       <h2 className="mt-3 text-title2 font-bold">{goal.user_words || goal.title}</h2>
       <div className="mt-3 flex flex-wrap items-end gap-x-4 gap-y-1">
         <div>
-          {current ? (
-            <><p className="font-num text-[3rem] font-extrabold leading-none tabular">{val(current)}<span className="ml-1 text-title3 text-text-2">{unit}</span></p>
+          {current && curVal !== null ? (
+            <><p className="font-num text-num-m font-extrabold leading-none tabular">{curVal}<span className="ml-1 text-title3 text-text-2">{unit}</span></p>
               <p className="mt-1 text-footnote text-text-2">{fmtDate(current.observed_at)}</p></>
           ) : <UnknownValue className="text-title2" />}
         </div>
         <p className="text-subhead text-text-2">
-          from {baseline ? <><b className="font-num text-text">{val(baseline)}</b> on {fmtDate(baseline.observed_at)}</> : "—"}
-          {" · "}target {goal.target != null ? <b className="font-num text-text">{goal.target}{goal.target_unit ? ` ${goal.target_unit}` : ""}</b> : "—"}
+          from {baseline && baseVal(baseline) !== null ? <><b className="font-num text-text">{baseVal(baseline)}</b> on {fmtDate(baseline.observed_at)}</> : <UnknownValue className="text-footnote" />}
+          {" · "}target {goal.target != null ? <b className="font-num text-text">{goal.target}{goal.target_unit ? ` ${goal.target_unit}` : ""}</b> : <UnknownValue className="text-footnote" />}
         </p>
       </div>
-      {current ? (
-        <Chart points={series.map((r) => ({ at: r.observed_at, v: val(r) }))} target={goal.target} className="mt-4" />
+      {current && curVal !== null ? (
+        <Chart points={series.flatMap((r) => { const v = val(r); return v === null ? [] : [{ at: r.observed_at, v }]; })} target={goal.target} className="mt-4" />
       ) : (
         <p className="mt-3 text-footnote text-text-2">
           {measuresFailed ? "Measurements load when you're online." : metric ? `No ${metric} entries yet.` : "How this goal is measured isn't set yet."}
@@ -200,7 +212,7 @@ function Chart({ points, target, className }: { points: { at: string; v: number 
       {target != null && (
         <>
           <line x1={0} x2={W} y1={y(target)} y2={y(target)} className="stroke-spot" strokeWidth={1.5} strokeDasharray="5 4" />
-          <text x={W} y={y(target) - 4} textAnchor="end" className="fill-spot-ink font-voice text-[11px]">target {target}</text>
+          <text x={W} y={y(target) - 4} textAnchor="end" className="fill-spot-ink font-ui text-footnote">target {target}</text>
         </>
       )}
       {points.slice(1).map((p, i) => {
@@ -209,7 +221,7 @@ function Chart({ points, target, className }: { points: { at: string; v: number 
         return (
           <g key={p.at + i}>
             <line x1={x(a.at)} y1={y(a.v)} x2={x(p.at)} y2={y(p.v)} className={gap ? "stroke-text-3" : "stroke-text"} strokeWidth={gap ? 1.5 : 2.5} strokeDasharray={gap ? "3 4" : undefined} />
-            {gap && <text x={(x(a.at) + x(p.at)) / 2} y={H} textAnchor="middle" className="fill-text-2 font-voice text-[10px]">no entry · {Math.round(gapList.find((g) => g.from === a.at)!.days / 7)} wk</text>}
+            {gap && <text x={(x(a.at) + x(p.at)) / 2} y={H} textAnchor="middle" className="fill-text-2 font-ui text-footnote">no entry · {Math.round(gapList.find((g) => g.from === a.at)!.days / 7)} wk</text>}
           </g>
         );
       })}
@@ -218,10 +230,10 @@ function Chart({ points, target, className }: { points: { at: string; v: number 
   );
 }
 
-function SteadyCard({ sessions, target, today }: { sessions: { data: { local_date: string; completion: string; shortened: boolean }[] | undefined; isPending: boolean; isError: boolean }; target: number | null; today: string }) {
+function SteadyCard({ sessions, target, today, since, sinceKnown }: { sessions: { data: { local_date: string; completion: string; shortened: boolean }[] | undefined; isPending: boolean; isError: boolean }; target: number | null; today: string; since: string | null | undefined; sinceKnown: boolean }) {
   if (sessions.isPending) return <Skeleton h="h-56" />;
-  const known = !!sessions.data;
-  const s = steadyWeeks(sessions.data ?? [], today, target);
+  const known = !!sessions.data && sinceKnown;
+  const s = steadyWeeks(sessions.data ?? [], today, target, 8, since ?? null);
   const rowsN = Math.max(1, ...s.cols.map((c) => c.pips.length));
   return (
     <Card>
@@ -240,7 +252,7 @@ function SteadyCard({ sessions, target, today }: { sessions: { data: { local_dat
             {s.cols.map((c) => (
               <div key={c.monday} role="listitem" className="flex flex-col items-center gap-1.5" aria-label={`Week of ${c.monday}: ${c.pips.filter((p) => p === "done").length} done`}>
                 {Array.from({ length: rowsN }, (_, i) => <WeekDot key={i} kind={c.pips[i]} />)}
-                <span className="mt-1 text-[11px] font-bold text-text-2">{c.current ? "now" : `${Number(c.monday.slice(5, 7))}/${Number(c.monday.slice(8))}`}</span>
+                <span className="mt-1 text-footnote font-bold text-text-2">{c.current ? "now" : `${Number(c.monday.slice(5, 7))}/${Number(c.monday.slice(8))}`}</span>
               </div>
             ))}
           </div>
@@ -283,15 +295,17 @@ function BodyList({ rows, pending, failed, onRetry, wUnit, lUnit }: { rows: MRow
           const info = typeInfo(last.type);
           const unit = info?.kind === "mass" ? wUnit : lUnit;
           const sideLabel = last.side && last.side !== "none" ? ` · ${last.side}` : "";
+          const shown = convert(last.value, last.unit, unit);
+          const pts = list.flatMap((r) => { const v = convert(r.value, r.unit, unit); return v === null ? [] : [{ at: r.observed_at, v: round1(v) }]; });
           return (
             <Card key={k}>
               <div className="flex items-baseline justify-between gap-2">
                 <h3 className="text-headline font-bold">{info?.label ?? last.type}{last.site ? ` · ${last.site}` : ""}<span className="capitalize">{sideLabel}</span></h3>
                 {last.local ? <SaveState state={last.local} /> : <span className="text-footnote text-text-2">{fmtDate(last.observed_at)}</span>}
               </div>
-              <p className="mt-1 font-num text-title1 font-extrabold tabular">{round1(convert(last.value, last.unit, unit))}<span className="ml-1 text-subhead text-text-2">{unit}</span></p>
+              {shown === null ? <UnknownValue className="mt-1" /> : <p className="mt-1 font-num text-title1 font-extrabold tabular">{round1(shown)}<span className="ml-1 text-subhead text-text-2">{unit}</span></p>}
               {last.unit !== unit && <p className="text-footnote text-text-2">Entered as {last.value} {last.unit}</p>}
-              {list.length > 1 && <Chart className="mt-3" target={null} points={list.map((r) => ({ at: r.observed_at, v: round1(convert(r.value, r.unit, unit)) }))} />}
+              {pts.length > 1 && <Chart className="mt-3" target={null} points={pts} />}
             </Card>
           );
         })
@@ -299,9 +313,10 @@ function BodyList({ rows, pending, failed, onRetry, wUnit, lUnit }: { rows: MRow
       <Card>
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-headline font-bold">BMI</h3>
-          <StatusTag kind="guess" icon={false}>derived</StatusTag>
+          <StatusTag kind="neutral" icon={<Calculator className="size-3.5" aria-hidden />}>Derived</StatusTag>
         </div>
         <p className="mt-1 font-num text-title1 font-extrabold tabular">{b != null ? b : <UnknownValue className="text-subhead" />}</p>
+        <p className="mt-1 text-footnote text-text-2">kg / m² · v1</p>
         <p className="mt-1 text-footnote text-text-2">Worked out from your latest weight and height. It isn't a full picture of fitness.</p>
       </Card>
     </div>
