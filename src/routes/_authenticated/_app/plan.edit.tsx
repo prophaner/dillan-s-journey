@@ -3,6 +3,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, ChevronLeft, CircleAlert, Link2, Plus, Trash2, Unlink } from "lucide-react";
 import { pageHead } from "@/lib/head";
+import { useUnits } from "@/lib/use-profile";
+import { convert } from "@/lib/measurements";
 import { localPhrase } from "@/lib/device";
 import { deleteDraft, loadDraft, saveDraft } from "@/lib/outbox";
 import { useOutbox } from "@/lib/use-outbox";
@@ -48,7 +50,10 @@ function EditorBody({ uid, base }: { uid: string; base: PlanSnapshot }) {
   const [saving, setSaving] = useState(false);
   const [newName, setNewName] = useState("");
   const busy = useRef(false);
-  const unit = base.blocks[0]?.prescriptions[0]?.unit ?? "lb";
+  const prefUnit = useUnits(uid, outbox.items).weight;
+  const unit = prefUnit;
+  /** Display in your unit; the stored value only changes if you edit it. */
+  const showLoad = (load: number | null, from: string) => { if (load === null) return null; const c = convert(load, from, prefUnit); return c === null ? load : Math.round(c * 10) / 10; };
   const nextNo = base.versionNo + 1;
 
   // Draft survives reloads and offline; it belongs to the version it was started from.
