@@ -17,6 +17,8 @@ export interface OutboxItem {
   status: OutboxStatus;
   attempts: number;
   createdAt: number;
+  /** Strictly increasing per device; keeps order when two writes share a millisecond. */
+  seq?: number;
   syncedAt?: number;
   error?: string;
 }
@@ -68,6 +70,14 @@ export function onOutboxChange(fn: () => void) {
   return () => events?.removeEventListener("change", fn);
 }
 
+let lastSeq = 0;
+/** Monotonic: never repeats or goes backwards, even within one millisecond or after a reload. */
+export function nextSeq(now = Date.now()) {
+  lastSeq = Math.max(now * 1000, lastSeq + 1);
+  return lastSeq;
+}
+const orderOf = (i: OutboxItem) => i.seq ?? i.createdAt * 1000;
+
 export async function enqueue(
   accountId: string,
   kind: string,
@@ -86,6 +96,7 @@ export async function enqueue(
     status: "local",
     attempts: 0,
     createdAt: Date.now(),
+    seq: nextSeq(),
   };
   await (await db()).put("outbox", item);
   emit();
@@ -102,7 +113,7 @@ export function sessionOf(item: Pick<OutboxItem, "kind" | "payload">): string | 
 
 export async function listItems(accountId: string): Promise<OutboxItem[]> {
   const all = (await (await db()).getAllFromIndex("outbox", "account", accountId)) as OutboxItem[];
-  return all.sort((a, b) => a.createdAt - b.createdAt);
+  return all.sort((a, b) => orderOf(a) - orderOf(b));
 }
 
 export async function unsyncedCount(accountId: string) {
