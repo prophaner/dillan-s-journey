@@ -103,7 +103,7 @@ function Train() {
               </DButton>
             </Card>
           )}
-          <OptionRow icon={<CalendarCheck className="size-6" aria-hidden />} title="Today's session" detail="Full · Short · Priority only comes with Today" onClick={() => navigate({ to: "/today" })} />
+          <OptionRow icon={<CalendarCheck className="size-6" aria-hidden />} title="Today's session" detail="Choose Full, Short or Priority only" onClick={() => navigate({ to: "/today" })} />
           <OptionRow icon={<List className="size-6" aria-hidden />} title="Pick a routine" detail="Comes later" />
           <OptionRow icon={<PencilLine className="size-6" aria-hidden />} title="Log something I already did" detail="Comes later" />
         </div>

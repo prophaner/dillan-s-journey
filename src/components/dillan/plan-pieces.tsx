@@ -85,7 +85,7 @@ export function BlockRow({
         </div>
         <p className={cn("mt-0.5 text-subhead", omitted ? "line-through" : "text-text-2")}>{exercises}</p>
       </div>
-      <span className="font-num text-subhead tabular text-text-2">{minutes} min</span>
+      <span className="font-num text-subhead tabular text-text-2">{omitted ? "—" : `${minutes} min`}</span>
     </li>
   );
 }
@@ -97,6 +97,7 @@ const pipLabel: Record<PipKind, string> = {
   planned: "planned",
   missed: "not done",
   today: "today",
+  empty: "nothing logged",
 };
 
 function Pip({ kind }: { kind: PipKind }) {
@@ -118,6 +119,8 @@ function Pip({ kind }: { kind: PipKind }) {
       );
     case "planned":
       return <span className={cn(base, "border-2 border-line")} />;
+    case "empty":
+      return <span className={cn(base, "border border-line")} />;
     case "missed":
       return <span className={cn(base, "border-2 border-dashed border-unknown")} />;
     case "today":

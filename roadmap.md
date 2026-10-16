@@ -19,7 +19,10 @@
 - [x] S11 Something feels off (sheet, stop/end, dated limitation note)
   - Verified on phone: no
 - [ ] Swap alternatives filtered by equipment/intent/limitations; "Use from now on" proposals (FR-15)
-- [ ] Today S01/S02/D01: time control, Course strip, stored purpose text (FR-06, AT-04)
+- [x] S11 review fixes (one report per tap, local date + session in note, rest links last exercise, option rows, discard undo, edited set prefills next)
+- [x] Today S01/S02/D01: Full/Short/Priority only from the routine, Course strip, plan purpose, resume card, time plan recorded in the session
+  - Verified on phone: no
+- [ ] "Why this is here" per block, Dillan's sentence, S03 check-in, missed-session card, custom time
 - [ ] S08 Progress: objectives, Steady weeks, measurements + manual entry (FR-10)
 - [ ] Plan + Routine editor (D02), exercise detail; transition rest editable (FR-05)
 - [ ] S21 Your data, S20 first-visit offline, all states incl. conflict card (AT-29…36)

@@ -41,6 +41,10 @@ export interface PlanSnapshot {
   title: string;
   isDemo: boolean;
   blocks: SnapshotBlock[];
+  /** Stored plan purpose text (shown on Today until Dillan's sentence exists). */
+  purpose?: string | null;
+  /** Today's time choice. `blocks` stays the full plan; omitted blocks are not run (FR-06, AT-04). */
+  timePlan?: { choice: "full" | "short" | "priority"; omittedPositions: number[]; estMinutes: number };
 }
 
 export interface Step {
@@ -60,8 +64,11 @@ export interface Step {
   plannedName: string;
 }
 
+/** Steps to run: blocks left out by today's time choice are not part of the session. */
 export function stepsOf(s: PlanSnapshot, defaultUnit: "lb" | "kg" = "lb"): Step[] {
+  const omitted = new Set(s.timePlan?.omittedPositions ?? []);
   return [...s.blocks]
+    .filter((b) => !omitted.has(b.position))
     .sort((a, b) => a.position - b.position)
     .flatMap((b) =>
       b.prescriptions.map((p, i) => ({
