@@ -55,3 +55,5 @@
 
 # Phase 5
 - [ ] Optional baseline assessments: reviewed protocols, versioned, skippable, no percentile or reminder dot (FR-01, FR-10)
+
+- [x] S08 Progress (goals, steady weeks, body, measurement entry); Improve/Maintain/Defer level blocked: needs a goals column
