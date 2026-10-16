@@ -328,11 +328,69 @@ Opened from Plan or from the editor. A **Plan** link takes you back. Under the n
 
 Exercise detail needs a connection. If it cannot load: "Couldn't load this exercise" with Try again. If the exercise no longer exists: "Exercise not found".
 
+## Your data and updates
+
+Dillan keeps a copy of your work on this device and sends it to your account when it can. This section is about seeing that copy, sending it, and what happens when a new version of Dillan arrives.
+
+### The Your data sheet
+
+Tap your initials, then **Your data** in the menu. The sheet is called "Your data on this phone". It counts the changes on this device, straight from the queue that holds them, in three rows:
+
+- **Synced** — "Stored on your account. Safe if this phone is lost." The server has them.
+- **Saved on this device** — "Kept here. Sends when you're online and Dillan is open." They are waiting to go.
+- **Didn't sync** — "Tried and stopped. Retry, or choose a version if it changed elsewhere." Items the server refused, and items that changed on another device; see When something changed on another device below.
+
+**Sync now** puts every Didn't sync item back in the queue and sends everything that is waiting. The button shows a spinner while it works. Items that changed on another device stay put; their card is what settles them.
+
+Under the button, a note about clearing browser data. While something is waiting: "Clearing your browser data would remove the N unsynced items. Sync first if you can." When nothing is: "Everything here is synced. Clearing your browser data only removes this device's copy." Clearing browser data never touches what is already on your account.
+
+At the bottom: "Signed in as <your email> · Signing out clears this device's copy." See Signing out under Session.
+
+The counts also show in the header of Today, Train, Progress and Plan as the save word (Saved on this device · N, Synced, Didn't sync · N with Retry). On Today, when anything is waiting, the date line adds "· N unsynced" with a small alert mark, so you see it before you start.
+
+### Updates
+
+Dillan does not update itself in the middle of a session. When a new version is ready and no session is open, Today shows a banner: "A new version of Dillan is ready" with an **Update** button. Tap it and Dillan reloads on the new version. The banner is only on Today, and only while no session is open.
+
+If you start a session with the banner up, nothing reloads during the session. The update waits. If a new version arrived while Dillan was closed, it is applied quietly the next time you open Dillan, unless you open straight into a session.
+
+Dillan's offline copy holds only the app itself, never your signed-in data; your data is on this device in its own store and on your account.
+
+## When something changed on another device
+
+If you change something on this device while the same thing was changed on another device first, the server refuses the later change rather than overwrite silently. Dillan then shows a **conflict card** and waits for you. Nothing resolves itself.
+
+**Where it appears.** At the top of every app screen: Today, Train, Progress, Dillan, Plan, Profile and Settings, above the screen's own content. One card per item. It has a "Changed on another device" eyebrow and the question "Your plan changed on another device. Keep yours, keep theirs, or compare?" for a routine save or a goal level, or "This changed on another device. Keep yours, keep theirs, or compare?" for a set change, a session finish or your setup.
+
+**The three buttons**, in plain words:
+
+- **Keep yours** — your change wins. Dillan reads the newest version from the server and sends your change again on top of it. You chose it, so this is not a silent overwrite. For a routine save, your edit comes back as a draft on the newest version and the editor opens: "Your edit is back as a draft on the newest version." If a session you started on your unsent version has not synced yet, the save stays as well, and you see "A session on this version hasn't synced yet, so the save stays; your edit is also a draft on the newest version." If the item no longer exists on the server: "That item no longer exists, so there's nothing to keep."
+- **Keep theirs** — their change wins. Your change is removed from this device and the screen reloads from the server. For a routine save that a not-yet-synced session was started on, Dillan refuses: "A session you started on this version hasn't synced yet, so this save has to stay until it does."
+- **Compare** — shows Yours and Theirs side by side before you decide. For a goal: Goal level. For a set: Reps, Load, Reps in reserve. For a session finish: Ended as, Feeling, Note. For your setup: Setup. For a routine save: "Yours compared with theirs (vN):" with the same plain list as "What changed" in the editor, or "No differences in the exercises." Compare needs a connection; otherwise "Couldn't load their version. Check your connection."
+
+If a button cannot do its work: "Couldn't do that. Try again." or, offline, "You're offline. Try again when you're back."
+
+**Retry does not clear a card.** Retry and Sync now resend items the server refused for other reasons; an item that changed on another device waits for your choice. Items counted under Didn't sync include these.
+
+**During a session.** The Session screen has no conflict cards. If a change from the open session is in conflict, the save word in the set screen header and in the Done screen footer reads "Changed on another device · resolve on Today". Finish or leave the session, then settle it on Today.
+
+**On Plan.** A routine save in conflict sits in Versions as vN+1 with the tag "Changed on another device · resolve above"; the card is at the top of the Plan screen. Keep editing and Discard this save are offered only for a save that failed for another reason.
+
+## Offline
+
+**The first visit needs a connection.** Dillan has to load once on a device before it can work offline. If you open it for the first time with no connection you see a page in Dillan's voice: "Dillan needs a connection the first time." with "After Dillan loads once on this device, your plan, set logging and rest timers keep working without a connection. Sets you log offline sync when you're back.", a **Try again** button and "Nothing was lost. There's nothing saved here yet."
+
+**After that, a calm banner.** Once Dillan has loaded on this device and your routine is on it, going offline shows a banner on Today: "You're offline. Logging works; it'll sync when you're back." Starting a session, logging sets, resting, changing a set, finishing and discarding all work offline, through the same queue. Things that need the server say so in place: "This week loads when you're online.", "Versions load when you're online.", "Exercises load once you're online."
+
+**Reopening offline.** You can close Dillan and open it again without a connection; it trusts the sign-in stored on this device. This works for about an hour after your last online use. After that you see the sign-in page until you are online once (unverified on a phone). Being sent to the sign-in page this way does not clear this device's copy; only Sign out does (unverified).
+
+**Private mode and full storage.** When Dillan starts it checks that this browser can keep data. If it cannot, Today shows: "This browser isn't keeping data between visits (private mode or storage full). Logging still works while the tab is open; nothing is saved here when you leave." The Session screen and the editor show their own version of the same warning when a set, undo, note or edit could not be stored; see If the device cannot save under Session. Dillan does not yet stop a set from being logged when storage is unavailable; it warns and lets you keep going while the tab is open.
+
 ## Profile
 This section is not written yet.
 
 ## Settings
-This section is not written yet.
+The Settings screen is a placeholder for now: "Notifications, privacy, AI data permissions, export and deletion." The Your data sheet lives in the menu for now: tap your initials, then **Your data**. See Your data and updates above.
 
 ## Coaching
 Coming later.

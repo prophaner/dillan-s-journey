@@ -1,6 +1,6 @@
 # Changelog
 
-Reviewed through: 7ab9b9c
+Reviewed through: f1afd3a
 
 One entry per accepted slice, newest first, written by the docs-writer agent after the owner
 accepts. Tooling changes merged by the owner (agent config, docs scaffolding) get a short
@@ -9,6 +9,76 @@ entry under "Tooling" so the history stays complete; they are not slices.
 ## Unreleased
 - 0002/0003: prescriptions reference exercises by id; backfill for existing routines
   (0003 landed at 0f55c7b, approved by the owner; see DECISIONS 2026-10-15)
+
+### 2026-10-16 — Your data, offline and conflicts (S21, S20), with Plan fixes
+Commits 4827521..f1afd3a (Lovable build 42eeca5, fix round f1afd3a). No migration.
+Screens: S21 Your data (sheet in the menu), S20 first-visit offline page, S01 Today (update banner,
+offline banner, storage banner, "N unsynced" eyebrow), conflict card on every app screen, S04/S07
+Session ("resolve on Today" pointer), Plan (Versions row, fixes), D02 Routine editor (fix).
+FRs/ATs: AT-21 met (a refused change shows a conflict card with Keep yours / Keep theirs / Compare;
+nothing resolves itself); AT-29 met (first visit offline shows "Dillan needs a connection the first
+time."; afterwards the shell reopens offline with a calm banner); AT-32 met (a new version is offered
+on Today only with no session open, never applied mid-session, applied quietly on a cold start);
+AT-36 met (offline, the sign-in stored on this device is trusted); AT-34 partial (startup storage
+probe and warning; no per-set blocking sync when storage is unavailable). Verified on phone: no.
+
+- "Your data on this phone" sheet from the menu: Synced ("Stored on your account. Safe if this phone
+  is lost."), Saved on this device ("Kept here. Sends when you're online and Dillan is open."),
+  Didn't sync ("Tried and stopped. Retry, or choose a version if it changed elsewhere."), with
+  counts from this device's queue.
+- "Sync now" requeues failed items and sends everything waiting; conflicts with a card stay put.
+- Clearing-data note: "Clearing your browser data would remove the N unsynced items. Sync first if
+  you can." or "Everything here is synced. Clearing your browser data only removes this device's
+  copy."; footer "Signed in as <email> · Signing out clears this device's copy."
+- Today's date line adds "· N unsynced" with an alert mark when anything is waiting or failed.
+- Update banner on Today, only with no session open: "A new version of Dillan is ready" with Update.
+  A waiting version is never activated on a session route; a cold start with no session open
+  activates it quietly.
+- Offline banner on Today once the routine is on this device: "You're offline. Logging works; it'll
+  sync when you're back."
+- Storage warning on Today from a startup probe (storage estimate plus a real write): "This browser
+  isn't keeping data between visits (private mode or storage full). Logging still works while the
+  tab is open; nothing is saved here when you leave."
+- First-visit offline page rewritten in Dillan's voice: "Dillan needs a connection the first time.",
+  the after-first-load promise, Try again, "Nothing was lost. There's nothing saved here yet."
+- The service worker caches the app shell HTML (never signed-in data) so a device that has loaded
+  Dillan once reopens offline to Today instead of the offline page.
+- Offline sign-in: when the server check cannot run, the session stored on this device is trusted;
+  otherwise the sign-in page.
+- Conflict card at the top of every app screen, one per item: "Changed on another device", "Your
+  plan changed on another device. Keep yours, keep theirs, or compare?" (routine save, goal level) or
+  "This changed on another device …" (set change, session finish, setup). Compare shows Yours /
+  Theirs rows (Goal level; Reps, Load, Reps in reserve; Ended as, Feeling, Note; Setup) or, for a
+  routine save, the plain "What changed" list against their vN; "Couldn't load their version. Check
+  your connection." when it cannot load.
+- Keep yours resends your change on the newest version (never silent; the user chose it); for a
+  routine save it becomes a draft on the newest version and opens the editor ("Your edit is back as
+  a draft on the newest version."); "That item no longer exists, so there's nothing to keep." when
+  the row is gone.
+- Keep theirs drops your change from this device and refetches; refused for a routine save that an
+  unsynced session was started on ("A session you started on this version hasn't synced yet, so this
+  save has to stay until it does.").
+- Retry no longer requeues a conflict that has a card; conflicts without a card are still requeued.
+- Session: a conflicting change from the open session shows "Changed on another device · resolve on
+  Today" in the set screen header and the Done footer instead of the save word.
+- Plan Versions: a save in conflict reads "Changed on another device · resolve above"; Keep editing
+  and Discard this save are offered only for a save that failed for another reason.
+- Fix (Plan): Discard this save is refused while a session started on that version has not synced.
+- Fix (Plan): Keep editing writes the draft first, then takes the save back, so nothing is lost if
+  the second step fails; if a session on that version has not synced, the save stays and the draft
+  is made ("A session on this version hasn't synced yet, so the save stays; your edit is also a
+  draft on the newest version.").
+- Fix (Plan): "What changed" keeps the same exercise in two blocks as two entries instead of merging
+  them.
+- Fix (Plan): a version still being written by a concurrent save is retried rather than reported as
+  stored; only a locked version counts.
+- Fix (D02): "Rest between (s)" is empty when not set, with the hint "default 20 s", instead of
+  showing 20 as if typed.
+- Fix round (f1afd3a): the build at 42eeca5 broke because the conflict actions module (which pulls in
+  the Supabase client) was imported statically into shared UI; it is now `conflict-actions.ts`,
+  loaded on demand. The same round added the setup (onboarding) conflict card, the "This changed …"
+  headline, the storage probe at app start, the "resolve on Today" / "resolve above" pointers, the
+  alert mark on the eyebrow, and stopped the service worker caching redirected HTML as the shell.
 
 ### 2026-10-16 — Plan + Routine editor, migration 0004, with S08 fixes
 Commits bf08eba..7ab9b9c (migration 0004 at ff320db, approved by the owner; Lovable build ff320db,
