@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { drain, enqueue, interpretAck, listItems, onOutboxChange, retryAccount, sessionOf, type OutboxItem, type SendResult } from "./outbox";
+import { DISCARD_HOLD_MS, drain, enqueue, interpretAck, listItems, onOutboxChange, retryAccount, sessionOf, type OutboxItem, type SendResult } from "./outbox";
 import { syncOutboxItem } from "./sync.functions";
 
 export type SaveState = "synced" | "local" | "failed";
@@ -36,14 +36,14 @@ export function useOutbox(accountId: string | undefined) {
 
   const syncNow = useCallback(async () => {
     if (!accountId) return;
-    await drain(accountId, sendItem);
+    await drain(accountId, sendItem, { discardHoldMs: DISCARD_HOLD_MS });
   }, [accountId, sendItem]);
 
   /** Retry button: put failed/conflict items back in the queue, then send everything. */
   const retryNow = useCallback(async () => {
     if (!accountId) return;
     await retryAccount(accountId);
-    await drain(accountId, sendItem);
+    await drain(accountId, sendItem, { discardHoldMs: DISCARD_HOLD_MS });
   }, [accountId, sendItem]);
 
   useEffect(() => {

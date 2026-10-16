@@ -134,7 +134,8 @@ let sendingId: string | null = null;
 export const DISCARD_HOLD_MS = 8000;
 
 /** Send pending items in order. Safe to call repeatedly; one drain at a time. */
-export async function drain(accountId: string, send: (item: OutboxItem) => Promise<SendResult>) {
+export async function drain(accountId: string, send: (item: OutboxItem) => Promise<SendResult>, opts: { discardHoldMs?: number } = {}) {
+  const hold = opts.discardHoldMs ?? 0;
   if (draining) return;
   draining = true;
   try {
@@ -149,7 +150,7 @@ export async function drain(accountId: string, send: (item: OutboxItem) => Promi
         continue;
       }
       if (sid && blocked.has(sid)) continue;
-      if (item.kind === "delete:sessions" && Date.now() - item.createdAt < DISCARD_HOLD_MS) {
+      if (item.kind === "delete:sessions" && Date.now() - item.createdAt < hold) {
         if (sid) blocked.add(sid);
         continue;
       }

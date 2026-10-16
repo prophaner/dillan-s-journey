@@ -156,7 +156,7 @@ function Today() {
                     key={b.position}
                     name={blockName(b)}
                     kind={b.position === prio ? "priority" : b.priority === "optional" ? "optional" : "required"}
-                    tag={b.position === prio ? "Priority" : undefined}
+                    {...(b.position === prio ? { tag: "Priority" } : {})}
                     exercises={b.blockType === "superset"
                       ? `Superset · ${b.rounds} rounds`
                       : b.prescriptions.map((p) => `${p.sets ?? b.rounds} × ${p.reps ?? "—"}${p.load != null ? ` @ ${p.load} ${p.unit ?? "lb"}` : ""}`).join(" · ")}
