@@ -13,4 +13,5 @@
 
 - [x] Prescriptions reference exercises by id
 - [x] Workout slice S16 → S04 → S05 → S07 with real set storage
+  - Verified on phone: no
 - [ ] Edit a done set, swap, discard session, supersets (S06) — later slices
