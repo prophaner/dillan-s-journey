@@ -218,7 +218,7 @@ function Chart({ points, target, className }: { points: { at: string; v: number 
   );
 }
 
-function SteadyCard({ sessions, target, today }: { sessions: { data?: { local_date: string; completion: string; shortened: boolean }[]; isPending: boolean; isError: boolean }; target: number | null; today: string }) {
+function SteadyCard({ sessions, target, today }: { sessions: { data: { local_date: string; completion: string; shortened: boolean }[] | undefined; isPending: boolean; isError: boolean }; target: number | null; today: string }) {
   if (sessions.isPending) return <Skeleton h="h-56" />;
   const known = !!sessions.data;
   const s = steadyWeeks(sessions.data ?? [], today, target);
@@ -255,7 +255,7 @@ function SteadyCard({ sessions, target, today }: { sessions: { data?: { local_da
   );
 }
 
-function WeekDot({ kind, small }: { kind?: string; small?: boolean }) {
+function WeekDot({ kind, small }: { kind?: string | undefined; small?: boolean }) {
   const base = cn("relative block overflow-hidden rounded-full", small ? "size-3.5" : "size-[26px]");
   if (kind === "done") return <span className={cn(base, "bg-text")} />;
   if (kind === "short") return <span className={cn(base, "border-2 border-text")}><span className="absolute inset-y-0 left-0 w-1/2 bg-text" /></span>;
@@ -265,7 +265,7 @@ function WeekDot({ kind, small }: { kind?: string; small?: boolean }) {
 }
 
 function BodyList({ rows, pending, failed, onRetry, wUnit, lUnit }: { rows: MRow[]; pending: boolean; failed: boolean; onRetry: () => void; wUnit: string; lUnit: string }) {
-  const series = groupSeries(rows);
+  const series = groupSeries(rows) as Map<string, MRow[]>;
   const latest = (t: string) => series.get(`${t}||`)?.at(-1);
   const w = latest("weight"), h = latest("height");
   const b = bmi(w ?? null, h ?? null);
