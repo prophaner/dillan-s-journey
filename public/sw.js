@@ -1,5 +1,5 @@
 /* Dillan service worker — app shell only. Never caches signed-in data. */
-const VERSION = "dillan-shell-v1";
+const VERSION = "dillan-shell-v2";
 const PRECACHE = ["/offline.html", "/tokens.css", "/fonts/Satoshi-Variable.woff2", "/fonts/Newsreader-Variable.woff2", "/apple-touch-icon.png", "/manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
@@ -23,7 +23,18 @@ self.addEventListener("fetch", (e) => {
   if (url.pathname.startsWith("/~oauth") || url.pathname.startsWith("/api") || url.pathname.startsWith("/_serverFn")) return;
 
   if (req.mode === "navigate") {
-    e.respondWith(fetch(req).catch(() => caches.match("/offline.html")));
+    // App-shell HTML only (signed-in pages render on the device, so this HTML holds no account data).
+    // Network first; once loaded, offline reopens the shell (Today shows an offline banner) instead of S20.
+    e.respondWith(
+      fetch(req).then((res) => {
+        if (res.ok && res.headers.get("content-type")?.includes("text/html")) {
+          const copy = res.clone();
+          const last = res.clone();
+          caches.open(VERSION).then((c) => { c.put(url.pathname, copy); c.put("/__shell", last); });
+        }
+        return res;
+      }).catch(async () => (await caches.match(url.pathname)) || (await caches.match("/__shell")) || caches.match("/offline.html")),
+    );
     return;
   }
   // Hashed build assets and fonts: cache-first.
