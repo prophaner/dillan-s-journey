@@ -131,6 +131,7 @@ function Session() {
 
   const { state: saveState, unsynced: unsyncedCount } = sessionSaveState(outbox.items, id, d.logs.map((l) => l.key));
   const unsynced = { length: unsyncedCount };
+  const conflicted = outbox.items.some((i) => i.status === "conflict" && sessionOf(i) === id);
 
   const doneSets = d.logs.filter((l) => l.ref === step.ref);
   const setNo = turn?.setNo ?? step.sets;
@@ -515,7 +516,9 @@ function Session() {
               Discard session
             </DButton>
           )}
-          {outbox.loaded && (saveState === "failed" ? (
+          {outbox.loaded && (conflicted ? (
+            <p className="mt-3 flex items-center justify-center gap-1.5 text-footnote text-text-2"><CircleAlert className="size-4 text-hold" aria-hidden />Changed on another device · resolve on Today</p>
+          ) : saveState === "failed" ? (
             <div className="mt-3 flex justify-center"><SaveState state="failed" count={unsyncedCount} onRetry={outbox.retryNow} /></div>
           ) : (
             <p className="mt-3 text-center text-footnote text-text-2">
@@ -559,7 +562,9 @@ function Session() {
         ) : (
           <span className="text-subhead font-medium text-text-2">Exercise {stepIndex + 1} of {steps.length}</span>
         )}
-        <span className="ml-auto">{outbox.loaded && <SaveState state={saveState} count={unsynced.length} onRetry={outbox.retryNow} />}</span>
+        <span className="ml-auto">{outbox.loaded && (conflicted
+          ? <span className="flex items-center gap-1.5 text-footnote font-medium text-text-2"><CircleAlert className="size-4 text-hold" aria-hidden />Changed on another device · resolve on Today</span>
+          : <SaveState state={saveState} count={unsynced.length} onRetry={outbox.retryNow} />)}</span>
       </div>
       {isDemo && <div className="mt-2"><DemoLabel /></div>}
       {writeFailed && (

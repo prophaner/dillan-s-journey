@@ -1,14 +1,13 @@
 import { useEffect, useRef } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Lock, PencilLine } from "lucide-react";
+import { BookOpen, CircleAlert, Lock, PencilLine } from "lucide-react";
 import { pageHead } from "@/lib/head";
 import { supabase } from "@/integrations/supabase/client";
 import { loadRoutine, planDraftKey } from "@/lib/workout-store";
 import { useToast } from "@/components/dillan/overlays";
 import { deleteDraft, onOutboxChange, removeIfLocal, type OutboxItem } from "@/lib/outbox";
 import { versionInUse } from "@/lib/conflicts";
-import { rebaseRoutineSave } from "@/lib/conflicts.client";
 import { useOutbox } from "@/lib/use-outbox";
 import { estimateMinutes, blockName } from "@/lib/time-plan";
 import { GOAL_LEVEL, GOAL_LEVELS, LEVEL_LABEL, ROUTINE_SAVE, type GoalLevel, type RoutineSavePayload } from "@/lib/plan";
@@ -93,7 +92,10 @@ function Plan() {
   const keepEditing = async (i: OutboxItem) => {
     try {
       // Draft first, then take the save back, so nothing is lost if the second step fails.
-      if (!(await rebaseRoutineSave(i))) return;
+      const { rebaseRoutineSave } = await import("@/lib/conflicts.client");
+      const r = await rebaseRoutineSave(i);
+      if (!r) return;
+      if (r === "kept") toast({ text: "A session on this version hasn't synced yet, so the save stays; your edit is also a draft on the newest version." });
       await qc.invalidateQueries({ queryKey: ["routine", user.id] });
       void navigate({ to: "/plan/edit" });
     } catch { toast({ text: "Couldn't change this device's copy. Try again." }); }
@@ -174,8 +176,10 @@ function Plan() {
                 return (
                   <div key={i.localId} className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
                     <span className="text-headline font-bold">v{p.baseVersionNo + 1}</span>
-                    <SaveState state={i.status === "local" ? "local" : "failed"} onRetry={outbox.retryNow} />
-                    {i.status !== "local" && (
+                    {i.status === "conflict"
+                      ? <StatusTag kind="neutral" icon={<CircleAlert className="size-3.5" aria-hidden />}>Changed on another device · resolve above</StatusTag>
+                      : <SaveState state={i.status === "local" ? "local" : "failed"} onRetry={outbox.retryNow} />}
+                    {i.status === "failed" && (
                       <div className="flex w-full flex-col gap-2 min-[400px]:flex-row">
                         <DButton variant="secondary" size="md" onClick={() => void keepEditing(i)}>Keep editing</DButton>
                         <DButton variant="quiet" size="md" onClick={() => void discardSave(i)}>Discard this save</DButton>
