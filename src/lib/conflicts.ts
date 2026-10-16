@@ -1,6 +1,6 @@
 /**
  * Conflict card rules (AT-21, 05-web-platform §2: 409 → Conflict card, never silent).
- * Pure helpers; the reads/writes live in conflicts.client.ts.
+ * Pure helpers; the reads/writes live in conflict-actions.ts.
  */
 import type { OutboxItem } from "./outbox";
 import { GOAL_LEVEL, LEVEL_LABEL, ROUTINE_SAVE, type GoalLevel } from "./plan";

@@ -92,7 +92,7 @@ function Plan() {
   const keepEditing = async (i: OutboxItem) => {
     try {
       // Draft first, then take the save back, so nothing is lost if the second step fails.
-      const { rebaseRoutineSave } = await import("@/lib/conflicts.client");
+      const { rebaseRoutineSave } = await import("@/lib/conflict-actions");
       const r = await rebaseRoutineSave(i);
       if (!r) return;
       if (r === "kept") toast({ text: "A session on this version hasn't synced yet, so the save stays; your edit is also a draft on the newest version." });

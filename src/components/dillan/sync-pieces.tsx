@@ -59,8 +59,8 @@ export function ConflictCards({ items, onResolved, onDraft }: { items: OutboxIte
   return <div className="mt-4 flex flex-col gap-3">{list.map((i) => <ConflictCard key={i.localId} item={i} all={items} onResolved={onResolved} onDraft={onDraft} />)}</div>;
 }
 
-type Cmp = Awaited<ReturnType<typeof import("@/lib/conflicts.client").compare>>;
-const client = () => import("@/lib/conflicts.client");
+type Cmp = Awaited<ReturnType<typeof import("@/lib/conflict-actions").compare>>;
+const client = () => import("@/lib/conflict-actions");
 
 function ConflictCard({ item, all, onResolved, onDraft }: { item: OutboxItem; all: OutboxItem[]; onResolved: () => void; onDraft: () => void }) {
   const qc = useQueryClient();
