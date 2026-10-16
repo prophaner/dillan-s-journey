@@ -456,6 +456,49 @@ describe("a session started on a routine version that is not yet stored waits be
   });
 });
 
+import { CONFLICT_KINDS, hasCard } from "@/lib/conflicts";
+import { GOAL_LEVEL } from "@/lib/plan";
+/**
+ * brief §13 AT-21 (Two actors edit same plan): "Stale version rejected/rebased through visible resolution"
+ * brief §10.2: "Retry while the app is active ... Server acknowledgement is the only basis for a 'synced' label."
+ * A 409 on a kind that has a Conflict card waits for the user's keep-yours / keep-theirs choice. A 409 on a
+ * kind with no card (a measurement) can never be resolved by the user, so Retry requeues it with the same
+ * idempotency key and a fresh attempt count; reconnecting never duplicates it.
+ */
+describe("retryAccount requeues a card-less conflict and leaves carded conflicts alone (AT-21, §10.2)", () => {
+  it("measurement:add has no card and goes back to local with attempts 0 and the same key; update:goals keeps waiting", async () => {
+    expect(hasCard(MEASUREMENT_ADD)).toBe(false);
+    expect(hasCard(GOAL_LEVEL)).toBe(true);
+    expect(CONFLICT_KINDS).toContain(GOAL_LEVEL);
+    expect(CONFLICT_KINDS).not.toContain(MEASUREMENT_ADD);
+
+    const acct = "acct-conflict-nocard";
+    const measure = await enqueue(acct, MEASUREMENT_ADD, { id: "44444444-4444-4444-8444-444444444444", type: "weight", side: "none", enteredValue: "180", unit: "lb", observedAt: "2026-10-16T08:00:00Z" });
+    const goals = await enqueue(acct, GOAL_LEVEL, { id: "g1", level: "improve" }, 2);
+
+    await drain(acct, async (): Promise<SendResult> => ({ ok: false, reason: "conflict", message: "409" }));
+    const before = Object.fromEntries((await listItems(acct)).map((i) => [i.localId, i]));
+    expect(before[measure.localId]?.status).toBe("conflict");
+    expect(before[goals.localId]?.status).toBe("conflict");
+
+    await retryAccount(acct);
+    const after = Object.fromEntries((await listItems(acct)).map((i) => [i.localId, i]));
+    expect(after[measure.localId]?.status).toBe("local");
+    expect(after[measure.localId]?.attempts).toBe(0);
+    expect(after[measure.localId]?.idempotencyKey).toBe(measure.idempotencyKey);
+    expect(after[goals.localId]?.status).toBe("conflict");
+    expect(after[goals.localId]?.idempotencyKey).toBe(goals.idempotencyKey);
+
+    // The requeued measurement is sent once, with its original key; the carded conflict is still not sent.
+    const send = vi.fn(async (_i: OutboxItem): Promise<SendResult> => ({ ok: true }));
+    await drain(acct, send);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0]![0].localId).toBe(measure.localId);
+    expect(send.mock.calls[0]![0].idempotencyKey).toBe(measure.idempotencyKey);
+    expect((await listItems(acct)).filter((i) => i.kind === MEASUREMENT_ADD)).toHaveLength(1);
+  });
+});
+
 // Last on purpose: vi.resetModules gives later dynamic imports a fresh module instance (and a fresh
 // in-memory idb store); the static imports above keep their original instance.
 describe("nextSeq never goes backwards across a module reload (§10.2 ordered replay)", () => {
