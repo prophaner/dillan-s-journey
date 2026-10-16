@@ -88,6 +88,13 @@ export async function clearDrafts(uid: string) {
   await deleteDraft(routineKey(uid));
   await deleteDraft(`onboarding:${uid}`);
   await deleteDraft(exercisesKey(uid));
+  await deleteDraft(planDraftKey(uid));
+}
+
+export const planDraftKey = (uid: string) => `plan-draft:${uid}`;
+/** After "Save as vN+1": Train uses the new version straight away, even offline. */
+export async function cacheRoutine(uid: string, snap: PlanSnapshot) {
+  await saveDraft(routineKey(uid), snap);
 }
 
 const exercisesKey = (uid: string) => `exercises:${uid}`;

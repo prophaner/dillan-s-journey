@@ -2,10 +2,10 @@
  * Today (S01/S02, FR-06, AT-04): Full · Short · Priority only, built from the stored routine.
  * Pure functions so the rules can be unit-tested.
  *
- * Rules (the routine has no "priority block" field yet):
+ * Rules:
  * - Full keeps every block.
- * - Short keeps the main blocks and leaves out the optional ones.
- * - Priority only keeps the first main block (by position) — the priority block.
+ * - Short keeps the required and priority blocks and leaves out the optional ones.
+ * - Priority only keeps the block marked priority, or the first required one when none is marked.
  */
 import type { PlanSnapshot, SnapshotBlock } from "./workout";
 
@@ -43,7 +43,7 @@ const sorted = (s: PlanSnapshot) => [...s.blocks].sort((a, b) => a.position - b.
 
 export function priorityPosition(s: PlanSnapshot): number | undefined {
   const blocks = sorted(s);
-  return (blocks.find((b) => b.priority === "main") ?? blocks[0])?.position;
+  return (blocks.find((b) => b.priority === "priority") ?? blocks.find((b) => b.priority === "main") ?? blocks[0])?.position;
 }
 
 export function keptPositions(s: PlanSnapshot, choice: TimeChoice): number[] {
@@ -53,7 +53,7 @@ export function keptPositions(s: PlanSnapshot, choice: TimeChoice): number[] {
     const p = priorityPosition(s);
     return p === undefined ? [] : [p];
   }
-  const main = blocks.filter((b) => b.priority === "main").map((b) => b.position);
+  const main = blocks.filter((b) => b.priority !== "optional").map((b) => b.position);
   return main.length ? main : blocks.slice(0, 1).map((b) => b.position);
 }
 
