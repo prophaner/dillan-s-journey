@@ -1,16 +1,87 @@
 # Changelog
 
-Reviewed through: cec1ef3
+Reviewed through: 7ab9b9c
 
 One entry per accepted slice, newest first, written by the docs-writer agent after the owner
 accepts. Tooling changes merged by the owner (agent config, docs scaffolding) get a short
 entry under "Tooling" so the history stays complete; they are not slices.
 
 ## Unreleased
-- 0004: goals.level (improve/maintain/defer); routine_blocks.priority adds "priority". Plan screen, routine editor (save as new version), exercise detail.
-
 - 0002/0003: prescriptions reference exercises by id; backfill for existing routines
   (0003 landed at 0f55c7b, approved by the owner; see DECISIONS 2026-10-15)
+
+### 2026-10-16 — Plan + Routine editor, migration 0004, with S08 fixes
+Commits bf08eba..7ab9b9c (migration 0004 at ff320db, approved by the owner; Lovable build ff320db,
+fix round 7ab9b9c).
+Screens: Plan (routine, versions, goal levels), D02 Routine editor, Exercise detail; S08 Progress
+(fixes), S01 Today and S04 Set logging (priority block). FRs/ATs: FR-05 met (sets, reps, load, rest,
+supersets with rounds and two rests, reorder, Required / Priority / Optional, add and remove
+exercises; exercise badge Reviewed / Yours / Not reviewed); FR-02 level met (Improve / Maintain /
+Defer per goal, stored in goals.level, shown on Plan and Progress); AT-03 met (Save as vN+1 makes a
+new locked version; sessions already done keep their snapshot). Exercise detail partial: emphasis,
+cues and equipment show when stored, alternatives are Not yet known. Verified on phone: no.
+
+- Plan shows your routine with an "In use" tag, "Version N", block count and "about N min
+  (estimate)", one row per block (Required / Priority / Optional, "superset · N rounds"), and
+  Edit routine; the account-wide save word sits in the header.
+- "How this plan works" shows the purpose text with "From your plan · vN", or Not yet known
+  ("Why this plan is built this way isn't written down yet.").
+- "Exercises in this routine" lists each exercise; tap one for its detail page.
+- Versions, newest first, with date, "In use" on the version in use and "Locked" on stored
+  versions; an unsent save sits on top as vN+1 with its save word. "Saving an edit makes a new
+  version. Sessions you've done keep the version they used."
+- "Goals · this period": Improve / Maintain / Defer chips per active goal, "Level not yet set."
+  until you pick; saved through the outbox with the goal's version, works offline, shows its own
+  save word; "Couldn't save on this device. Nothing changed." when the device cannot store it.
+- Routine editor: "Editing <name>", "Draft of vN+1", banner "Saving creates version N+1. Sessions
+  you've already done keep version N exactly as it was." The draft is kept on this device as you
+  edit and survives reload, lock and offline; it belongs to the version it started from.
+- Blocks: Required / Priority / Optional chips (one Priority at most; marking another clears the
+  first), Move up / Move down, Remove block. Exercise fields Sets, Reps, Load (decimals, comma
+  accepted), Rest (s); empty means not set ("—"); sets and rounds 1–20.
+- Supersets: "Group with next" merges two blocks (rounds = the larger set count), with Rounds,
+  "Rest between (s)" (20 s default; FR-05 transition rest editable) and "Round rest (s)"; letters
+  A, B, …; per-exercise remove; "Ungroup" splits back into one block per exercise with sets = rounds.
+- "Add an exercise" by name: a new Required block of 3 × 10; "Matched to the exercise library by
+  name; otherwise saved as your own exercise." (matched on the server, never by name alone in the
+  stored prescription).
+- "Dillan's check" is marked "Coming with Dillan": "A check against your goals, limitations and
+  equipment."
+- "What changed from vN": plain-language list (Added / Removed, sets, reps, load, rest, priority,
+  position, superset membership, rounds, round rest, rest between) or "Nothing yet."; optional
+  "Why" (300 characters) stored with the version; problems that block saving listed in place.
+- Time estimate for Full / Short / Priority only, updated as you edit; "Minutes, estimated from
+  sets, rest and setup."
+- "Save as vN+1" (also Ctrl/Cmd+S) is greyed out until something changed and nothing blocks it;
+  toast "Saved as vN+1 · saved on this device", back to Plan. The save goes through the outbox;
+  Train and Today use the unsent version at once, and a session started on it waits behind the
+  save when syncing. The server stores the version once (idempotent), resolves exercise ids, then
+  locks it; earlier versions and session snapshots are never touched. "Discard draft" drops the
+  draft with no question.
+- A save the server refused (a newer version saved elsewhere) shows "Didn't sync" in Versions with
+  "Keep editing" (reopens the editor on the newest version with your blocks) and "Discard this
+  save"; while it is failed, Train uses the stored version.
+- Exercise detail: name, badge Reviewed / Yours / Not reviewed, "Demo data"; Intended emphasis
+  ("What the exercise aims at. How it feels doesn't prove which muscles worked."), Cues, Equipment,
+  each Not yet known when empty; Alternatives "No reviewed alternatives are stored yet.";
+  "Couldn't load this exercise" / "Exercise not found".
+- Today and Session: Priority only keeps the block marked Priority (first required block when none
+  is marked); Short keeps required and priority blocks; the set screen tags a priority block
+  "Priority".
+- Fix (S08): the goal card shows the Improve / Maintain / Defer tag when set, "Level not yet known"
+  otherwise.
+- Fix (S08): Steady weeks counts only weeks from your first finished session ("N of M", M up to 7);
+  Not yet known until the first session is known.
+- Fix (S08): a measurement in a unit the app cannot convert shows Not yet known instead of the raw
+  number or 0; a pending entry without a value is never shown as 0; BMI is Not yet known when
+  either input cannot be converted. BMI tag is "Derived" with "kg / m² · v1".
+- Fix (S08): the server rejects a measurement dated more than five minutes in the future.
+- Fix (S08): chart labels and week labels use the UI font at footnote size.
+- Fix (Today): "Resume session · N min in" wraps to a second line under 360 px instead of
+  overflowing.
+- Fix (outbox): an unsent item that has just started sending is no longer removed by a replace.
+- Migration 0004 (ff320db): `goals.level` nullable text with check (improve, maintain, defer);
+  `routine_blocks.priority` check now allows "priority". Approved by the owner.
 
 ### 2026-10-16 — S08 Progress, with Today fixes
 Commits 61b7835..cec1ef3 (Lovable build cec1ef3).
