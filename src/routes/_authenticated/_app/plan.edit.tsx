@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, ChevronLeft, CircleAlert, Link2, Plus, Trash2, Unlink } from "lucide-react";
-import { toast } from "sonner";
 import { pageHead } from "@/lib/head";
 import { deleteDraft, loadDraft, saveDraft } from "@/lib/outbox";
 import { useOutbox } from "@/lib/use-outbox";
@@ -14,6 +13,7 @@ import {
   type BlockPriority, type EditBlock, type RoutineSavePayload,
 } from "@/lib/plan";
 import { Banner, Card, ScreenState, SectionLabel } from "@/components/dillan/surfaces";
+import { useToast } from "@/components/dillan/overlays";
 import { DButton } from "@/components/dillan/button";
 import { Chip, DemoLabel, StatusTag } from "@/components/dillan/tags";
 import { BlockDot } from "@/components/dillan/plan-pieces";
@@ -39,6 +39,7 @@ function EditorBody({ uid, base }: { uid: string; base: PlanSnapshot }) {
   const outbox = useOutbox(uid);
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const toast = useToast();
   const [blocks, setBlocks] = useState<EditBlock[]>(() => toEdit(base));
   const [reason, setReason] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -92,7 +93,7 @@ function EditorBody({ uid, base }: { uid: string; base: PlanSnapshot }) {
       await outbox.add(ROUTINE_SAVE, payload);
       await deleteDraft(planDraftKey(uid)).catch(() => undefined);
       await qc.invalidateQueries({ queryKey: ["routine", uid] });
-      toast.success(`Saved as v${nextNo} · saved on this device`);
+      toast({ text: `Saved as v${nextNo} · saved on this device` });
       void navigate({ to: "/plan" });
     } catch {
       setStorageFailed(true);
@@ -133,7 +134,7 @@ function EditorBody({ uid, base }: { uid: string; base: PlanSnapshot }) {
           <div className="min-w-0">
             <h1 className="text-title1 font-bold leading-tight">Editing {base.title}</h1>
             <div className="mt-2 flex flex-wrap gap-2">
-              <StatusTag kind="waiting">Draft of v{base.versionNo}</StatusTag>
+              <StatusTag kind="waiting">Draft of v{nextNo}</StatusTag>
               {base.isDemo && <DemoLabel />}
             </div>
           </div>
@@ -240,8 +241,8 @@ function BlockCard({ b, i, last, onMove, onGroup, onUngroup, onRemove, onRemoveE
       {sup && (
         <div className="mt-4 grid grid-cols-1 gap-3 min-[400px]:grid-cols-3">
           <NumField label="Rounds" value={b.rounds} onChange={(v) => setBlock({ rounds: v ?? 1 })} />
-          <NumField label="Rest between (s)" value={b.prescriptions[0]?.transition_seconds ?? DEFAULT_TRANSITION_SECONDS}
-            onChange={(v) => setBlock({ prescriptions: b.prescriptions.map((p, q) => (q < b.prescriptions.length - 1 ? { ...p, transition_seconds: v ?? 0 } : p)) })} />
+          <NumField label="Rest between (s)" value={b.prescriptions[0]?.transition_seconds === undefined ? DEFAULT_TRANSITION_SECONDS : b.prescriptions[0].transition_seconds}
+            onChange={(v) => setBlock({ prescriptions: b.prescriptions.map((p, q) => (q < b.prescriptions.length - 1 ? { ...p, transition_seconds: v } : p)) })} />
           <NumField label="Round rest (s)" value={b.restSeconds} onChange={(v) => setBlock({ restSeconds: v })} />
         </div>
       )}

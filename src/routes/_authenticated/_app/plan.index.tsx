@@ -2,11 +2,12 @@ import { useEffect, useRef } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, Lock, PencilLine } from "lucide-react";
-import { toast } from "sonner";
 import { pageHead } from "@/lib/head";
 import { supabase } from "@/integrations/supabase/client";
-import { loadRoutine } from "@/lib/workout-store";
-import { onOutboxChange, removeIfLocal } from "@/lib/outbox";
+import { loadRoutine, planDraftKey } from "@/lib/workout-store";
+import { useToast } from "@/components/dillan/overlays";
+import { toEdit } from "@/lib/plan";
+import { deleteDraft, onOutboxChange, removeIfLocal, saveDraft, type OutboxItem } from "@/lib/outbox";
 import { useOutbox } from "@/lib/use-outbox";
 import { estimateMinutes, blockName } from "@/lib/time-plan";
 import { GOAL_LEVEL, GOAL_LEVELS, LEVEL_LABEL, ROUTINE_SAVE, type GoalLevel, type RoutineSavePayload } from "@/lib/plan";
@@ -29,6 +30,7 @@ function Plan() {
   const outbox = useOutbox(user.id);
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const toast = useToast();
   const routine = useQuery({ queryKey: ["routine", user.id], queryFn: () => loadRoutine(user.id) });
   const r = routine.data;
   const versions = useQuery({
@@ -70,12 +72,30 @@ function Plan() {
       }
       await outbox.add(GOAL_LEVEL, { id: g.id, level }, expected);
     } catch {
-      toast.error("Couldn't save on this device. Nothing changed.");
+      toast({ text: "Couldn't save on this device. Nothing changed." });
     } finally {
       busy.current = false;
     }
   };
 
+  const discardSave = async (i: OutboxItem) => {
+    try {
+      if (!(await removeIfLocal(i.localId))) return;
+      await deleteDraft(planDraftKey(user.id));
+      await qc.invalidateQueries({ queryKey: ["routine", user.id] });
+    } catch { toast({ text: "Couldn't change this device's copy. Try again." }); }
+  };
+  const keepEditing = async (i: OutboxItem) => {
+    const p = i.payload as RoutineSavePayload;
+    try {
+      const fresh = await loadRoutine(user.id);
+      if (!fresh) return;
+      if (!(await removeIfLocal(i.localId))) return;
+      await saveDraft(planDraftKey(user.id), { baseVersionId: fresh.templateVersionId, blocks: toEdit({ ...fresh, blocks: p.blocks }), reason: p.reason ?? "" });
+      await qc.invalidateQueries({ queryKey: ["routine", user.id] });
+      void navigate({ to: "/plan/edit" });
+    } catch { toast({ text: "Couldn't change this device's copy. Try again." }); }
+  };
   const pendingSave = outbox.items.filter((i) => i.kind === ROUTINE_SAVE && i.status !== "synced");
 
   return (
@@ -150,9 +170,15 @@ function Plan() {
               {pendingSave.map((i) => {
                 const p = i.payload as RoutineSavePayload;
                 return (
-                  <div key={i.localId} className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
+                  <div key={i.localId} className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
                     <span className="text-headline font-bold">v{p.baseVersionNo + 1}</span>
                     <SaveState state={i.status === "local" ? "local" : "failed"} onRetry={outbox.retryNow} />
+                    {i.status !== "local" && (
+                      <div className="flex w-full flex-col gap-2 min-[400px]:flex-row">
+                        <DButton variant="secondary" size="md" onClick={() => void keepEditing(i)}>Keep editing</DButton>
+                        <DButton variant="quiet" size="md" onClick={() => void discardSave(i)}>Discard this save</DButton>
+                      </div>
+                    )}
                   </div>
                 );
               })}
