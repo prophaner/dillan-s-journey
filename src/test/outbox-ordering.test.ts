@@ -155,14 +155,14 @@ describe("drain keeps per-session order (§10.2 outbox, §9.1 version checks)", 
       return { ok: true };
     });
 
-    await drain(acct, send);
+    await drain(acct, send, { discardHoldMs: 0 });
     expect(sent.map((i) => i.localId)).toEqual([start.localId, log.localId, edit.localId]);
     expect(sent.map((i) => i.localId)).not.toContain(discard.localId);
     const after1 = Object.fromEntries((await listItems(acct)).map((i) => [i.localId, i.status]));
     expect(after1[edit.localId]).toBe("local");
     expect(after1[discard.localId]).toBe("local");
 
-    await drain(acct, send);
+    await drain(acct, send, { discardHoldMs: 0 });
     const editSends = sent.filter((i) => i.localId === edit.localId);
     expect(editSends).toHaveLength(2);
     expect(editSends.map((i) => i.idempotencyKey)).toEqual([edit.idempotencyKey, edit.idempotencyKey]);
@@ -335,6 +335,27 @@ describe("discard undo window (S07 'Session discarded · Undo')", () => {
     expect(sent.filter((i) => i.localId === item.localId)).toHaveLength(0);
     expect(await removeIfLocal(item.localId)).toBe(true);
     expect((await listItems(acct)).some((i) => i.localId === item.localId)).toBe(false);
+  });
+
+  it("the hold is the default: a plain drain does not send a fresh discard", async () => {
+    const acct = "undo-default";
+    const item = await enqueue(acct, SESSION_DISCARD, { sessionId: "s-def" });
+    const sent: OutboxItem[] = [];
+    await drain(acct, async (i) => { sent.push(i); return { ok: true }; });
+    expect(sent.some((i) => i.localId === item.localId)).toBe(false);
+  });
+
+  it("an Undo during an in-flight drain stops the discard from being sent", async () => {
+    const acct = "undo-inflight";
+    const first = await enqueue(acct, SET_LOG, { sessionId: "other", id: "x" });
+    const item = await enqueue(acct, SESSION_DISCARD, { sessionId: "s-fly" });
+    const sent: OutboxItem[] = [];
+    await drain(acct, async (i) => {
+      sent.push(i);
+      if (i.localId === first.localId) await removeIfLocal(item.localId); // Undo tapped mid-drain
+      return { ok: true };
+    }, { discardHoldMs: 0 });
+    expect(sent.some((i) => i.localId === item.localId)).toBe(false);
   });
 });
 

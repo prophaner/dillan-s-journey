@@ -108,7 +108,7 @@ export function OptionRow({
         <span className="block text-title3 font-bold">{title}</span>
         {detail && <span className="mt-0.5 block text-subhead text-text-2">{detail}</span>}
       </span>
-      {trailing ?? <ChevronRight className="size-5 shrink-0 text-text-2" aria-hidden />}
+      {trailing !== undefined ? trailing : <ChevronRight className="size-5 shrink-0 text-text-2" aria-hidden />}
     </button>
   );
 }
