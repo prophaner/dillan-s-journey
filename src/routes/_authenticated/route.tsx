@@ -7,7 +7,7 @@ export const Route = createFileRoute("/_authenticated")({
     const { data, error } = await supabase.auth.getUser();
     if (data.user) return { user: { id: data.user.id, email: data.user.email ?? "" } };
     // Offline, the server check can't run: trust the session on this device (AT-36).
-    if (error && !navigator.onLine) {
+    if (error && (!navigator.onLine || error.name === "AuthRetryableFetchError")) {
       const { data: s } = await supabase.auth.getSession();
       const u = s.session?.user;
       if (u) return { user: { id: u.id, email: u.email ?? "" } };
