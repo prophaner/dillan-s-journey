@@ -1,12 +1,33 @@
 # Changelog
 
-Reviewed through: f0cac87
+Reviewed through: 03aefe0
 
 One entry per accepted slice, newest first, written by the docs-writer agent after the owner
 accepts. Tooling changes merged by the owner (agent config, docs scaffolding) get a short
 entry under "Tooling" so the history stays complete; they are not slices.
 
 ## Unreleased
+
+### 2026-10-16 — S04 edits + S06 Superset, with carry-over fixes
+Commits 885b071..03aefe0 (fix rounds 33edd78, 3475a13, 47e1751, d8840de, 5c8dc07; Lovable build 03aefe0).
+Screens: S04 Set logging (change a done set, swap an exercise for this session), S06 Superset,
+S07 Session complete (Save session or Discard session). FRs/ATs: FR-05; FR-07 (edit and undo of a
+done set; still no pause/resume); AT-02, AT-03, AT-17. Verified on phone: no.
+
+- Tap a done set pip to change its reps, load or reps left in the tank in place; Save change
+  shows "Set N changed · saved on this device". A change corrects the same set; no Undo on a change.
+- Swap an exercise for this session only, from a sheet, until its first set is logged; "Back to
+  <planned exercise>" undoes the swap. Alternatives are not yet matched to equipment or
+  limitations. The set screen and the Done screen note "Swapped for <planned> · this session only".
+- Supersets run as rounds: Superset tag and "Round N of M", A then B, transition rest of 20 s by
+  default, the round rest after the last exercise, pattern line "Go A → B · rest 20s between ·
+  75s after the round.", a finished exercise in the round shows Done.
+- Done screen offers Save session or Discard session; Discard asks once more inline ("This removes
+  the session and its N sets from your history."), then "Session discarded" and the session and
+  its sets are removed. Save session is greyed out while a discard is waiting.
+- Fix: Save session queues the finish once, even after a reload or a double tap.
+- Fix: Undo runs once; Log set is greyed out while an undo is waiting to be stored.
+- Fix: Changes sync in the order you made them, so an edit or undo never arrives before its set.
 
 ### 2026-10-16 — Workout slice: S16 → S04 → S05 → S07 with real set storage
 Commits a9fddd0..f0cac87 (Lovable build 0328455 plus fix rounds e018d34, 08e1b13, 5818581, f0cac87).

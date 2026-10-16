@@ -15,4 +15,5 @@
 - [x] Workout slice S16 → S04 → S05 → S07 with real set storage
   - Verified on phone: no
 - [x] Edit a done set, swap (this session only), discard session, supersets (S06)
+  - Verified on phone: no
 - [ ] Swap alternatives filtered by equipment/intent/limitations; "Use from now on" proposals (FR-15)
