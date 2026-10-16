@@ -8,14 +8,14 @@ import { describe, expect, it, vi } from "vitest";
 const mem = vi.hoisted(() => new Map<string, Map<string, Record<string, unknown>>>());
 vi.mock("idb", () => {
   const store = (n: string) => { let s = mem.get(n); if (!s) { s = new Map(); mem.set(n, s); } return s; };
-  const keyOf = (n: string, r: Record<string, unknown>) => String(n === "outbox" ? r.localId : r.key);
+  const keyOf = (n: string, r: Record<string, unknown>) => String(n === "outbox" ? r["localId"] : r["key"]);
   return {
     openDB: async () => ({
       put: async (n: string, r: Record<string, unknown>) => { store(n).set(keyOf(n, r), r); },
       get: async (n: string, k: string) => store(n).get(k),
       delete: async (n: string, k: string) => { store(n).delete(k); },
       getAllKeys: async (n: string) => [...store(n).keys()],
-      getAllFromIndex: async (n: string, _i: string, v: string) => [...store(n).values()].filter((r) => r.accountId === v),
+      getAllFromIndex: async (n: string, _i: string, v: string) => [...store(n).values()].filter((r) => r["accountId"] === v),
     }),
   };
 });
@@ -35,7 +35,7 @@ describe("profile updates", () => {
     expect(() => validateRowUpdate("profiles", { id: ID, patch: { onboarding_status: "done" } })).toThrow(/400/);
   });
   it("experience accepts only new / returning / experienced", () => {
-    expect(validateRowUpdate("profiles", { id: ID, patch: { experience: "returning" } }).patch.experience).toBe("returning");
+    expect(validateRowUpdate("profiles", { id: ID, patch: { experience: "returning" } }).patch["experience"]).toBe("returning");
     expect(() => validateRowUpdate("profiles", { id: ID, patch: { experience: "expert" } })).toThrow(/400/);
   });
   it("limitation status is one of accommodated / avoided / pending / resolved", () => {

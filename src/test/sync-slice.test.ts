@@ -70,6 +70,7 @@ describe("Compare shows yours and theirs (AT-21)", () => {
 describe("keepYours (conflict-actions.ts) idempotency (§10.2, §9.1)", () => {
   // keepYours for onboarding:complete must reuse the original idempotencyKey (currently generates a new one → duplicate child rows)
   it.todo("keepYours on an onboarding:complete conflict resends with the original idempotencyKey, not a fresh enqueue key");
+  it.todo("Settings UnitsControl must refetch the profile row after a sync (stale version → false self-conflict)");
 });
 
 describe("storage check (AT-34, §10.2)", () => {
