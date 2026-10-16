@@ -3,25 +3,25 @@ import { deleteDraft, enqueue, removeIfLocal, saveDraft, type OutboxItem } from 
 import { diffPlans, GOAL_LEVEL, ROUTINE_SAVE, toEdit, type RoutineSavePayload } from "./plan";
 import { SESSION_FINISH, SET_LOG_EDIT } from "./workout";
 import { loadRoutine, planDraftKey } from "./workout-store";
-import { compareRows } from "./conflicts";
+import { compareRows, type Fields } from "./conflicts";
 
 /** Current server row for a conflicting update (what "theirs" is). */
-export async function readTheirs(item: OutboxItem): Promise<Record<string, unknown> | null> {
-  const p = item.payload as Record<string, string>;
+export async function readTheirs(item: OutboxItem): Promise<Fields | null> {
+  const p = item.payload as Fields;
   if (item.kind === GOAL_LEVEL) {
-    const { data, error } = await supabase.from("goals").select("version, level").eq("id", p.id!).maybeSingle();
+    const { data, error } = await supabase.from("goals").select("version, level").eq("id", String(p.id)).maybeSingle();
     if (error) throw error;
     return data;
   }
   if (item.kind === SET_LOG_EDIT) {
-    const { data, error } = await supabase.from("set_logs").select("version, reps, load, rir").eq("owner_id", item.accountId).eq("idempotency_key", p.setKey!).maybeSingle();
+    const { data, error } = await supabase.from("set_logs").select("version, reps, load, rir").eq("owner_id", item.accountId).eq("idempotency_key", String(p.setKey)).maybeSingle();
     if (error) throw error;
     return data;
   }
   if (item.kind === SESSION_FINISH) {
-    const { data, error } = await supabase.from("sessions").select("version, completion, feedback").eq("id", p.id!).maybeSingle();
+    const { data, error } = await supabase.from("sessions").select("version, completion, feedback").eq("id", String(p.id)).maybeSingle();
     if (error) throw error;
-    return data as Record<string, unknown> | null;
+    return data as Fields | null;
   }
   return null;
 }
@@ -32,7 +32,7 @@ export async function compare(item: OutboxItem) {
     const fresh = await loadRoutine(item.accountId);
     return { rows: [], lines: fresh ? diffPlans(fresh.blocks, p.blocks) : [], theirsLabel: fresh ? `v${fresh.versionNo}` : "—" };
   }
-  return { rows: compareRows(item.kind, item.payload as Record<string, unknown>, await readTheirs(item)), lines: [], theirsLabel: "" };
+  return { rows: compareRows(item.kind, item.payload as Fields, await readTheirs(item)), lines: [], theirsLabel: "" };
 }
 
 /** Turn a routine save back into a draft against the newest stored version. Draft is written first. */

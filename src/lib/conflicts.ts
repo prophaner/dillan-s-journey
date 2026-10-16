@@ -15,10 +15,12 @@ export function versionInUse(items: OutboxItem[], versionId: string) {
     && (i.payload as { snapshot?: { templateVersionId?: string } } | null)?.snapshot?.templateVersionId === versionId);
 }
 
+export type Fields = Partial<Record<"id" | "setKey" | "version" | "level" | "reps" | "load" | "rir" | "feedback" | "completion" | "feeling" | "note", unknown>>;
+
 const v = (x: unknown, unit = "") => (x === null || x === undefined || x === "" ? "—" : `${x}${unit}`);
 
 /** "Compare": the fields this item changes, as yours vs theirs lines. */
-export function compareRows(kind: string, yours: Record<string, unknown>, theirs: Record<string, unknown> | null): { label: string; yours: string; theirs: string }[] {
+export function compareRows(kind: string, yours: Fields, theirs: Fields | null): { label: string; yours: string; theirs: string }[] {
   const t = theirs ?? {};
   if (kind === GOAL_LEVEL) {
     const l = (x: unknown) => (x ? LEVEL_LABEL[x as GoalLevel] ?? String(x) : "—");
