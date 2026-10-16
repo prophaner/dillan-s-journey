@@ -23,14 +23,14 @@ export async function storeRowUpdate(sb: SB, userId: string, table: ProfileTable
   for (const [k, v] of Object.entries(patch)) {
     if (k === "units") {
       const u = v as Units;
-      row.preferences = { ...((cur.preferences as Record<string, Json>) ?? {}), units: u } as Json;
-      row.weight_unit = u.weight;
-      row.length_unit = u.length;
+      row["preferences"] = { ...((cur.preferences as Record<string, Json>) ?? {}), units: u as unknown as Json } as Json;
+      row["weight_unit"] = u.weight;
+      row["length_unit"] = u.length;
     } else if (k === "archived") {
-      row.archived_at = v ? new Date().toISOString() : null;
-      if (table === "limitations") row.status = v ? "archived" : (patch.status ?? "pending");
+      row["archived_at"] = v ? new Date().toISOString() : null;
+      if (table === "limitations") row["status"] = v ? "archived" : (patch["status"] ?? "pending");
     } else if (k === "note") {
-      row.context = joinContext(splitContext(cur.context as string | null).prefix, (v as string).trim());
+      row["context"] = joinContext(splitContext(cur.context as string | null).prefix, (v as string).trim());
     } else row[k] = v;
   }
   const already = Object.entries(row).every(([k, v]) =>

@@ -57,8 +57,8 @@ export function compareRows(kind: string, yours: Fields, theirs: Fields | null):
       if (Array.isArray(x)) return x.length ? x.join(", ") : "—";
       return v(x);
     };
-    const theirsOf = (k: string) => k === "units" ? (tr.preferences as { units?: unknown } | null)?.units ?? { weight: tr.weight_unit, length: tr.length_unit }
-      : k === "archived" ? tr.archived_at != null : k === "note" ? tr.context : tr[k];
+    const theirsOf = (k: string) => k === "units" ? (tr["preferences"] as { units?: unknown } | null)?.units ?? { weight: tr["weight_unit"], length: tr["length_unit"] }
+      : k === "archived" ? tr["archived_at"] != null : k === "note" ? tr["context"] : tr[k];
     return Object.keys(patch).map((k) => ({ label: k.replace(/_/g, " "), yours: show(k, patch[k]), theirs: show(k, theirsOf(k)) }));
   }
   if (kind === ONBOARDING_KIND) {

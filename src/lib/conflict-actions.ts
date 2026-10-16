@@ -61,8 +61,9 @@ async function rebaseInPlace(item: OutboxItem, fresh: PlanSnapshot) {
   const sessions = new Set<string>();
   await rewriteUnsent(item.accountId, (i) => {
     if (i.localId === item.localId) {
+      const { error: _old, ...rest } = i;
       return {
-        ...i, idempotencyKey: crypto.randomUUID(), status: "local", attempts: 0, error: undefined,
+        ...rest, idempotencyKey: crypto.randomUUID(), status: "local", attempts: 0,
         payload: { ...p, id: newId, baseVersionId: fresh.templateVersionId, baseVersionNo: fresh.versionNo } satisfies RoutineSavePayload,
       };
     }

@@ -45,7 +45,7 @@ export function unitsOf(p: { preferences?: unknown; weight_unit?: string | null;
 /** An unsent units change on this device wins, so the screen follows what you just chose. */
 export function localUnits(items: OutboxItem[], server: Units): Units {
   const last = items.filter((i) => i.kind === UPDATE_PROFILE && i.status !== "synced")
-    .map((i) => (i.payload as RowUpdatePayload).patch.units as Units | undefined).filter(Boolean).at(-1);
+    .map((i) => (i.payload as RowUpdatePayload).patch["units"] as Units | undefined).filter(Boolean).at(-1);
   return last ?? server;
 }
 
@@ -113,7 +113,7 @@ export function validateRowUpdate(table: ProfileTable, raw: unknown): RowUpdateP
     if (!rule || !rule(p.patch[k])) throw new Error(`400 bad field ${k}`);
   }
   if (table === "profiles" && "timezone" in p.patch) {
-    try { new Intl.DateTimeFormat("en", { timeZone: p.patch.timezone as string }); } catch { throw new Error("400 bad timezone"); }
+    try { new Intl.DateTimeFormat("en", { timeZone: p.patch["timezone"] as string }); } catch { throw new Error("400 bad timezone"); }
   }
   return p;
 }

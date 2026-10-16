@@ -754,7 +754,7 @@ function ReportStatus({ uid, reportKey, items }: { uid: string; reportKey: strin
   if (!q.data) return null;
   const local = items.filter((i) => i.kind === UPDATE_LIMITATION && i.status !== "synced" && (i.payload as RowUpdatePayload).id === q.data!.id)
     .map((i) => (i.payload as RowUpdatePayload).patch).at(-1);
-  const status = local?.archived ? "archived" : (local?.status as string | undefined) ?? q.data.status;
+  const status = local?.["archived"] ? "archived" : (local?.["status"] as string | undefined) ?? q.data.status;
   if (status === "active") return null;
   return <StatusTag kind={status === "resolved" ? "done" : status === "pending" ? "waiting" : "neutral"}>{LIMITATION_LABEL[status] ?? status}</StatusTag>;
 }

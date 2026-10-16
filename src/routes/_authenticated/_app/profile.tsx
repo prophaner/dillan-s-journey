@@ -75,7 +75,7 @@ function Profile() {
     const ins = pendingInsert(row.id);
     if (ins) {
       // Not stored yet: change the add itself (or take it back).
-      if (patch.archived) { await removeIfLocal(ins.localId); return; }
+      if (patch["archived"]) { await removeIfLocal(ins.localId); return; }
       await rewriteUnsent(uid, (i) => i.localId === ins.localId ? { ...i, payload: { ...(i.payload as EquipmentAdd), ...patch } } : null);
       return;
     }
