@@ -1,15 +1,16 @@
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { Sun, Dumbbell, TrendingUp, ClipboardList, User, Settings, LogOut, FlaskConical, Component } from "lucide-react";
+import { Sun, Dumbbell, TrendingUp, ClipboardList, User, Settings, LogOut, FlaskConical, Component, HardDrive } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { clearAccount, unsyncedCount } from "@/lib/outbox";
 import { useOutbox } from "@/lib/use-outbox";
-import { useServiceWorker } from "@/lib/sw";
+import { useRegisterServiceWorker } from "@/lib/sw";
 import { clearDrafts } from "@/lib/workout-store";
 import { SpotMark } from "./spot-mark";
 import { SaveState } from "./tags";
-import { Sheet, UpdateBanner } from "./overlays";
+import { Sheet } from "./overlays";
+import { ConflictCards, YourDataSheet } from "./sync-pieces";
 import { DButton } from "./button";
 
 const tabs = [
@@ -59,8 +60,10 @@ export function useSignOut(accountId: string) {
 
 export function AppShell({ user, children }: { user: { id: string; email: string }; children: ReactNode }) {
   const [menu, setMenu] = useState(false);
-  const { state, pending, failed, retryNow, loaded } = useOutbox(user.id);
-  const sw = useServiceWorker();
+  const [dataOpen, setDataOpen] = useState(false);
+  const { state, pending, failed, retryNow, syncNow, loaded, items } = useOutbox(user.id);
+  useRegisterServiceWorker();
+  const navigate = useNavigate();
   const signOut = useSignOut(user.id);
 
   const navLink = "flex items-center gap-3 rounded-btn px-4 h-12 text-headline font-medium text-text-2 hover:bg-surface-2";
@@ -95,7 +98,7 @@ export function AppShell({ user, children }: { user: { id: string; email: string
       </aside>
 
       <main className="mx-auto w-full max-w-[640px] px-margin pb-nav lg:max-w-[1120px] lg:px-12 lg:pb-12">
-        {sw.updateReady && <UpdateBanner onUpdate={sw.applyUpdate} />}
+        {loaded && <ConflictCards items={items} onResolved={() => void syncNow()} onDraft={() => void navigate({ to: "/plan/edit" })} />}
         {children}
       </main>
 
@@ -127,6 +130,10 @@ export function AppShell({ user, children }: { user: { id: string; email: string
               {t.label}
             </Link>
           ))}
+          <button type="button" className={navLink} onClick={() => { setMenu(false); setDataOpen(true); }}>
+            <HardDrive className="size-5" aria-hidden />
+            Your data
+          </button>
         </nav>
         <div className="mt-4 border-t border-line pt-4">
           {loaded && <SaveState state={state} count={pending + failed} onRetry={retryNow} />}
@@ -135,6 +142,7 @@ export function AppShell({ user, children }: { user: { id: string; email: string
           </DButton>
         </div>
       </Sheet>
+      <YourDataSheet open={dataOpen} onClose={() => setDataOpen(false)} email={user.email} items={items} onSync={retryNow} />
     </div>
   );
 }
