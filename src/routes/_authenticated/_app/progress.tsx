@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Calculator, CircleAlert, Plus, Repeat2 } from "lucide-react";
 import { LEVEL_LABEL, type GoalLevel } from "@/lib/plan";
 import { pageHead } from "@/lib/head";
+import { useUnits } from "@/lib/use-profile";
 import { supabase } from "@/integrations/supabase/client";
 import { localDate } from "@/lib/workout";
 import { loadRoutine, loadWeek } from "@/lib/workout-store";
@@ -95,8 +96,9 @@ function Progress() {
     return [...server, ...local].sort((a, b) => a.observed_at.localeCompare(b.observed_at));
   }, [measures.data, outbox.items]);
 
-  const wUnit = profile.data?.weight_unit === "kg" ? "kg" : "lb";
-  const lUnit = profile.data?.length_unit === "cm" ? "cm" : "in";
+  const units = useUnits(user.id, outbox.items); // display only: stored entries keep their unit
+  const wUnit = units.weight;
+  const lUnit = units.length;
   const r = routine.data;
 
   return (

@@ -8,6 +8,7 @@ import { ROUTINE_SAVE, type RoutineSavePayload } from "@/lib/plan";
 import { Sheet, useToast } from "./overlays";
 import { Card } from "./surfaces";
 import { DButton } from "./button";
+import { localLabel, useStorageHealth } from "@/lib/device";
 
 /** S21 "Your data on this phone" (AT-34). Counts come straight from this device's outbox. */
 export function YourDataSheet({ open, onClose, email, items, onSync }: {
@@ -18,9 +19,11 @@ export function YourDataSheet({ open, onClose, email, items, onSync }: {
   const local = items.filter((i) => i.status === "local").length;
   const failed = items.filter((i) => i.status === "failed" || i.status === "conflict").length;
   const unsynced = local + failed;
+  const health = useStorageHealth();
+  const tabOnly = health === "unavailable";
   const rows = [
     { icon: <CircleCheck className="size-5 text-steady" aria-hidden />, label: "Synced", n: synced, meaning: "Stored on your account. Safe if this phone is lost." },
-    { icon: <CircleDot className="size-5 text-text-3" aria-hidden />, label: "Saved on this device", n: local, meaning: "Kept here. Sends when you're online and Dillan is open." },
+    { icon: <CircleDot className="size-5 text-text-3" aria-hidden />, label: localLabel(health), n: local, meaning: tabOnly ? "This browser isn't keeping data, so closing this tab loses it. Sync before you close." : "Kept here. Sends when you're online and Dillan is open." },
     { icon: <CircleAlert className="size-5 text-hold" aria-hidden />, label: "Didn't sync", n: failed, meaning: "Tried and stopped. Retry, or choose a version if it changed elsewhere." },
   ];
   return (
@@ -74,7 +77,7 @@ function ConflictCard({ item, all, onResolved, onDraft }: { item: OutboxItem; al
   };
   const yours = () => run(async () => {
     const r = await (await client()).keepYours(item);
-    if (r === "kept") { toast({ text: "A session on this version hasn't synced yet, so the save stays; your edit is also a draft on the newest version." }); onDraft(); }
+    if (r === "rebased") toast({ text: "Kept yours as the newest version. The session you started on it will sync after it." });
     else if (r === "draft") { toast({ text: "Your edit is back as a draft on the newest version." }); onDraft(); }
     else if (r === "gone") toast({ text: "That item no longer exists, so there's nothing to keep." });
     onResolved();
@@ -96,7 +99,7 @@ function ConflictCard({ item, all, onResolved, onDraft }: { item: OutboxItem; al
       <p className="flex items-center gap-2 text-footnote font-bold uppercase tracking-wider text-text-2">
         <CircleAlert className="size-4 text-hold" aria-hidden /> Changed on another device
       </p>
-      <p className="mt-2 text-headline font-bold">{item.kind === ROUTINE_SAVE || item.kind === "update:goals" ? "Your plan" : "This"} changed on another device. Keep yours, keep theirs, or compare?</p>
+      <p className="mt-2 text-headline font-bold">{item.kind === ROUTINE_SAVE || item.kind === "update:goals" ? "Your plan" : item.kind.startsWith("update:") && item.kind !== "update:sessions" ? "Your profile" : "This"} changed on another device. Keep yours, keep theirs, or compare?</p>
       {cmp === "failed" && <p className="mt-2 text-footnote text-text-2">Couldn't load their version. Check your connection.</p>}
       {cmp && cmp !== "failed" && (
         cmp.rows.length ? (

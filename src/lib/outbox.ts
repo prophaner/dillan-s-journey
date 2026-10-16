@@ -91,6 +91,7 @@ export async function enqueue(
   kind: string,
   payload: unknown,
   expectedVersion: number | null = null,
+  opts: { idempotencyKey?: string } = {},
 ): Promise<OutboxItem> {
   // Updates ("update:<table>") must carry the version the app read.
   if (isUpdateKind(kind)) assertVersion(kind.slice(7), expectedVersion);
@@ -98,7 +99,8 @@ export async function enqueue(
   const item: OutboxItem = {
     localId: crypto.randomUUID(),
     accountId,
-    idempotencyKey: crypto.randomUUID(),
+    // A resend of the same change keeps its key, so the server can recognise a replay.
+    idempotencyKey: opts.idempotencyKey ?? crypto.randomUUID(),
     kind,
     payload,
     expectedVersion,
@@ -167,12 +169,12 @@ export async function drain(accountId: string, send: (item: OutboxItem) => Promi
       const fresh = (await d.get("outbox", item.localId)) as OutboxItem | undefined;
       if (!fresh || fresh.status !== "local") continue;
       sendingId = item.localId;
-      const res = await send(item).catch(
+      const res = await send(fresh).catch(
         (e: unknown): SendResult => ({ ok: false, reason: "retry", message: String(e) }),
       ).finally(() => { sendingId = null; });
       if (!res.ok && sid) blocked.add(sid);
       if (res.ok) {
-        await d.put("outbox", { ...item, status: "synced", syncedAt: Date.now(), error: undefined });
+        await d.put("outbox", { ...fresh, status: "synced", syncedAt: Date.now(), error: undefined });
         if (item.kind === "routine:save_version") unsentSaves.delete((item.payload as { id?: string } | null)?.id ?? "");
       } else if (res.reason === "offline") {
         break;
@@ -180,14 +182,14 @@ export async function drain(accountId: string, send: (item: OutboxItem) => Promi
         // Server reachable but no durable storage yet: stay local, don't burn retries.
         continue;
       } else {
-        const attempts = item.attempts + 1;
+        const attempts = fresh.attempts + 1;
         const status: OutboxStatus =
           res.reason === "conflict"
             ? "conflict"
             : res.reason === "permanent" || attempts >= MAX_ATTEMPTS
               ? "failed"
               : "local";
-        await d.put("outbox", { ...item, attempts, status, error: res.message });
+        await d.put("outbox", { ...fresh, attempts, status, error: res.message });
       }
       emit();
     }
@@ -218,6 +220,25 @@ export async function removeIfLocal(localId: string): Promise<boolean> {
   await d.delete("outbox", localId);
   emit();
   return true;
+}
+
+/**
+ * Rewrite items that haven't left this device (not synced, not mid-send). `fn` returns the
+ * new item, or null to leave it alone. Order (seq) is kept. Returns how many changed.
+ */
+export async function rewriteUnsent(accountId: string, fn: (item: OutboxItem) => OutboxItem | null) {
+  const d = await db();
+  let n = 0;
+  for (const item of await listItems(accountId)) {
+    if (item.status === "synced" || sendingId === item.localId) continue;
+    const next = fn(item);
+    if (!next) continue;
+    if (sendingId === item.localId) continue;
+    await d.put("outbox", { ...next, localId: item.localId, seq: item.seq, accountId: item.accountId });
+    n++;
+  }
+  if (n) emit();
+  return n;
 }
 
 /** Put this account's failed items back in the queue. Conflicts with a card stay put (the card resolves them); conflicts without one are requeued. */

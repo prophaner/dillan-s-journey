@@ -19,6 +19,12 @@ export function storageVerdict(est: { quota?: number; usage?: number } | null): 
 }
 
 let probe: Promise<"ok" | "unavailable"> | null = null;
+let lastVerdict: "ok" | "unavailable" | null = null;
+/** AT-34: with no lasting storage, unsent items live only in this tab. */
+export const localLabel = (v: "ok" | "unavailable" | "checking" | null = lastVerdict) =>
+  v === "unavailable" ? "Kept in this tab only" : "Saved on this device";
+/** Lower-case form for toasts: "Set 2 logged · kept in this tab only". */
+export const localPhrase = () => localLabel().toLowerCase();
 /** Startup check (AT-34): storage estimate + a real write/read/delete in IndexedDB. */
 export function checkStorage() {
   probe ??= (async () => {
@@ -33,7 +39,7 @@ export function checkStorage() {
     } catch {
       return "unavailable";
     }
-  })();
+  })().then((v) => { lastVerdict = v; return v; });
   return probe;
 }
 

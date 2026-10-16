@@ -316,3 +316,5 @@ AT-31, AT-33, AT-34. Verified on phone: no.
 ## Tooling
 - 2026-10-15 — Added `.claude/` (agents, commands) and `CLAUDE.md` lead instructions; docs
   scaffolding (changelog, user manual, decision log, test-plans). No user-visible change.
+
+- 2026-10-16 · Migration 0005: limitation statuses (accommodated/avoided/pending), profiles.experience, training_days, week_start. Profile and Settings shells.

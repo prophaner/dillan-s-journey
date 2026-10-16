@@ -2,6 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowLeftRight, Check, CircleAlert, CircleStop, Hand, Minus, Pencil, Plus, SkipForward, Trash2 } from "lucide-react";
 import { pageHead } from "@/lib/head";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { LIMITATION_LABEL, UPDATE_LIMITATION, type RowUpdatePayload } from "@/lib/profile";
+import type { OutboxItem } from "@/lib/outbox";
+import { localPhrase } from "@/lib/device";
 import { sessionSaveState, useOutbox } from "@/lib/use-outbox";
 import { elapsedMs, formatClock, remainingMs, useNow, useWakeLock } from "@/lib/timer";
 import { closeSession, draftKey, lastValues, loadExercises, restoreSession, saveSession, type SessionDraft } from "@/lib/workout-store";
@@ -221,7 +226,7 @@ function Session() {
     if (!pendingUndoRef.current) setWriteFailed(false);
     setD(next);
     toast({
-      text: `Set ${setNo} logged · saved on this device`,
+      text: `Set ${setNo} logged · ${localPhrase()}`,
       undo: () => void undoSet(log),
     });
   };
@@ -276,7 +281,7 @@ function Session() {
       setD(next);
       setEditing(null);
       draftSaved();
-      toast({ text: `Set ${log.setNo} changed · saved on this device` });
+      toast({ text: `Set ${log.setNo} changed · ${localPhrase()}` });
     } catch {
       setWriteFailed(true);
     } finally {
@@ -472,7 +477,7 @@ function Session() {
                 return (
                   <li key={rep.key} className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-subhead">{rep.exerciseName}{rep.area ? ` · ${rep.area}${rep.side ? ` (${rep.side})` : ""}` : ""}</span>
-                    <SaveState state={st} onRetry={outbox.retryNow} />
+                    <span className="flex items-center gap-2"><ReportStatus uid={user.id} reportKey={rep.key} items={outbox.items} /><SaveState state={st} onRetry={outbox.retryNow} /></span>
                   </li>
                 );
               })}
@@ -524,7 +529,7 @@ function Session() {
             <p className="mt-3 text-center text-footnote text-text-2">
               {saveState === "synced"
                 ? `${d.logs.length} sets synced · nothing waiting`
-                : `${unsynced.length} ${unsynced.length === 1 ? "change" : "changes"} saved on this device · will sync when you're online`}
+                : `${unsynced.length} ${unsynced.length === 1 ? "change" : "changes"} ${localPhrase()} · will sync when you're online`}
             </p>
           ))}
         </div>
@@ -734,4 +739,22 @@ function Session() {
       </Sheet>
     </div>
   );
+}
+
+/** Status you've set for this note in Profile (e.g. Resolved). Nothing shown while it's just "Noted". */
+function ReportStatus({ uid, reportKey, items }: { uid: string; reportKey: string; items: OutboxItem[] }) {
+  const q = useQuery({
+    queryKey: ["report-limitation", uid, reportKey],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("limitations").select("id, status").eq("owner_id", uid).eq("idempotency_key", reportKey).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+  if (!q.data) return null;
+  const local = items.filter((i) => i.kind === UPDATE_LIMITATION && i.status !== "synced" && (i.payload as RowUpdatePayload).id === q.data!.id)
+    .map((i) => (i.payload as RowUpdatePayload).patch).at(-1);
+  const status = local?.["archived"] ? "archived" : (local?.["status"] as string | undefined) ?? q.data.status;
+  if (status === "active") return null;
+  return <StatusTag kind={status === "resolved" ? "done" : status === "pending" ? "waiting" : "neutral"}>{LIMITATION_LABEL[status] ?? status}</StatusTag>;
 }

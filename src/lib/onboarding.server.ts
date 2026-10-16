@@ -18,6 +18,8 @@ export async function storeOnboarding(
     .from("profiles").select("version, onboarding_status").eq("id", userId).single();
   if (pErr || !prof) throw new Error(`retry: profile read failed`);
   if (prof.onboarding_status === "done") return; // already stored on an earlier attempt
+  // Check the version before writing anything, so a conflict leaves no half-saved child rows.
+  if (prof.version !== expectedVersion) throw new Error("409 conflict: profile changed elsewhere");
 
   const idem = { onConflict: "owner_id,idempotency_key", ignoreDuplicates: true } as const;
   const check = (e: { message: string } | null) => {

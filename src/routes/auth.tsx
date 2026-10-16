@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { Mail } from "lucide-react";
+import { Mail, WifiOff } from "lucide-react";
+import { useOnline } from "@/lib/device";
 import { supabase } from "@/integrations/supabase/client";
 import { SpotMark } from "@/components/dillan/spot-mark";
 import { DButton } from "@/components/dillan/button";
@@ -19,6 +20,7 @@ export const Route = createFileRoute("/auth")({
     ],
   }),
   beforeLoad: async () => {
+    if (!navigator.onLine) return; // can't check offline; the page explains
     const { data } = await supabase.auth.getUser();
     if (data.user) throw redirect({ to: "/today" });
   },
@@ -29,6 +31,8 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [error, setError] = useState("");
+  const online = useOnline();
+  const [checking, setChecking] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,7 +53,20 @@ function AuthPage() {
       <h1 className="mt-6 font-voice text-voice-xl leading-[1.2]">I'm Dillan. Let's get you in.</h1>
       <p className="mt-2 text-body text-text-2">Enter your email and I'll send you a sign-in link. No password.</p>
 
-      {state === "sent" ? (
+      {!online ? (
+        <div className="mt-8 flex flex-col gap-4">
+          <Banner icon={<WifiOff className="size-5 shrink-0" aria-hidden />}>
+            Dillan needs a connection to sign you in again. Open it online once.
+          </Banner>
+          <DButton variant="secondary" loading={checking} onClick={() => {
+            setChecking(true);
+            // Re-check: if the connection is back, reload so the sign-in check runs.
+            window.setTimeout(() => { setChecking(false); if (navigator.onLine) window.location.reload(); }, 400);
+          }}>
+            Try again
+          </DButton>
+        </div>
+      ) : state === "sent" ? (
         <Banner className="mt-8" icon={<Mail className="size-5 shrink-0" aria-hidden />}>
           Check <strong>{email}</strong> and tap the link. You can close this tab.
         </Banner>
