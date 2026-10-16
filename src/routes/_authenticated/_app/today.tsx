@@ -123,7 +123,7 @@ function Today() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-footnote font-bold uppercase tracking-wider text-text-2">
           {date}
-          {outbox.loaded && outbox.pending + outbox.failed > 0 && <span className="text-hold"> · {outbox.pending + outbox.failed} unsynced</span>}
+          {outbox.loaded && outbox.pending + outbox.failed > 0 && <span className="inline-flex items-center gap-1"> · <CircleAlert className="size-3.5 text-hold" aria-hidden />{outbox.pending + outbox.failed} unsynced</span>}
         </p>
         <div className="flex items-center gap-2">
           {r?.isDemo && <DemoLabel />}
