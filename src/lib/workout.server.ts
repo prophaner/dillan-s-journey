@@ -35,6 +35,10 @@ export async function storeSetLog(sb: SB, userId: string, key: string, raw: unkn
   const setNo = Number(p.setNo);
   if (!Number.isInteger(setNo) || setNo < 1 || setNo > 50) throw new Error("400 bad set number");
   const unit = p.unit === "kg" ? "kg" : "lb";
+  // A swapped exercise must be one this user can see (shared library or their own).
+  const { data: ex, error: exErr } = await sb.from("exercises").select("id").eq("id", p.exerciseId as string).maybeSingle();
+  fail(exErr, "exercise read");
+  if (!ex) throw new Error("400 exercise not found");
   const { error } = await sb.from("set_logs").upsert({
     owner_id: userId, session_id: p.sessionId as string, exercise_id: p.exerciseId as string,
     prescription_ref: (p.ref as string).slice(0, 20), set_no: setNo,
@@ -76,4 +80,32 @@ export async function storeSessionFinish(sb: SB, userId: string, key: string, ve
     fail(error, "session update");
   }
   if (!data?.length) throw new Error("retry: session not updated");
+}
+
+/** Correction of a logged set (reps, load, effort). Sends the version it read; a replay of a stored edit is a no-op. */
+export async function storeSetEdit(sb: SB, userId: string, version: number, raw: unknown) {
+  const p = raw as { setKey?: unknown; reps?: unknown; load?: unknown; rir?: unknown };
+  if (typeof p?.setKey !== "string" || p.setKey.length < 8) throw new Error("400 bad edit");
+  const patch = { reps: numOrNull(p.reps, 1000), load: numOrNull(p.load, 2000), rir: numOrNull(p.rir, 10) };
+  const { data, error } = await sb.from("set_logs").update({ ...patch, version })
+    .eq("owner_id", userId).eq("idempotency_key", p.setKey).select("id");
+  if (error) {
+    if (error.code === "40001" || /version conflict/i.test(error.message)) {
+      const { data: cur } = await sb.from("set_logs").select("reps, load, rir")
+        .eq("owner_id", userId).eq("idempotency_key", p.setKey).maybeSingle();
+      const same = cur && cur.reps === patch.reps && Number(cur.load ?? -1) === Number(patch.load ?? -1) && Number(cur.rir ?? -1) === Number(patch.rir ?? -1);
+      if (same) return; // this edit was already stored
+      throw new Error("409 conflict: set changed elsewhere");
+    }
+    fail(error, "set edit");
+  }
+  if (!data?.length) throw new Error("retry: set not stored yet");
+}
+
+/** Discard: removes the session; its sets go with it (on delete cascade). Repeating it is harmless. */
+export async function discardSession(sb: SB, userId: string, raw: unknown) {
+  const id = (raw as { sessionId?: unknown })?.sessionId;
+  if (!uuid(id)) throw new Error("400 bad discard");
+  const { error } = await sb.from("sessions").delete().eq("owner_id", userId).eq("id", id as string);
+  fail(error, "session discard");
 }

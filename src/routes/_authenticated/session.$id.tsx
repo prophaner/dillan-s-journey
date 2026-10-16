@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Check, CircleAlert, Hand, Minus, Plus } from "lucide-react";
+import { ArrowLeftRight, Check, CircleAlert, Hand, Minus, Pencil, Plus, Trash2 } from "lucide-react";
 import { pageHead } from "@/lib/head";
 import { sessionSaveState, useOutbox } from "@/lib/use-outbox";
 import { elapsedMs, formatClock, remainingMs, useNow, useWakeLock } from "@/lib/timer";
-import { closeSession, draftKey, saveSession, type SessionDraft } from "@/lib/workout-store";
-import { loadDraft } from "@/lib/outbox";
+import { closeSession, draftKey, loadExercises, saveSession, type SessionDraft } from "@/lib/workout-store";
+import { loadDraft, sessionOf } from "@/lib/outbox";
 import {
-  completionOf, headlineFor, isDoubleTap, SESSION_FINISH, SET_LOG, SET_LOG_DELETE, stepResult, stepsOf, type LoggedSet,
+  applySwaps, completionOf, headlineFor, isDoubleTap, nextTurn, SESSION_DISCARD, SESSION_FINISH, SET_LOG, SET_LOG_DELETE,
+  SET_LOG_EDIT, stepResult, stepsOf, supersetPattern, turnsOf, type LoggedSet, type Step,
 } from "@/lib/workout";
 import { DButton } from "@/components/dillan/button";
 import { Chip, DemoLabel, SaveState, StatusTag } from "@/components/dillan/tags";
@@ -49,6 +50,12 @@ function Session() {
   const pendingUndoRef = useRef<LoggedSet | null>(null);
   const setPendingUndo = (v: LoggedSet | null) => { pendingUndoRef.current = v; setPendingUndoState(v); };
   const inFlight = useRef(false);
+  type Vals = SessionDraft["inputs"];
+  const [editing, setEditing] = useState<LoggedSet | null>(null);
+  const [editVals, setEditVals] = useState<Vals>({ reps: 0, load: null, rir: null });
+  const [swapOpen, setSwapOpen] = useState(false);
+  const [swapList, setSwapList] = useState<{ id: string; name: string }[] | "loading" | "offline" | "failed">("loading");
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const finishKey = useRef<string | null>(null);
   /** Clear the warning only when no set or undo is waiting to be retried. */
   const draftSaved = () => { if (!pendingRef.current && !pendingUndoRef.current) setWriteFailed(false); };
@@ -72,8 +79,11 @@ function Session() {
       return next;
     });
 
-  const steps = d ? stepsOf(d.snapshot) : [];
-  const step = d ? steps[Math.min(d.stepIndex, steps.length - 1)] : undefined;
+  const steps = d ? applySwaps(stepsOf(d.snapshot), d.swaps) : [];
+  const turns = turnsOf(steps);
+  const turn = d ? nextTurn(turns, d.logs) : undefined;
+  const step: Step | undefined = turn?.step ?? steps[steps.length - 1];
+  const stepIndex = turn?.stepIndex ?? steps.length - 1;
   const restLeft = d?.restStartedAt ? remainingMs(d.restStartedAt, d.restTotalMs, now) : 0;
   const resting = !!d && d.phase === "training" && d.restStartedAt !== null && restLeft > 0;
 
@@ -104,9 +114,11 @@ function Session() {
   const unsynced = { length: unsyncedCount };
 
   const doneSets = d.logs.filter((l) => l.ref === step.ref);
-  const setNo = doneSets.length + 1;
-  const stepFinished = doneSets.length >= step.sets;
-  const allDone = d.logs.length >= steps.reduce((n, s) => n + s.sets, 0);
+  const setNo = turn?.setNo ?? step.sets;
+  const allDone = !turn;
+  const group = step.blockType === "superset" ? steps.filter((s) => s.blockPosition === step.blockPosition) : [];
+  const finishItem = outbox.items.find((i) => i.kind === SESSION_FINISH && sessionOf(i) === id);
+  const discardItem = outbox.items.find((i) => i.kind === SESSION_DISCARD && sessionOf(i) === id);
   const isDemo = d.snapshot.isDemo;
 
   const bannerText =
@@ -116,31 +128,34 @@ function Session() {
     (pendingUndo ? " That undo didn't go through." : "");
 
   const retryWrite = () => {
+    if (editing) { void saveEdit(); return; }
     if (pendingUndoRef.current) { void undoSet(pendingUndoRef.current); return; }
     if (pendingRef.current) { void logSet(pendingRef.current); return; }
     saveSession(user.id, d).then(draftSaved).catch(() => setWriteFailed(true));
   };
 
-  const prefill = (i: number) => {
-    const s = steps[i];
-    if (!s) return d.inputs;
+  const prefill = (s: Step): Vals => {
     const last = d.last[s.exerciseId];
     return { reps: s.reps ?? last?.reps ?? 0, load: s.load ?? last?.load ?? null, rir: null };
   };
+  const inputs: Vals = d.inputsByRef?.[step.ref] ?? prefill(step);
+  const setInputs = (patch: Partial<Vals>) =>
+    update((c) => ({ inputsByRef: { ...c.inputsByRef, [step.ref]: { ...(c.inputsByRef?.[step.ref] ?? prefill(step)), ...patch } } }));
 
-  const logSet = async (inputs: SessionDraft["inputs"] = d.inputs) => {
-    if (inFlight.current) return;
+  const logSet = async (vals: Vals = inputs) => {
+    if (inFlight.current || pendingUndoRef.current || !turn) return; // no new set while an undo is waiting
     const t = Date.now();
-    if (stepFinished || isDoubleTap(lastTap.current, t)) return;
+    if (isDoubleTap(lastTap.current, t)) return;
     inFlight.current = true;
     try {
-      await logSetOnce(inputs, t);
+      await logSetOnce(vals, t);
     } finally {
       inFlight.current = false;
     }
   };
 
-  const logSetOnce = async (inputs: SessionDraft["inputs"], t: number) => {
+  const logSetOnce = async (inputs: Vals, t: number) => {
+    if (!turn) return;
     lastTap.current = t;
     let item;
     try {
@@ -158,16 +173,18 @@ function Session() {
     setPendingSet(null);
     const log: LoggedSet = {
       key: item.idempotencyKey, ref: step.ref, setNo, reps: inputs.reps, load: inputs.load,
-      unit: step.unit, rir: inputs.rir, loggedAt: new Date(t).toISOString(),
+      unit: step.unit, rir: inputs.rir, loggedAt: new Date(t).toISOString(), version: 1, exerciseId: step.exerciseId,
     };
-    const lastOfStep = setNo >= step.sets;
-    const lastOfAll = lastOfStep && d.stepIndex >= steps.length - 1;
+    const logs = [...d.logs, log];
+    const after = nextTurn(turns, logs);
+    const rest = after && turn.restAfter > 0;
     const next: SessionDraft = {
       ...d,
-      logs: [...d.logs, log],
-      restStartedAt: lastOfAll ? null : Date.now(),
-      restTotalMs: step.restSeconds * 1000,
-      ...(lastOfStep && !lastOfAll ? { stepIndex: d.stepIndex + 1, inputs: prefill(d.stepIndex + 1) } : {}),
+      logs,
+      restStartedAt: rest ? Date.now() : null,
+      restTotalMs: turn.restAfter * 1000,
+      stepIndex: after?.stepIndex ?? d.stepIndex,
+      inputsByRef: { ...d.inputsByRef, [step.ref]: inputs },
     };
     try {
       await saveSession(user.id, next);
@@ -187,6 +204,16 @@ function Session() {
 
   /** Remove a set only after its delete is queued; otherwise keep it and offer Try again. */
   const undoSet = async (log: LoggedSet) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    try {
+      await undoSetOnce(log);
+    } finally {
+      inFlight.current = false;
+    }
+  };
+
+  const undoSetOnce = async (log: LoggedSet) => {
     try {
       await outbox.add(SET_LOG_DELETE, { sessionId: id, setKey: log.key });
     } catch {
@@ -195,11 +222,74 @@ function Session() {
       return;
     }
     setPendingUndo(null);
+    if (editing?.key === log.key) setEditing(null);
     update((cur) => ({
       logs: cur.logs.filter((l) => l.key !== log.key),
       restStartedAt: null,
       stepIndex: steps.findIndex((s) => s.ref === log.ref),
     }));
+  };
+
+  /** Tap a done pip: the values reopen in place. Saving corrects that same set (no new row). */
+  const openEdit = (n: number) => {
+    const log = doneSets.find((l) => l.setNo === n);
+    if (!log) return;
+    setEditing(log);
+    setEditVals({ reps: log.reps ?? 0, load: log.load, rir: log.rir });
+  };
+
+  const saveEdit = async () => {
+    if (!editing || inFlight.current) return;
+    inFlight.current = true;
+    const log = editing;
+    try {
+      const version = log.version ?? 1;
+      await outbox.add(SET_LOG_EDIT, { sessionId: id, setKey: log.key, ...editVals }, version);
+      const logs = d.logs.map((l) => (l.key === log.key ? { ...l, ...editVals, version: version + 1 } : l));
+      await saveSession(user.id, { ...d, logs });
+      setD({ ...d, logs });
+      setEditing(null);
+      draftSaved();
+      toast({ text: `Set ${log.setNo} changed · saved on this device` });
+    } catch {
+      setWriteFailed(true);
+    } finally {
+      inFlight.current = false;
+    }
+  };
+
+  const openSwap = () => {
+    setSwapOpen(true);
+    setSwapList("loading");
+    loadExercises(user.id).then(setSwapList).catch(() => setSwapList(navigator.onLine ? "failed" : "offline"));
+  };
+  /** This session only: the plan snapshot is untouched. */
+  const swapTo = (ex: { id: string; name: string } | null) => {
+    setSwapOpen(false);
+    update((c) => {
+      const swaps = { ...c.swaps };
+      if (ex && ex.id !== stepsOf(c.snapshot).find((s) => s.ref === step.ref)?.exerciseId) swaps[step.ref] = { exerciseId: ex.id, name: ex.name };
+      else delete swaps[step.ref];
+      const by = { ...c.inputsByRef };
+      delete by[step.ref];
+      return { swaps, inputsByRef: by };
+    });
+  };
+
+  /** Discard: queued like every write; the server removes the session and its sets. */
+  const discard = async () => {
+    if (saving || finishItem || finishKey.current) return;
+    setSaving(true);
+    try {
+      if (!discardItem) await outbox.add(SESSION_DISCARD, { sessionId: id });
+      await closeSession(user.id, id);
+    } catch {
+      setWriteFailed(true);
+      setSaving(false);
+      return;
+    }
+    toast({ text: "Session discarded" });
+    void navigate({ to: "/train" });
   };
 
   const end = (stopped = false) =>
@@ -209,6 +299,8 @@ function Session() {
     if (saving) return;
     setSaving(true);
     try {
+      // Reuse a finish already queued for this session (e.g. after a reload), never queue a second one.
+      if (!finishKey.current && finishItem) finishKey.current = finishItem.idempotencyKey;
       if (!finishKey.current) {
         const item = await outbox.add(
           SESSION_FINISH,
@@ -250,7 +342,10 @@ function Session() {
             const r = stepResult(s, d.logs);
             return (
               <li key={s.ref} className="flex items-center justify-between gap-3 rounded-btn bg-surface px-4 py-3">
-                <span className="min-w-0 text-headline font-bold">{s.name}</span>
+                <span className="min-w-0 text-headline font-bold">
+                  {s.name}
+                  {s.name !== s.plannedName && <span className="block text-footnote font-normal text-text-2">Swapped for {s.plannedName} · this session only</span>}
+                </span>
                 {r.kind === "done" && <StatusTag kind="done">Done</StatusTag>}
                 {r.kind === "partial" && <StatusTag kind="neutral">Partial · {r.done} of {r.of} sets</StatusTag>}
                 {r.kind === "skipped" && <StatusTag kind="neutral">Skipped</StatusTag>}
@@ -288,7 +383,18 @@ function Session() {
         </fieldset>
 
         <div className="mt-auto pt-6">
-          <DButton variant="primary" loading={saving} disabled={saving} onClick={saveAndClose}>Save session</DButton>
+          <DButton variant="primary" loading={saving} disabled={saving || !outbox.loaded || !!discardItem} onClick={saveAndClose}>Save session</DButton>
+          {!finishItem && !finishKey.current && (confirmDiscard ? (
+            <div className="mt-3 rounded-btn bg-surface-2 p-3">
+              <p className="text-subhead">This removes the session and its {d.logs.length} {d.logs.length === 1 ? "set" : "sets"} from your history.</p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <DButton size="md" variant="secondary" disabled={saving || !outbox.loaded} onClick={discard}>Discard</DButton>
+                <DButton size="md" variant="quiet" onClick={() => setConfirmDiscard(false)}>Keep it</DButton>
+              </div>
+            </div>
+          ) : (
+            <DButton variant="quiet" size="md" className="mt-2 w-full" icon={<Trash2 className="size-5" aria-hidden />} onClick={() => setConfirmDiscard(true)}>Discard session</DButton>
+          ))}
           {outbox.loaded && (saveState === "failed" ? (
             <div className="mt-3 flex justify-center"><SaveState state="failed" count={unsyncedCount} onRetry={outbox.retryNow} /></div>
           ) : (
@@ -305,6 +411,8 @@ function Session() {
 
   // ---------- S04 Set · S05 Rest ----------
   const shownDone = doneSets.map((l) => l.setNo);
+  const vals = editing ? editVals : inputs;
+  const setVals = (patch: Partial<Vals>) => (editing ? setEditVals((v) => ({ ...v, ...patch })) : setInputs(patch));
   return (
     <div className="mx-auto flex min-h-dvh max-w-[640px] flex-col px-margin pt-[calc(var(--safe-t)+12px)]">
       <header className="flex items-center justify-between gap-3">
@@ -317,13 +425,20 @@ function Session() {
       </header>
       <div className="mt-4 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }} aria-hidden>
         {steps.map((s, i) => (
-          <span key={s.ref} className={i < d.stepIndex ? "h-1 rounded-full bg-text" : i === d.stepIndex ? "h-1 rounded-full bg-spot" : "h-1 rounded-full bg-surface-2"} />
+          <span key={s.ref} className={stepResult(s, d.logs).kind === "done" ? "h-1 rounded-full bg-text" : i === stepIndex ? "h-1 rounded-full bg-spot" : "h-1 rounded-full bg-surface-2"} />
         ))}
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
         {step.priority === "optional" ? <StatusTag kind="neutral" icon={false}>Optional</StatusTag> : <StatusTag kind="priority" icon={false}>Main</StatusTag>}
-        <span className="text-subhead font-medium text-text-2">Exercise {d.stepIndex + 1} of {steps.length}</span>
+        {group.length > 0 ? (
+          <>
+            <StatusTag kind="neutral" icon={false}>Superset</StatusTag>
+            <span className="text-subhead font-bold">Round {turn?.round ?? step.sets} of {turn?.rounds ?? step.sets}</span>
+          </>
+        ) : (
+          <span className="text-subhead font-medium text-text-2">Exercise {stepIndex + 1} of {steps.length}</span>
+        )}
         <span className="ml-auto">{outbox.loaded && <SaveState state={saveState} count={unsynced.length} onRetry={outbox.retryNow} />}</span>
       </div>
       {isDemo && <div className="mt-2"><DemoLabel /></div>}
@@ -349,37 +464,68 @@ function Session() {
           </div>
           <Card className="mt-5 w-full">
             <p className="text-footnote font-bold uppercase tracking-wide text-text-2">Up next</p>
-            <p className="mt-1 text-headline font-bold">Set {setNo} of {step.sets} · {step.name}</p>
+            <p className="mt-1 text-headline font-bold">
+              {turn ? (turn.round ? `Round ${turn.round} · ${turn.step.name}` : `Set ${turn.setNo} of ${turn.step.sets} · ${turn.step.name}`) : "Finish session"}
+            </p>
           </Card>
           <Banner className="mt-4 w-full">Keeps correct time if your screen locks. No sound while the screen is off.</Banner>
         </section>
       ) : (
         <section className="flex-1">
-          <h1 className="mt-3 text-title1 font-bold leading-tight">{step.name}</h1>
+          {group.length > 0 && (
+            <>
+              <p className="mt-3 text-subhead text-text-2">{supersetPattern(group)}</p>
+              <ol className="mt-3 flex flex-col gap-2 border-l-4 border-spot pl-3" aria-label="Superset exercises">
+                {group.map((g, k) => {
+                  const r = stepResult(g, d.logs);
+                  const cur = g.ref === step.ref;
+                  return (
+                    <li key={g.ref} className={cur ? "rounded-btn border-2 border-text bg-surface px-3 py-2" : "rounded-btn bg-surface px-3 py-2"}>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 text-subhead font-bold">{String.fromCharCode(65 + k)} · {g.name}</span>
+                        {r.kind === "done" ? <StatusTag kind="done">Done</StatusTag>
+                          : <span className="font-num text-footnote font-bold tabular text-text-2">{r.kind === "partial" ? r.done : 0} of {g.sets} · {g.reps ?? "—"} reps</span>}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            </>
+          )}
+          <div className="mt-3 flex items-start justify-between gap-3">
+            <h1 className="text-title1 font-bold leading-tight">{step.name}</h1>
+            {doneSets.length === 0 && !editing && (
+              <DButton size="sm" variant="quiet" icon={<ArrowLeftRight className="size-4" aria-hidden />} onClick={openSwap}>Swap</DButton>
+            )}
+          </div>
+          {step.name !== step.plannedName && <p className="mt-1 text-footnote text-text-2">Swapped for {step.plannedName} · this session only</p>}
           <p className="mt-2 text-body text-text-2">
-            Plan: {step.sets} sets × {step.reps ?? "—"} reps{step.load !== null ? ` at ${step.load} ${step.unit}` : ""}
+            Plan: {step.sets} {group.length > 0 ? "rounds" : "sets"} × {step.reps ?? "—"} reps{step.load !== null ? ` at ${step.load} ${step.unit}` : ""}
           </p>
-          <div className="mt-4 flex flex-wrap gap-2"><Chip>Set {Math.min(setNo, step.sets)} of {step.sets}</Chip></div>
-          <div className="mt-5"><SetPips total={step.sets} done={shownDone} current={Math.min(setNo, step.sets)} /></div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {editing ? <Chip icon={<Pencil className="size-4" aria-hidden />}>Changing set {editing.setNo}</Chip> : <Chip>Set {Math.min(setNo, step.sets)} of {step.sets}</Chip>}
+          </div>
+          <div className="mt-5"><SetPips total={step.sets} done={shownDone} current={editing ? editing.setNo : Math.min(setNo, step.sets)} onSelect={openEdit} /></div>
+          {shownDone.length > 0 && !editing && <p className="mt-2 text-footnote text-text-2">Tap a done set to change it.</p>}
           <div className="mt-6 flex flex-col gap-5">
-            <NumericInput label="Reps" value={d.inputs.reps} onChange={(v) => update((c) => ({ inputs: { ...c.inputs, reps: Math.round(v) } }))} last={d.last[step.exerciseId]?.reps ?? null} />
+            <NumericInput label="Reps" value={vals.reps} onChange={(v) => setVals({ reps: Math.round(v) })} last={d.last[step.exerciseId]?.reps ?? null} />
             <div className="border-t border-line" />
-            {d.inputs.load === null ? (
+            {vals.load === null ? (
               <div className="flex items-center justify-between gap-3">
                 <p className="text-subhead text-text-2">No weight · bodyweight</p>
-                <DButton size="sm" onClick={() => update((c) => ({ inputs: { ...c.inputs, load: d.last[step.exerciseId]?.load ?? 0 } }))}>Add weight</DButton>
+                <DButton size="sm" onClick={() => setVals({ load: d.last[step.exerciseId]?.load ?? 0 })}>Add weight</DButton>
               </div>
             ) : (
-              <NumericInput label="Load" unit={step.unit} decimal step={2.5} value={d.inputs.load} onChange={(v) => update((c) => ({ inputs: { ...c.inputs, load: v } }))} last={d.last[step.exerciseId]?.load ?? null} />
+              <NumericInput label="Load" unit={step.unit} decimal step={2.5} value={vals.load} onChange={(v) => setVals({ load: v })} last={d.last[step.exerciseId]?.load ?? null} />
             )}
           </div>
           <fieldset className="mt-6">
             <legend className="text-subhead font-bold">Reps left in the tank <span className="font-normal text-text-2">· optional</span></legend>
             <div className="mt-3 grid grid-cols-5 gap-2" role="radiogroup">
               {[0, 1, 2, 3, 4].map((n) => (
-                <button key={n} type="button" role="radio" aria-checked={d.inputs.rir === n}
-                  onClick={() => update((c) => ({ inputs: { ...c.inputs, rir: c.inputs.rir === n ? null : n } }))}
-                  className={d.inputs.rir === n ? "press h-12 rounded-btn bg-text font-num text-headline font-bold text-bg" : "press h-12 rounded-btn border border-line bg-surface font-num text-headline font-bold"}>
+                <button key={n} type="button" role="radio" aria-checked={vals.rir === n}
+                  onClick={() => setVals({ rir: vals.rir === n ? null : n })}
+                  className={vals.rir === n ? "press h-12 rounded-btn bg-text font-num text-headline font-bold text-bg" : "press h-12 rounded-btn border border-line bg-surface font-num text-headline font-bold"}>
                   {n === 4 ? "4+" : n}
                 </button>
               ))}
@@ -389,15 +535,44 @@ function Session() {
       )}
 
       <StickyActions className="mt-6">
-        {!resting && (allDone ? (
+        {!resting && editing ? (
+          <div className="grid grid-cols-2 gap-2">
+            <DButton variant="primary" size="log" icon={<Check className="size-6" aria-hidden />} onClick={() => void saveEdit()}>Save change</DButton>
+            <DButton variant="secondary" size="log" onClick={() => setEditing(null)}>Cancel</DButton>
+          </div>
+        ) : !resting && (allDone ? (
           <DButton variant="primary" size="log" icon={<Check className="size-6" aria-hidden />} onClick={() => end(false)}>Finish session</DButton>
         ) : (
-          <DButton variant="primary" size="log" icon={<Check className="size-6" aria-hidden />} onClick={() => void logSet()}>Log set</DButton>
+          <DButton variant="primary" size="log" icon={<Check className="size-6" aria-hidden />} disabled={!!pendingUndo} onClick={() => void logSet()}>Log set</DButton>
         ))}
         <DButton variant="quiet" size="md" className="mt-1 w-full" icon={<Hand className="size-5" aria-hidden />} onClick={() => setOffSheet(true)}>
           Something feels off
         </DButton>
       </StickyActions>
+
+      <Sheet open={swapOpen} onClose={() => setSwapOpen(false)} title={`Swap ${step.name}`}>
+        <p className="text-subhead text-text-2">For this session only. Your plan stays the same. Alternatives aren't matched to your equipment or limitations yet.</p>
+        <div className="mt-4">
+          {swapList === "loading" ? <ScreenState kind="loading" />
+            : swapList === "offline" ? <ScreenState kind="offline" body="Exercises load once you're online." />
+            : swapList === "failed" ? <ScreenState kind="failed" title="Couldn't load exercises" action={{ label: "Try again", onClick: openSwap }} />
+            : (() => {
+                const opts = swapList.filter((x) => x.id !== step.exerciseId);
+                const planned = stepsOf(d.snapshot).find((s) => s.ref === step.ref);
+                return (
+                  <ul className="flex max-h-[50dvh] flex-col gap-2 overflow-y-auto">
+                    {planned && step.name !== step.plannedName && (
+                      <li><DButton variant="secondary" size="md" className="w-full" onClick={() => swapTo(null)}>Back to {planned.name}</DButton></li>
+                    )}
+                    {opts.length === 0 && <li><ScreenState kind="empty" title="No other exercises yet" body="Exercises you add to a routine show up here." /></li>}
+                    {opts.map((x) => (
+                      <li key={x.id}><DButton variant="quiet" size="md" className="w-full justify-start" onClick={() => swapTo(x)}>{x.name}</DButton></li>
+                    ))}
+                  </ul>
+                );
+              })()}
+        </div>
+      </Sheet>
 
       <Sheet open={offSheet} onClose={() => setOffSheet(false)} title="Something feels off">
         <p className="font-voice text-voice text-text">Thanks for telling me. You can stop right now, and what you did still counts.</p>

@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { deleteDraft, listDraftKeys, loadDraft, saveDraft } from "./outbox";
-import { localDate, type LoggedSet, type PlanSnapshot, type Prescription } from "./workout";
+import { localDate, type LoggedSet, type PlanSnapshot, type Prescription, type Swaps } from "./workout";
 
 /** Everything a running session needs, kept in IndexedDB so reloads and locked screens lose nothing. */
 export interface SessionDraft {
@@ -16,6 +16,10 @@ export interface SessionDraft {
   endedAt: number | null;
   last: Record<string, { reps: number | null; load: number | null }>;
   inputs: { reps: number; load: number | null; rir: number | null };
+  /** Values being entered, per exercise (supersets switch between A and B). */
+  inputsByRef?: Record<string, { reps: number; load: number | null; rir: number | null }>;
+  /** This session only — the plan snapshot stays as it was. */
+  swaps?: Swaps;
   feeling: string | null;
   note: string;
 }
@@ -78,6 +82,22 @@ export async function clearDrafts(uid: string) {
   await deleteDraft(activeKey(uid));
   await deleteDraft(routineKey(uid));
   await deleteDraft(`onboarding:${uid}`);
+  await deleteDraft(exercisesKey(uid));
+}
+
+const exercisesKey = (uid: string) => `exercises:${uid}`;
+/** Exercises you can swap to: the shared library and your own. Cached for offline. */
+export async function loadExercises(uid: string): Promise<{ id: string; name: string }[]> {
+  try {
+    const { data, error } = await supabase.from("exercises").select("id, name").is("archived_at", null).order("name").limit(500);
+    if (error) throw error;
+    await saveDraft(exercisesKey(uid), data ?? []);
+    return data ?? [];
+  } catch (e) {
+    const cached = await loadDraft<{ id: string; name: string }[]>(exercisesKey(uid));
+    if (cached) return cached;
+    throw e;
+  }
 }
 
 export async function closeSession(uid: string, id: string) {
