@@ -33,3 +33,42 @@ describe("workout rules", () => {
     expect(isUpdateKind("update:sessions")).toBe(true);
   });
 });
+
+import { applySwaps, nextTurn, supersetPattern, turnsOf } from "@/lib/workout";
+import { nextSeq } from "@/lib/outbox";
+
+const ss: PlanSnapshot = {
+  templateVersionId: "v", routineId: "r", versionNo: 1, title: "T", isDemo: false,
+  blocks: [{ position: 1, blockType: "superset", priority: "main", rounds: 3, restSeconds: 75,
+    prescriptions: [{ exercise_id: "a", name: "Row", reps: 10 }, { exercise_id: "b", name: "Push-up", reps: 15 }] }],
+};
+
+describe("superset (FR-05, AT-02)", () => {
+  it("goes A then B each round, transition rest between, round rest after, own reps per exercise", () => {
+    const t = turnsOf(stepsOf(ss));
+    expect(t.map((x) => `${x.step.name}:${x.round}:${x.restAfter}`)).toEqual([
+      "Row:1:20", "Push-up:1:75", "Row:2:20", "Push-up:2:75", "Row:3:20", "Push-up:3:0",
+    ]);
+    expect(t[0]!.step.reps).toBe(10);
+    expect(t[1]!.step.reps).toBe(15);
+    expect(supersetPattern(stepsOf(ss))).toBe("Go A → B · rest 20s between · 75s after the round.");
+  });
+  it("after round 1 the next turn is round 2 of 3", () => {
+    const t = turnsOf(stepsOf(ss));
+    const n = nextTurn(t, [log("1:0", 1), log("1:1", 1)]);
+    expect([n?.step.name, n?.round, n?.rounds]).toEqual(["Row", 2, 3]);
+  });
+});
+
+describe("swap and order", () => {
+  it("a swap changes this session's exercise but not the plan snapshot", () => {
+    const before = JSON.stringify(snap);
+    const s = applySwaps(stepsOf(snap), { "1:0": { exerciseId: "z", name: "Split squat" } });
+    expect([s[0]!.exerciseId, s[0]!.name, s[0]!.plannedName]).toEqual(["z", "Split squat", "Squat"]);
+    expect(JSON.stringify(snap)).toBe(before);
+  });
+  it("outbox sequence numbers strictly increase within one millisecond", () => {
+    const a = nextSeq(5), b = nextSeq(5);
+    expect(b).toBeGreaterThan(a);
+  });
+});
