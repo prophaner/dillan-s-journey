@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CircleAlert, Play } from "lucide-react";
+import { CircleAlert, HardDrive, Play, RefreshCw, WifiOff } from "lucide-react";
+import { useUpdateReady } from "@/lib/sw";
+import { useOnline, useStorageHealth } from "@/lib/device";
 import { pageHead } from "@/lib/head";
 import { supabase } from "@/integrations/supabase/client";
 import type { PipKind } from "@/lib/demo";
@@ -39,6 +41,9 @@ function Today() {
   const { user } = Route.useRouteContext();
   const navigate = useNavigate();
   const outbox = useOutbox(user.id);
+  const sw = useUpdateReady();
+  const online = useOnline();
+  const storage = useStorageHealth();
   const now = useNow(30000);
   const [time, setTime] = useState<TimeChoice>("full");
   const [active, setActive] = useState<SessionDraft | null | undefined>(undefined);
@@ -118,12 +123,29 @@ function Today() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-footnote font-bold uppercase tracking-wider text-text-2">
           {date}
+          {outbox.loaded && outbox.pending + outbox.failed > 0 && <span className="text-hold"> · {outbox.pending + outbox.failed} unsynced</span>}
         </p>
         <div className="flex items-center gap-2">
           {r?.isDemo && <DemoLabel />}
           {outbox.loaded && <SaveState state={outbox.state} count={outbox.pending + outbox.failed} onRetry={outbox.retryNow} />}
         </div>
       </div>
+      {sw.updateReady && active === null && (
+        <Banner className="mt-4" icon={<RefreshCw className="size-5 shrink-0" aria-hidden />}
+          action={<DButton variant="secondary" size="sm" className="bg-surface" onClick={sw.applyUpdate}>Update</DButton>}>
+          A new version of Dillan is ready
+        </Banner>
+      )}
+      {storage === "unavailable" && (
+        <Banner className="mt-4" icon={<HardDrive className="size-5 shrink-0" aria-hidden />}>
+          This browser isn't keeping data between visits (private mode or storage full). Logging still works while the tab is open; nothing is saved here when you leave.
+        </Banner>
+      )}
+      {!online && r && (
+        <Banner className="mt-4" icon={<WifiOff className="size-5 shrink-0" aria-hidden />}>
+          You're offline. Logging works; it'll sync when you're back.
+        </Banner>
+      )}
       <div className="mt-4 hidden lg:block lg:max-w-[480px]">{strip}</div>
 
       {routine.isPending ? (
