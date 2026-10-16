@@ -31,6 +31,18 @@ Consequence: Accounts created before 0002 cannot log sets until 0003 lands. docs
 Entries here are the lead's recommendations. They become decisions only when the owner says
 so, and then move above this line with the date.
 
+## Short / Priority-only rule and minute estimates
+Question: How does Today shorten a session and estimate its time?
+Options: (a) Lovable's rule: Short drops the optional blocks; Priority only keeps the first main block; estimates count 60 s setup per exercise + 45 s per set + the plan's rest, 20 s transition in a superset, 90 s rest by default. (b) A routine-level priority flag and a per-user pace.
+Recommendation: (a) for Phase 1; add a priority flag with the routine editor.
+Consequence: Estimates are labelled as estimates on screen. A real priority block needs a schema change.
+
+## Goal level Improve / Maintain / Defer
+Question: Where does the FR-02 level live?
+Options: (a) a goals.level column (migration 0004), set in the Plan slice; (b) a periodic-review table later.
+Recommendation: (a) goals.level as nullable text with a check constraint, set in the Plan slice; S08 shows Not yet known until then.
+Consequence: schema-guardian review before it lands. S08 is accepted against FR-10 now, not FR-02.
+
 ## Lovable is the only product coder
 Question: Should Claude Code subagents patch product code directly when Lovable fails a fix?
 Options: (a) a "patcher" agent on a claude/ branch; (b) Lovable only, Claude adds tests that pin the behavior.
