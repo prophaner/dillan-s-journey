@@ -7,6 +7,7 @@ accepts. Tooling changes merged by the owner (agent config, docs scaffolding) ge
 entry under "Tooling" so the history stays complete; they are not slices.
 
 ## Unreleased
+- 0004: goals.level (improve/maintain/defer); routine_blocks.priority adds "priority". Plan screen, routine editor (save as new version), exercise detail.
 
 - 0002/0003: prescriptions reference exercises by id; backfill for existing routines
   (0003 landed at 0f55c7b, approved by the owner; see DECISIONS 2026-10-15)
