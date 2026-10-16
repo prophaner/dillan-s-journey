@@ -22,7 +22,7 @@ describe("Today time plan (FR-06, AT-04)", () => {
     const f = estimateMinutes(plan, "full"), s = estimateMinutes(plan, "short"), p = estimateMinutes(plan, "priority");
     expect(f).toBeGreaterThan(s);
     expect(s).toBeGreaterThan(p);
-    expect(p).toBe(9); // 60s setup + 3×45s work + 2×120s rest = 435s ≈ 7… plus rounding check below
+    expect(p).toBe(7); // 60s setup + 3×45s work + 2×120s rest = 435s
   });
   it("a shortened session keeps the full plan but runs only kept blocks", () => {
     const snap = applyTimePlan(plan, "short");
