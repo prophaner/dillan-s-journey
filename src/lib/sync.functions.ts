@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { MEASUREMENT_ADD } from "./measurements";
+import { INSERT_EQUIPMENT, PROFILE_UPDATE_KINDS, tableOfUpdate } from "./profile";
 import { GOAL_LEVEL, ROUTINE_SAVE } from "./plan";
 import { ONBOARDING_KIND, validateOnboardingPayload } from "./onboarding";
 import { SESSION_DISCARD, SESSION_FINISH, SESSION_START, SET_LOG, SET_LOG_DELETE, SET_LOG_EDIT, SESSION_OFF_REPORT } from "./workout";
@@ -38,6 +39,15 @@ export const syncOutboxItem = createServerFn({ method: "POST" })
     } else if (data.kind === ROUTINE_SAVE) {
       const { storeRoutineVersion } = await import("./plan.server");
       await storeRoutineVersion(sb, userId, data.idempotencyKey, data.payload);
+      stored = true;
+    } else if ((PROFILE_UPDATE_KINDS as readonly string[]).includes(data.kind)) {
+      if (typeof data.expectedVersion !== "number") throw new Error("400 version required");
+      const { storeRowUpdate } = await import("./profile.server");
+      await storeRowUpdate(sb, userId, tableOfUpdate(data.kind), data.expectedVersion, data.payload);
+      stored = true;
+    } else if (data.kind === INSERT_EQUIPMENT) {
+      const { storeEquipmentAdd } = await import("./profile.server");
+      await storeEquipmentAdd(sb, userId, data.idempotencyKey, data.payload);
       stored = true;
     } else if (data.kind === MEASUREMENT_ADD) {
       const { storeMeasurement } = await import("./measurements.server");

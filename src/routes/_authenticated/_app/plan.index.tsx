@@ -95,8 +95,8 @@ function Plan() {
       const { rebaseRoutineSave } = await import("@/lib/conflict-actions");
       const r = await rebaseRoutineSave(i);
       if (!r) return;
-      if (r === "kept") toast({ text: "A session on this version hasn't synced yet, so the save stays; your edit is also a draft on the newest version." });
       await qc.invalidateQueries({ queryKey: ["routine", user.id] });
+      if (r === "rebased") { toast({ text: "A session on this version hasn't synced yet, so your save moved onto the newest version and will send first." }); void outbox.retryNow(); return; }
       void navigate({ to: "/plan/edit" });
     } catch { toast({ text: "Couldn't change this device's copy. Try again." }); }
   };

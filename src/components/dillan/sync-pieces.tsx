@@ -74,7 +74,7 @@ function ConflictCard({ item, all, onResolved, onDraft }: { item: OutboxItem; al
   };
   const yours = () => run(async () => {
     const r = await (await client()).keepYours(item);
-    if (r === "kept") { toast({ text: "A session on this version hasn't synced yet, so the save stays; your edit is also a draft on the newest version." }); onDraft(); }
+    if (r === "rebased") toast({ text: "Kept yours as the newest version. The session you started on it will sync after it." });
     else if (r === "draft") { toast({ text: "Your edit is back as a draft on the newest version." }); onDraft(); }
     else if (r === "gone") toast({ text: "That item no longer exists, so there's nothing to keep." });
     onResolved();
@@ -96,7 +96,7 @@ function ConflictCard({ item, all, onResolved, onDraft }: { item: OutboxItem; al
       <p className="flex items-center gap-2 text-footnote font-bold uppercase tracking-wider text-text-2">
         <CircleAlert className="size-4 text-hold" aria-hidden /> Changed on another device
       </p>
-      <p className="mt-2 text-headline font-bold">{item.kind === ROUTINE_SAVE || item.kind === "update:goals" ? "Your plan" : "This"} changed on another device. Keep yours, keep theirs, or compare?</p>
+      <p className="mt-2 text-headline font-bold">{item.kind === ROUTINE_SAVE || item.kind === "update:goals" ? "Your plan" : item.kind.startsWith("update:") && item.kind !== "update:sessions" ? "Your profile" : "This"} changed on another device. Keep yours, keep theirs, or compare?</p>
       {cmp === "failed" && <p className="mt-2 text-footnote text-text-2">Couldn't load their version. Check your connection.</p>}
       {cmp && cmp !== "failed" && (
         cmp.rows.length ? (
