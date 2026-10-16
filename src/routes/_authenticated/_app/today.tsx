@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Play } from "lucide-react";
+import { CircleAlert, Play } from "lucide-react";
 import { pageHead } from "@/lib/head";
 import { supabase } from "@/integrations/supabase/client";
 import type { PipKind } from "@/lib/demo";
@@ -10,7 +10,7 @@ import { blockMinutes, blockName, estimateMinutes, keptPositions, priorityPositi
 import { beginSession, getActiveSession, loadRoutine, loadWeek, type SessionDraft } from "@/lib/workout-store";
 import { onOutboxChange } from "@/lib/outbox";
 import { useOutbox } from "@/lib/use-outbox";
-import { Card, ScreenState, VoiceBlock } from "@/components/dillan/surfaces";
+import { Banner, Card, ScreenState, VoiceBlock } from "@/components/dillan/surfaces";
 import { BlockRow, CourseStrip, TimeControl } from "@/components/dillan/plan-pieces";
 import { DButton } from "@/components/dillan/button";
 import { DemoLabel, SaveState, StatusTag, UnknownValue } from "@/components/dillan/tags";
@@ -87,9 +87,12 @@ function Today() {
 
   const days: { day: string; kind: PipKind }[] = dates.map((date, i) => {
     if (date === today) return { day: DAY_LETTERS[i]!, kind: "today" };
+    // Without this week's data we don't know what happened: never claim "nothing logged".
+    if (!week.data) return { day: DAY_LETTERS[i]!, kind: "unknown" };
     const s = week.data?.filter((x) => x.local_date === date && x.completion !== "in_progress") ?? [];
     if (s.some((x) => x.completion === "complete" && !x.shortened)) return { day: DAY_LETTERS[i]!, kind: "done" };
-    if (s.length) return { day: DAY_LETTERS[i]!, kind: "short" };
+    if (s.some((x) => x.shortened)) return { day: DAY_LETTERS[i]!, kind: "short" };
+    if (s.length) return { day: DAY_LETTERS[i]!, kind: "partial" };
     return { day: DAY_LETTERS[i]!, kind: date < today ? "empty" : "planned" };
   });
   const strip = (
@@ -114,7 +117,7 @@ function Today() {
     <div className="pt-6 lg:pt-10">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-footnote font-bold uppercase tracking-wider text-text-2">
-          {date}{r ? ` · ${r.title}` : ""}
+          {date}
         </p>
         <div className="flex items-center gap-2">
           {r?.isDemo && <DemoLabel />}
@@ -124,7 +127,11 @@ function Today() {
       <div className="mt-4 hidden lg:block lg:max-w-[480px]">{strip}</div>
 
       {routine.isPending ? (
-        <Card className="mt-6"><ScreenState kind="loading" /></Card>
+        <div className="mt-6 flex flex-col gap-3" aria-busy="true" aria-label="Loading today's plan">
+          <div className="h-16 animate-pulse rounded-card bg-surface-2" />
+          <div className="h-10 animate-pulse rounded-card bg-surface-2" />
+          <div className="h-56 animate-pulse rounded-card bg-surface-2" />
+        </div>
       ) : routine.isError ? (
         <Card className="mt-6">
           <ScreenState kind={navigator.onLine ? "failed" : "offline"} title="Couldn't load today's plan" body="Check your connection and try again." action={{ label: "Try again", onClick: () => void routine.refetch() }} />
@@ -179,7 +186,7 @@ function Today() {
                 <p className="mt-2 text-headline font-bold">{active.snapshot.title}</p>
                 <div className="mt-3 flex flex-col gap-1 lg:max-w-[480px]">
                   <DButton variant="primary" icon={<Play className="size-5" aria-hidden />} onClick={() => navigate({ to: "/session/$id", params: { id: active.id } })}>
-                    Resume session · {minIn} min in
+                    <span className="whitespace-nowrap">Resume · {minIn} min in</span>
                   </DButton>
                   <DButton variant="quiet" size="md" className="w-full" onClick={() => navigate({ to: "/session/$id", params: { id: active.id }, search: { finish: true } })}>
                     Finish here
@@ -189,7 +196,9 @@ function Today() {
             ) : (
               <StickyActions className="mt-4 lg:static lg:mx-0 lg:bg-transparent lg:px-0 lg:backdrop-blur-none">
                 {startFailed && (
-                  <p className="mb-2 text-footnote text-text-2">Couldn't start on this device. Private mode or full storage can block it. Try again.</p>
+                  <Banner className="mb-2" icon={<CircleAlert className="size-5 shrink-0 text-text" aria-hidden />}>
+                    Couldn't start on this device. Private mode or full storage can block it. Try again.
+                  </Banner>
                 )}
                 <DButton
                   variant="primary"

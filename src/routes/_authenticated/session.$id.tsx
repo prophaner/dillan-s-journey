@@ -381,6 +381,7 @@ function Session() {
           void navigate({ to: "/session/$id", params: { id } });
         } catch {
           setWriteFailed(true);
+          toast({ text: "This browser isn't keeping data between visits (private mode or storage full)." });
         }
       })(),
     });
