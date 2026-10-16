@@ -8,6 +8,7 @@ import { ROUTINE_SAVE, type RoutineSavePayload } from "@/lib/plan";
 import { Sheet, useToast } from "./overlays";
 import { Card } from "./surfaces";
 import { DButton } from "./button";
+import { localLabel, useStorageHealth } from "@/lib/device";
 
 /** S21 "Your data on this phone" (AT-34). Counts come straight from this device's outbox. */
 export function YourDataSheet({ open, onClose, email, items, onSync }: {
@@ -18,9 +19,11 @@ export function YourDataSheet({ open, onClose, email, items, onSync }: {
   const local = items.filter((i) => i.status === "local").length;
   const failed = items.filter((i) => i.status === "failed" || i.status === "conflict").length;
   const unsynced = local + failed;
+  const health = useStorageHealth();
+  const tabOnly = health === "unavailable";
   const rows = [
     { icon: <CircleCheck className="size-5 text-steady" aria-hidden />, label: "Synced", n: synced, meaning: "Stored on your account. Safe if this phone is lost." },
-    { icon: <CircleDot className="size-5 text-text-3" aria-hidden />, label: "Saved on this device", n: local, meaning: "Kept here. Sends when you're online and Dillan is open." },
+    { icon: <CircleDot className="size-5 text-text-3" aria-hidden />, label: localLabel(health), n: local, meaning: tabOnly ? "This browser isn't keeping data, so closing this tab loses it. Sync before you close." : "Kept here. Sends when you're online and Dillan is open." },
     { icon: <CircleAlert className="size-5 text-hold" aria-hidden />, label: "Didn't sync", n: failed, meaning: "Tried and stopped. Retry, or choose a version if it changed elsewhere." },
   ];
   return (

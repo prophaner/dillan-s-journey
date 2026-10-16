@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowLeftRight, Check, CircleAlert, CircleStop, Hand, Minus, Pencil, Plus, SkipForward, Trash2 } from "lucide-react";
 import { pageHead } from "@/lib/head";
+import { localPhrase } from "@/lib/device";
 import { sessionSaveState, useOutbox } from "@/lib/use-outbox";
 import { elapsedMs, formatClock, remainingMs, useNow, useWakeLock } from "@/lib/timer";
 import { closeSession, draftKey, lastValues, loadExercises, restoreSession, saveSession, type SessionDraft } from "@/lib/workout-store";
@@ -221,7 +222,7 @@ function Session() {
     if (!pendingUndoRef.current) setWriteFailed(false);
     setD(next);
     toast({
-      text: `Set ${setNo} logged · saved on this device`,
+      text: `Set ${setNo} logged · ${localPhrase()}`,
       undo: () => void undoSet(log),
     });
   };
@@ -276,7 +277,7 @@ function Session() {
       setD(next);
       setEditing(null);
       draftSaved();
-      toast({ text: `Set ${log.setNo} changed · saved on this device` });
+      toast({ text: `Set ${log.setNo} changed · ${localPhrase()}` });
     } catch {
       setWriteFailed(true);
     } finally {
@@ -524,7 +525,7 @@ function Session() {
             <p className="mt-3 text-center text-footnote text-text-2">
               {saveState === "synced"
                 ? `${d.logs.length} sets synced · nothing waiting`
-                : `${unsynced.length} ${unsynced.length === 1 ? "change" : "changes"} saved on this device · will sync when you're online`}
+                : `${unsynced.length} ${unsynced.length === 1 ? "change" : "changes"} ${localPhrase()} · will sync when you're online`}
             </p>
           ))}
         </div>

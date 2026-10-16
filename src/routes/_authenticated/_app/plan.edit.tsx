@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, ChevronLeft, CircleAlert, Link2, Plus, Trash2, Unlink } from "lucide-react";
 import { pageHead } from "@/lib/head";
+import { localPhrase } from "@/lib/device";
 import { deleteDraft, loadDraft, saveDraft } from "@/lib/outbox";
 import { useOutbox } from "@/lib/use-outbox";
 import { loadRoutine, planDraftKey } from "@/lib/workout-store";
@@ -93,7 +94,7 @@ function EditorBody({ uid, base }: { uid: string; base: PlanSnapshot }) {
       await outbox.add(ROUTINE_SAVE, payload);
       await deleteDraft(planDraftKey(uid)).catch(() => undefined);
       await qc.invalidateQueries({ queryKey: ["routine", uid] });
-      toast({ text: `Saved as v${nextNo} · saved on this device` });
+      toast({ text: `Saved as v${nextNo} · ${localPhrase()}` });
       void navigate({ to: "/plan" });
     } catch {
       setStorageFailed(true);

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Check, CircleAlert, Clock, Circle, CircleDot, Sparkles, Flag, Loader } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { localLabel, useStorageHealth } from "@/lib/device";
 
 export type TagKind = "done" | "waiting" | "priority" | "neutral" | "unknown" | "guess" | "failed" | "reviewing";
 
@@ -88,8 +89,9 @@ export function SaveState({
   onRetry?: () => void;
   className?: string;
 }) {
+  const health = useStorageHealth();
   const label =
-    state === "synced" ? "Synced" : state === "local" ? "Saved on this device" : "Didn't sync";
+    state === "synced" ? "Synced" : state === "local" ? localLabel(health) : "Didn't sync";
   return (
     <span
       role="status"
