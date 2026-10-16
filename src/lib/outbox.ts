@@ -92,6 +92,14 @@ export async function enqueue(
   return item;
 }
 
+/** Session an item belongs to: "session:start" carries `id`, the rest carry `sessionId`.
+ *  "update:sessions" edits the session row itself, so it carries `id` too. */
+export function sessionOf(item: Pick<OutboxItem, "kind" | "payload">): string | undefined {
+  const p = item.payload as { sessionId?: string; id?: string } | null;
+  if (item.kind === "update:sessions") return p?.id;
+  return p?.sessionId ?? (item.kind.startsWith("session:") ? p?.id : undefined);
+}
+
 export async function listItems(accountId: string): Promise<OutboxItem[]> {
   const all = (await (await db()).getAllFromIndex("outbox", "account", accountId)) as OutboxItem[];
   return all.sort((a, b) => a.createdAt - b.createdAt);
@@ -109,11 +117,20 @@ export async function drain(accountId: string, send: (item: OutboxItem) => Promi
   draining = true;
   try {
     const d = await db();
+    const blocked = new Set<string>();
     for (const item of await listItems(accountId)) {
-      if (item.status !== "local" || item.accountId !== accountId) continue;
+      if (item.status === "synced" || item.accountId !== accountId) continue;
+      const sid = sessionOf(item);
+      // Keep per-session order: nothing later for a session syncs ahead of an earlier unsent item.
+      if (item.status !== "local") {
+        if (sid) blocked.add(sid);
+        continue;
+      }
+      if (sid && blocked.has(sid)) continue;
       const res = await send(item).catch(
         (e: unknown): SendResult => ({ ok: false, reason: "retry", message: String(e) }),
       );
+      if (!res.ok && sid) blocked.add(sid);
       if (res.ok) {
         await d.put("outbox", { ...item, status: "synced", syncedAt: Date.now(), error: undefined });
       } else if (res.reason === "offline") {
@@ -147,6 +164,19 @@ export async function retryItem(localId: string) {
   }
 }
 
+/** Put this account's failed/conflict items back in the queue. */
+export async function retryAccount(accountId: string) {
+  const d = await db();
+  let changed = false;
+  for (const item of await listItems(accountId)) {
+    if (item.status === "failed" || item.status === "conflict") {
+      await d.put("outbox", { ...item, status: "local", attempts: 0, error: undefined });
+      changed = true;
+    }
+  }
+  if (changed) emit();
+}
+
 /** Sign-out / account switch: never let another account replay this outbox. */
 export async function clearAccount(accountId: string) {
   const d = await db();
@@ -165,4 +195,8 @@ export async function loadDraft<T>(key: string): Promise<T | undefined> {
 
 export async function deleteDraft(key: string) {
   await (await db()).delete("drafts", key);
+}
+
+export async function listDraftKeys(): Promise<string[]> {
+  return (await (await db()).getAllKeys("drafts")).map(String);
 }

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Check, Hand, Minus, Plus } from "lucide-react";
+import { Check, CircleAlert, Hand, Minus, Plus } from "lucide-react";
 import { pageHead } from "@/lib/head";
-import { useOutbox } from "@/lib/use-outbox";
+import { sessionSaveState, useOutbox } from "@/lib/use-outbox";
 import { elapsedMs, formatClock, remainingMs, useNow, useWakeLock } from "@/lib/timer";
 import { closeSession, draftKey, saveSession, type SessionDraft } from "@/lib/workout-store";
 import { loadDraft } from "@/lib/outbox";
@@ -40,14 +40,25 @@ function Session() {
   const [d, setD] = useState<SessionDraft | null | undefined>(undefined);
   const [offSheet, setOffSheet] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [writeFailed, setWriteFailed] = useState(false);
   const lastTap = useRef<number | null>(null);
+  const [pendingSet, setPendingSetState] = useState<SessionDraft["inputs"] | null>(null);
+  const pendingRef = useRef<SessionDraft["inputs"] | null>(null);
+  const setPendingSet = (v: SessionDraft["inputs"] | null) => { pendingRef.current = v; setPendingSetState(v); };
+  const [pendingUndo, setPendingUndoState] = useState<LoggedSet | null>(null);
+  const pendingUndoRef = useRef<LoggedSet | null>(null);
+  const setPendingUndo = (v: LoggedSet | null) => { pendingUndoRef.current = v; setPendingUndoState(v); };
+  const inFlight = useRef(false);
+  const finishKey = useRef<string | null>(null);
+  /** Clear the warning only when no set or undo is waiting to be retried. */
+  const draftSaved = () => { if (!pendingRef.current && !pendingUndoRef.current) setWriteFailed(false); };
   useWakeLock(d?.phase === "training");
 
   useEffect(() => {
     void loadDraft<SessionDraft>(draftKey(user.id, id)).then((x) => {
       if (x && finish && x.phase === "training") {
         const next = { ...x, phase: "done" as const, endedAt: Date.now(), restStartedAt: null };
-        void saveSession(user.id, next);
+        void saveSession(user.id, next).then(draftSaved).catch(() => setWriteFailed(true));
         setD(next);
       } else setD(x ?? null);
     });
@@ -57,7 +68,7 @@ function Session() {
     setD((cur) => {
       if (!cur) return cur;
       const next = { ...cur, ...(typeof patch === "function" ? patch(cur) : patch) };
-      void saveSession(user.id, next);
+      saveSession(user.id, next).then(draftSaved).catch(() => setWriteFailed(true));
       return next;
     });
 
@@ -89,17 +100,26 @@ function Session() {
     );
   }
 
-  const sessionItems = outbox.items.filter(
-    (i) => (i.payload as { sessionId?: string })?.sessionId === id || (i.payload as { id?: string })?.id === id,
-  );
-  const unsynced = sessionItems.filter((i) => i.status !== "synced");
-  const saveState = sessionItems.some((i) => i.status === "failed" || i.status === "conflict") ? "failed" : unsynced.length ? "local" : "synced";
+  const { state: saveState, unsynced: unsyncedCount } = sessionSaveState(outbox.items, id, d.logs.map((l) => l.key));
+  const unsynced = { length: unsyncedCount };
 
   const doneSets = d.logs.filter((l) => l.ref === step.ref);
   const setNo = doneSets.length + 1;
   const stepFinished = doneSets.length >= step.sets;
   const allDone = d.logs.length >= steps.reduce((n, s) => n + s.sets, 0);
   const isDemo = d.snapshot.isDemo;
+
+  const bannerText =
+    "This browser isn't keeping data between visits (private mode or storage full)." +
+    (pendingSet || pendingUndo ? "" : " Logging still works while this tab is open.") +
+    (pendingSet ? " That set wasn't logged." : "") +
+    (pendingUndo ? " That undo didn't go through." : "");
+
+  const retryWrite = () => {
+    if (pendingUndoRef.current) { void undoSet(pendingUndoRef.current); return; }
+    if (pendingRef.current) { void logSet(pendingRef.current); return; }
+    saveSession(user.id, d).then(draftSaved).catch(() => setWriteFailed(true));
+  };
 
   const prefill = (i: number) => {
     const s = steps[i];
@@ -108,53 +128,101 @@ function Session() {
     return { reps: s.reps ?? last?.reps ?? 0, load: s.load ?? last?.load ?? null, rir: null };
   };
 
-  const logSet = async () => {
+  const logSet = async (inputs: SessionDraft["inputs"] = d.inputs) => {
+    if (inFlight.current) return;
     const t = Date.now();
-    if (isDoubleTap(lastTap.current, t) || stepFinished) return;
+    if (stepFinished || isDoubleTap(lastTap.current, t)) return;
+    inFlight.current = true;
+    try {
+      await logSetOnce(inputs, t);
+    } finally {
+      inFlight.current = false;
+    }
+  };
+
+  const logSetOnce = async (inputs: SessionDraft["inputs"], t: number) => {
     lastTap.current = t;
-    const t0 = performance.now();
-    const item = await outbox.add(SET_LOG, {
-      sessionId: id, exerciseId: step.exerciseId, ref: step.ref, setNo,
-      reps: d.inputs.reps, load: d.inputs.load, unit: step.unit, rir: d.inputs.rir,
-      loggedAt: new Date(t).toISOString(), isDemo,
-    });
+    let item;
+    try {
+      item = await outbox.add(SET_LOG, {
+        sessionId: id, exerciseId: step.exerciseId, ref: step.ref, setNo,
+        reps: inputs.reps, load: inputs.load, unit: step.unit, rir: inputs.rir,
+        loggedAt: new Date(t).toISOString(), isDemo,
+      });
+    } catch {
+      lastTap.current = null; // let Try again run right away
+      setPendingSet(inputs);
+      setWriteFailed(true);
+      return;
+    }
+    setPendingSet(null);
     const log: LoggedSet = {
-      key: item.idempotencyKey, ref: step.ref, setNo, reps: d.inputs.reps, load: d.inputs.load,
-      unit: step.unit, rir: d.inputs.rir, loggedAt: new Date(t).toISOString(),
+      key: item.idempotencyKey, ref: step.ref, setNo, reps: inputs.reps, load: inputs.load,
+      unit: step.unit, rir: inputs.rir, loggedAt: new Date(t).toISOString(),
     };
     const lastOfStep = setNo >= step.sets;
     const lastOfAll = lastOfStep && d.stepIndex >= steps.length - 1;
-    update((cur) => ({
-      logs: [...cur.logs, log],
+    const next: SessionDraft = {
+      ...d,
+      logs: [...d.logs, log],
       restStartedAt: lastOfAll ? null : Date.now(),
       restTotalMs: step.restSeconds * 1000,
-      ...(lastOfStep && !lastOfAll ? { stepIndex: cur.stepIndex + 1, inputs: prefill(cur.stepIndex + 1) } : {}),
-    }));
-    const ms = Math.round(performance.now() - t0);
+      ...(lastOfStep && !lastOfAll ? { stepIndex: d.stepIndex + 1, inputs: prefill(d.stepIndex + 1) } : {}),
+    };
+    try {
+      await saveSession(user.id, next);
+    } catch {
+      // The set is queued; show it as logged so it isn't logged twice.
+      setD(next);
+      setWriteFailed(true);
+      return;
+    }
+    if (!pendingUndoRef.current) setWriteFailed(false);
+    setD(next);
     toast({
-      text: `Set ${setNo} logged · saved on this device in ${ms} ms`,
-      undo: () => {
-        void outbox.add(SET_LOG_DELETE, { sessionId: id, setKey: log.key });
-        update((cur) => ({
-          logs: cur.logs.filter((l) => l.key !== log.key),
-          restStartedAt: null,
-          stepIndex: steps.findIndex((s) => s.ref === log.ref),
-        }));
-      },
+      text: `Set ${setNo} logged · saved on this device`,
+      undo: () => void undoSet(log),
     });
+  };
+
+  /** Remove a set only after its delete is queued; otherwise keep it and offer Try again. */
+  const undoSet = async (log: LoggedSet) => {
+    try {
+      await outbox.add(SET_LOG_DELETE, { sessionId: id, setKey: log.key });
+    } catch {
+      setPendingUndo(log);
+      setWriteFailed(true);
+      return;
+    }
+    setPendingUndo(null);
+    update((cur) => ({
+      logs: cur.logs.filter((l) => l.key !== log.key),
+      restStartedAt: null,
+      stepIndex: steps.findIndex((s) => s.ref === log.ref),
+    }));
   };
 
   const end = (stopped = false) =>
     update({ phase: "done", stopped, endedAt: Date.now(), restStartedAt: null });
 
   const saveAndClose = async () => {
+    if (saving) return;
     setSaving(true);
-    await outbox.add(
-      SESSION_FINISH,
-      { id, completion: completionOf(steps, d.logs, d.stopped), endedAt: new Date(d.endedAt ?? Date.now()).toISOString(), feeling: d.feeling, note: d.note },
-      1, // a session row is created at version 1 and this is its first and only edit
-    );
-    await closeSession(user.id, id);
+    try {
+      if (!finishKey.current) {
+        const item = await outbox.add(
+          SESSION_FINISH,
+          { id, completion: completionOf(steps, d.logs, d.stopped), endedAt: new Date(d.endedAt ?? Date.now()).toISOString(), feeling: d.feeling, note: d.note },
+          1, // a session row is created at version 1 and this is its first and only edit
+        );
+        finishKey.current = item.idempotencyKey;
+      }
+      await closeSession(user.id, id);
+    } catch {
+      setWriteFailed(true);
+      setSaving(false);
+      return;
+    }
     void navigate({ to: "/train" });
   };
 
@@ -167,6 +235,15 @@ function Session() {
         <SpotMark size={64} className="text-text" />
         <p className="mt-5 font-voice text-voice-xl leading-[1.2]">{headlineFor(completion)}</p>
         {isDemo && <DemoLabel className="mt-3" />}
+        {writeFailed && (
+          <Banner
+            className="mt-3"
+            icon={<CircleAlert className="size-5 shrink-0 text-text-2" aria-hidden />}
+            action={<DButton size="sm" variant="outline" onClick={retryWrite}>Try again</DButton>}
+          >
+            {bannerText}
+          </Banner>
+        )}
 
         <ul className="mt-6 flex flex-col gap-2">
           {steps.map((s) => {
@@ -211,12 +288,16 @@ function Session() {
         </fieldset>
 
         <div className="mt-auto pt-6">
-          <DButton variant="primary" loading={saving} onClick={saveAndClose}>Save session</DButton>
-          <p className="mt-3 text-center text-footnote text-text-2">
-            {unsynced.length === 0
-              ? `${d.logs.length} sets synced · nothing waiting`
-              : `${unsynced.length} ${unsynced.length === 1 ? "change" : "changes"} saved on this device · will sync when you're online`}
-          </p>
+          <DButton variant="primary" loading={saving} disabled={saving} onClick={saveAndClose}>Save session</DButton>
+          {outbox.loaded && (saveState === "failed" ? (
+            <div className="mt-3 flex justify-center"><SaveState state="failed" count={unsyncedCount} onRetry={outbox.retryNow} /></div>
+          ) : (
+            <p className="mt-3 text-center text-footnote text-text-2">
+              {saveState === "synced"
+                ? `${d.logs.length} sets synced · nothing waiting`
+                : `${unsynced.length} ${unsynced.length === 1 ? "change" : "changes"} saved on this device · will sync when you're online`}
+            </p>
+          ))}
         </div>
       </div>
     );
@@ -243,9 +324,18 @@ function Session() {
       <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
         {step.priority === "optional" ? <StatusTag kind="neutral" icon={false}>Optional</StatusTag> : <StatusTag kind="priority" icon={false}>Main</StatusTag>}
         <span className="text-subhead font-medium text-text-2">Exercise {d.stepIndex + 1} of {steps.length}</span>
-        <span className="ml-auto"><SaveState state={saveState} count={unsynced.length} onRetry={outbox.syncNow} /></span>
+        <span className="ml-auto">{outbox.loaded && <SaveState state={saveState} count={unsynced.length} onRetry={outbox.retryNow} />}</span>
       </div>
       {isDemo && <div className="mt-2"><DemoLabel /></div>}
+      {writeFailed && (
+        <Banner
+          className="mt-3"
+          icon={<CircleAlert className="size-5 shrink-0 text-text-2" aria-hidden />}
+          action={<DButton size="sm" variant="outline" onClick={retryWrite}>Try again</DButton>}
+        >
+          {bannerText}
+        </Banner>
+      )}
 
       {resting ? (
         <section className="flex flex-1 flex-col items-center justify-center py-6">
@@ -302,7 +392,7 @@ function Session() {
         {!resting && (allDone ? (
           <DButton variant="primary" size="log" icon={<Check className="size-6" aria-hidden />} onClick={() => end(false)}>Finish session</DButton>
         ) : (
-          <DButton variant="primary" size="log" icon={<Check className="size-6" aria-hidden />} onClick={logSet}>Log set</DButton>
+          <DButton variant="primary" size="log" icon={<Check className="size-6" aria-hidden />} onClick={() => void logSet()}>Log set</DButton>
         ))}
         <DButton variant="quiet" size="md" className="mt-1 w-full" icon={<Hand className="size-5" aria-hidden />} onClick={() => setOffSheet(true)}>
           Something feels off
