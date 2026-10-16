@@ -20,7 +20,7 @@ const LATER = [
   { icon: <Shield className="size-5" aria-hidden />, title: "Privacy", line: "Your data is stored on your account and shared with no one unless you invite a coach." },
   { icon: <BrainCircuit className="size-5" aria-hidden />, title: "AI data permissions", line: "Dillan's AI isn't on yet, so nothing is sent to it." },
   { icon: <Download className="size-5" aria-hidden />, title: "Export", line: "Downloading a copy of everything isn't built yet." },
-  { icon: <Trash2 className="size-5" aria-hidden />, title: "Deletion", line: "Deleting your account from here isn't built yet. Until then, ask and it will be done by hand." },
+  { icon: <Trash2 className="size-5" aria-hidden />, title: "Deletion", line: "Deleting your account from here isn't built yet." },
   { icon: <Accessibility className="size-5" aria-hidden />, title: "Accessibility", line: "Dillan follows your phone's text size, motion and dark mode settings for now." },
 ];
 
