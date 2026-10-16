@@ -1,5 +1,5 @@
 /** Synthetic demo data. Every screen that shows it carries a "Demo data" label. */
-export type PipKind = "done" | "short" | "rest" | "planned" | "missed" | "today" | "empty";
+export type PipKind = "done" | "short" | "rest" | "planned" | "missed" | "today" | "empty" | "partial" | "unknown";
 export type BlockKind = "required" | "priority" | "optional";
 export type TimeChoice = "full" | "short" | "priority";
 

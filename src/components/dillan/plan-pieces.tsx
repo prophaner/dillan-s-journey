@@ -98,6 +98,8 @@ const pipLabel: Record<PipKind, string> = {
   missed: "not done",
   today: "today",
   empty: "nothing logged",
+  partial: "logged, not finished",
+  unknown: "not yet known",
 };
 
 function Pip({ kind }: { kind: PipKind }) {
@@ -121,6 +123,14 @@ function Pip({ kind }: { kind: PipKind }) {
       return <span className={cn(base, "border-2 border-line")} />;
     case "empty":
       return <span className={cn(base, "border border-line")} />;
+    case "partial":
+      return (
+        <span className={cn(base, "border-[3px] border-text-2")}>
+          <span className="size-3 rounded-full bg-text-2" />
+        </span>
+      );
+    case "unknown":
+      return <span className={cn(base, "border-2 border-dashed border-unknown text-footnote font-bold text-text-2")}>—</span>;
     case "missed":
       return <span className={cn(base, "border-2 border-dashed border-unknown")} />;
     case "today":

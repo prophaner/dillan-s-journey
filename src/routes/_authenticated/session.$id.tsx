@@ -5,7 +5,7 @@ import { pageHead } from "@/lib/head";
 import { sessionSaveState, useOutbox } from "@/lib/use-outbox";
 import { elapsedMs, formatClock, remainingMs, useNow, useWakeLock } from "@/lib/timer";
 import { closeSession, draftKey, lastValues, loadExercises, restoreSession, saveSession, type SessionDraft } from "@/lib/workout-store";
-import { listItems, loadDraft, removeIfLocal, sessionOf } from "@/lib/outbox";
+import { isSending, listItems, loadDraft, removeIfLocal, sessionOf } from "@/lib/outbox";
 import { blockName, choiceLabel, listOf } from "@/lib/time-plan";
 import {
   activeTurns, applySwaps, completionOf, localDate, OFF_AREAS, OFF_SIDES, reconcileLogs, SESSION_OFF_REPORT, type OffAction, headlineFor, isDoubleTap, nextTurn, SESSION_DISCARD, SESSION_FINISH, SET_LOG, SET_LOG_DELETE,
@@ -369,9 +369,19 @@ function Session() {
       text: "Session discarded",
       // Undo works while the discard is still on this device (it waits a few seconds before sending).
       undo: () => void (async () => {
-        if (!(await removeIfLocal(queued.localId))) { toast({ text: "Already discarded on the server" }); return; }
-        await restoreSession(user.id, before);
-        void navigate({ to: "/session/$id", params: { id } });
+        try {
+          // Draft back first, so a failed take-back never leaves the session lost on this device.
+          await restoreSession(user.id, before);
+          const sending = isSending(queued.localId);
+          if (!(await removeIfLocal(queued.localId))) {
+            await closeSession(user.id, id);
+            toast({ text: sending ? "Discard is being sent" : "Already discarded on the server" });
+            return;
+          }
+          void navigate({ to: "/session/$id", params: { id } });
+        } catch {
+          setWriteFailed(true);
+        }
       })(),
     });
     void navigate({ to: "/train" });

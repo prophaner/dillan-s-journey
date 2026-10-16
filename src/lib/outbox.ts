@@ -135,7 +135,7 @@ export const DISCARD_HOLD_MS = 8000;
 
 /** Send pending items in order. Safe to call repeatedly; one drain at a time. */
 export async function drain(accountId: string, send: (item: OutboxItem) => Promise<SendResult>, opts: { discardHoldMs?: number } = {}) {
-  const hold = opts.discardHoldMs ?? 0;
+  const hold = opts.discardHoldMs ?? DISCARD_HOLD_MS;
   if (draining) return;
   draining = true;
   try {
@@ -154,6 +154,9 @@ export async function drain(accountId: string, send: (item: OutboxItem) => Promi
         if (sid) blocked.add(sid);
         continue;
       }
+      // Re-read right before sending: an Undo may have removed it, or another path changed it.
+      const fresh = (await d.get("outbox", item.localId)) as OutboxItem | undefined;
+      if (!fresh || fresh.status !== "local") continue;
       sendingId = item.localId;
       const res = await send(item).catch(
         (e: unknown): SendResult => ({ ok: false, reason: "retry", message: String(e) }),
@@ -191,6 +194,9 @@ export async function retryItem(localId: string) {
     emit();
   }
 }
+
+/** True while this item is mid-send (an Undo can no longer take it back). */
+export const isSending = (localId: string) => sendingId === localId;
 
 /** Take back an item that hasn't left this device. False if it is being sent or already sent. */
 export async function removeIfLocal(localId: string): Promise<boolean> {
