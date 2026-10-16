@@ -8,6 +8,8 @@ entry under "Tooling" so the history stays complete; they are not slices.
 
 ## Unreleased
 
+- 0002/0003: prescriptions reference exercises by id; backfill for existing routines
+
 ### 2026-10-16 — S04 edits + S06 Superset, with carry-over fixes
 Commits 885b071..03aefe0 (fix rounds 33edd78, 3475a13, 47e1751, d8840de, 5c8dc07; Lovable build 03aefe0).
 Screens: S04 Set logging (change a done set, swap an exercise for this session), S06 Superset,
