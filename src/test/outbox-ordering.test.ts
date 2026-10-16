@@ -12,16 +12,19 @@
  *   "planned and ad-hoc sessions; exercise-level results; and individual sets."
  * AGENTS.md: "User writes go through the IndexedDB outbox (src/lib/outbox.ts) with idempotency keys;
  *   'Synced' only after server ack."
+ * AGENTS.md: "every UPDATE must send the version it read, built via src/lib/updates.ts or outbox
+ *   kind "update:<table>" with expectedVersion."
  *
  * jsdom has no IndexedDB and fake-indexeddb is not installed, so the `idb` module boundary is
  * replaced with an in-memory store below. Product code is exercised unchanged.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { drain, enqueue, listItems, retryAccount, sessionOf, type OutboxItem, type SendResult } from "@/lib/outbox";
+import { drain, enqueue, listItems, nextSeq, retryAccount, sessionOf, type OutboxItem, type SendResult } from "@/lib/outbox";
 import { sessionSaveState } from "@/lib/use-outbox";
-import { SESSION_FINISH, SESSION_START, SET_LOG, SET_LOG_DELETE } from "@/lib/workout";
+import { SESSION_DISCARD, SESSION_FINISH, SESSION_START, SET_LOG, SET_LOG_DELETE, SET_LOG_EDIT } from "@/lib/workout";
 
-vi.mock("idb", () => {
+// Hoisted so tests can reach the in-memory store (e.g. to insert rows out of order).
+const mem = vi.hoisted(() => {
   type Row = Record<string, unknown> & { localId?: string; key?: string; accountId?: string };
   const stores = new Map<string, Map<string, Row>>();
   const store = (name: string) => {
@@ -32,6 +35,12 @@ vi.mock("idb", () => {
     }
     return s;
   };
+  return { store };
+});
+
+vi.mock("idb", () => {
+  type Row = Record<string, unknown> & { localId?: string; key?: string; accountId?: string };
+  const store = mem.store;
   const keyOf = (name: string, row: Row) => String(name === "outbox" ? row.localId : row.key);
   return {
     openDB: async () => ({
@@ -82,6 +91,11 @@ describe("sessionOf: which session an outbox item belongs to", () => {
     expect(sessionOf({ kind: SET_LOG, payload: { sessionId: "A", id: "A1" } })).toBe("A");
     expect(sessionOf({ kind: SET_LOG_DELETE, payload: { sessionId: "A", id: "A1" } })).toBe("A");
   });
+  it("update:set_logs, delete:sessions and a set_log with a swapped exercise carry `sessionId` (FR-07)", () => {
+    expect(sessionOf({ kind: SET_LOG_EDIT, payload: { sessionId: "A", id: "A1", reps: 10 } })).toBe("A");
+    expect(sessionOf({ kind: SESSION_DISCARD, payload: { sessionId: "A" } })).toBe("A");
+    expect(sessionOf({ kind: SET_LOG, payload: { sessionId: "A", id: "A1", exerciseId: "swapped-ex" } })).toBe("A");
+  });
   it("an unrelated kind belongs to no session", () => {
     expect(sessionOf({ kind: "onboarding:complete", payload: { id: "profile-1" } })).toBeUndefined();
     expect(sessionOf({ kind: "note", payload: null })).toBeUndefined();
@@ -121,6 +135,90 @@ describe("drain keeps per-session order (§10.2 outbox, §9.1 version checks)", 
     await drain(acct, send);
     expect(sent).toEqual([logA1.localId, delA1.localId, finish.localId]);
     expect((await listItems(acct)).every((i) => i.status === "synced")).toBe(true);
+  });
+
+  it("an edit replays with the same key and the version it read; the discard waits behind it (§9.1, AGENTS.md)", async () => {
+    const acct = "acct-edit";
+    const start = await enqueue(acct, SESSION_START, { id: "E" });
+    const log = await enqueue(acct, SET_LOG, { sessionId: "E", id: "E1", reps: 8 });
+    const edit = await enqueue(acct, SET_LOG_EDIT, { sessionId: "E", id: "E1", reps: 10 }, 1);
+    const discard = await enqueue(acct, SESSION_DISCARD, { sessionId: "E" });
+
+    let failEditOnce = true;
+    const sent: OutboxItem[] = [];
+    const send = vi.fn(async (i: OutboxItem): Promise<SendResult> => {
+      sent.push(i);
+      if (failEditOnce && i.localId === edit.localId) {
+        failEditOnce = false;
+        return { ok: false, reason: "retry", message: "503" };
+      }
+      return { ok: true };
+    });
+
+    await drain(acct, send);
+    expect(sent.map((i) => i.localId)).toEqual([start.localId, log.localId, edit.localId]);
+    expect(sent.map((i) => i.localId)).not.toContain(discard.localId);
+    const after1 = Object.fromEntries((await listItems(acct)).map((i) => [i.localId, i.status]));
+    expect(after1[edit.localId]).toBe("local");
+    expect(after1[discard.localId]).toBe("local");
+
+    await drain(acct, send);
+    const editSends = sent.filter((i) => i.localId === edit.localId);
+    expect(editSends).toHaveLength(2);
+    expect(editSends.map((i) => i.idempotencyKey)).toEqual([edit.idempotencyKey, edit.idempotencyKey]);
+    expect(editSends.map((i) => i.expectedVersion)).toEqual([1, 1]);
+
+    const discardSends = sent.filter((i) => i.localId === discard.localId);
+    expect(discardSends).toHaveLength(1);
+    const lastEditIdx = sent.map((i) => i.localId).lastIndexOf(edit.localId);
+    const discardIdx = sent.map((i) => i.localId).indexOf(discard.localId);
+    expect(discardIdx).toBeGreaterThan(lastEditIdx);
+    expect((await listItems(acct)).every((i) => i.status === "synced")).toBe(true);
+  });
+
+  it("a discard waits for its session chain; another session is not held up", async () => {
+    const acct = "acct-discard";
+    const startF = await enqueue(acct, SESSION_START, { id: "F" });
+    const discardF = await enqueue(acct, SESSION_DISCARD, { sessionId: "F" });
+    const logG = await enqueue(acct, SET_LOG, { sessionId: "G", id: "G1", reps: 5 });
+
+    const sent: string[] = [];
+    await drain(acct, async (i): Promise<SendResult> => {
+      sent.push(i.localId);
+      return i.localId === startF.localId ? { ok: false, reason: "retry", message: "503" } : { ok: true };
+    });
+    expect(sent).toEqual([startF.localId, logG.localId]);
+    expect(sent).not.toContain(discardF.localId);
+    const after = Object.fromEntries((await listItems(acct)).map((i) => [i.localId, i.status]));
+    expect(after[startF.localId]).toBe("local");
+    expect(after[discardF.localId]).toBe("local");
+    expect(after[logG.localId]).toBe("synced");
+  });
+});
+
+describe("listItems orders by seq, not by store insertion (§10.2 ordered replay)", () => {
+  it("returns enqueue order even when rows sit in the store out of order; legacy rows without seq sort by createdAt", async () => {
+    const acct = "acct-seq";
+    const a = await enqueue(acct, SESSION_START, { id: "S" });
+    const b = await enqueue(acct, SET_LOG, { sessionId: "S", id: "S1", reps: 8 });
+    const c = await enqueue(acct, SET_LOG, { sessionId: "S", id: "S2", reps: 8 });
+    expect(a.seq).toBeDefined();
+    expect(a.seq!).toBeLessThan(b.seq!);
+    expect(b.seq!).toBeLessThan(c.seq!);
+
+    // Legacy rows written before `seq` existed: one older than everything, one newer.
+    const legacyOld: OutboxItem = { ...item(SET_LOG, { sessionId: "S", id: "S0" }, "synced"), accountId: acct, createdAt: a.createdAt - 10 };
+    const legacyNew: OutboxItem = { ...item(SET_LOG, { sessionId: "S", id: "S3" }, "local"), accountId: acct, createdAt: c.createdAt + 10 };
+    expect(legacyOld.seq).toBeUndefined();
+    expect(legacyNew.seq).toBeUndefined();
+
+    // Re-insert out of order; the Map iterates in insertion order, so getAllFromIndex returns this order.
+    const outbox = mem.store("outbox");
+    for (const row of [a, b, c]) outbox.delete(row.localId);
+    for (const row of [legacyNew, c, a, legacyOld, b]) outbox.set(row.localId, row as unknown as Record<string, unknown>);
+
+    const ids = (await listItems(acct)).map((i) => i.localId);
+    expect(ids).toEqual([legacyOld.localId, a.localId, b.localId, c.localId, legacyNew.localId]);
   });
 });
 
@@ -200,5 +298,29 @@ describe("sessionSaveState: 'Synced' only after every write for the session is a
       item(SESSION_FINISH, { id: "A" }, "conflict"),
     ];
     expect(sessionSaveState(conflict, "A", [k1]).state).toBe("failed");
+  });
+});
+
+// Last on purpose: vi.resetModules gives later dynamic imports a fresh module instance (and a fresh
+// in-memory idb store); the static imports above keep their original instance.
+describe("nextSeq never goes backwards across a module reload (§10.2 ordered replay)", () => {
+  it("a fresh module instance with a later clock issues seq values above the old ones", async () => {
+    const oldSeqs = [nextSeq(), nextSeq(), nextSeq()];
+    expect(oldSeqs[1]).toBeGreaterThan(oldSeqs[0]!);
+    expect(oldSeqs[2]).toBeGreaterThan(oldSeqs[1]!);
+    // Same millisecond: still strictly increasing.
+    const now = Date.now();
+    const same1 = nextSeq(now);
+    const same2 = nextSeq(now);
+    expect(same2).toBe(same1 + 1);
+
+    vi.resetModules();
+    clock += 1_000; // the device was closed for a second before the reload
+    const fresh = await import("@/lib/outbox");
+    expect(fresh.nextSeq).not.toBe(nextSeq);
+    const newSeqs = [fresh.nextSeq(), fresh.nextSeq()];
+    const maxOld = Math.max(...oldSeqs, same2);
+    expect(newSeqs[0]).toBeGreaterThan(maxOld);
+    expect(newSeqs[1]).toBeGreaterThan(newSeqs[0]!);
   });
 });
