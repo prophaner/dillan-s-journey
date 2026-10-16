@@ -45,8 +45,13 @@ function Session() {
   const [pendingSet, setPendingSetState] = useState<SessionDraft["inputs"] | null>(null);
   const pendingRef = useRef<SessionDraft["inputs"] | null>(null);
   const setPendingSet = (v: SessionDraft["inputs"] | null) => { pendingRef.current = v; setPendingSetState(v); };
-  /** Clear the warning only when no set is waiting to be re-logged. */
-  const draftSaved = () => { if (!pendingRef.current) setWriteFailed(false); };
+  const [pendingUndo, setPendingUndoState] = useState<LoggedSet | null>(null);
+  const pendingUndoRef = useRef<LoggedSet | null>(null);
+  const setPendingUndo = (v: LoggedSet | null) => { pendingUndoRef.current = v; setPendingUndoState(v); };
+  const inFlight = useRef(false);
+  const finishKey = useRef<string | null>(null);
+  /** Clear the warning only when no set or undo is waiting to be retried. */
+  const draftSaved = () => { if (!pendingRef.current && !pendingUndoRef.current) setWriteFailed(false); };
   useWakeLock(d?.phase === "training");
 
   useEffect(() => {
@@ -104,7 +109,14 @@ function Session() {
   const allDone = d.logs.length >= steps.reduce((n, s) => n + s.sets, 0);
   const isDemo = d.snapshot.isDemo;
 
+  const bannerText =
+    "This browser isn't keeping data between visits (private mode or storage full)." +
+    (pendingSet || pendingUndo ? "" : " Logging still works while this tab is open.") +
+    (pendingSet ? " That set wasn't logged." : "") +
+    (pendingUndo ? " That undo didn't go through." : "");
+
   const retryWrite = () => {
+    if (pendingUndoRef.current) { void undoSet(pendingUndoRef.current); return; }
     if (pendingRef.current) { void logSet(pendingRef.current); return; }
     saveSession(user.id, d).then(draftSaved).catch(() => setWriteFailed(true));
   };
@@ -117,9 +129,18 @@ function Session() {
   };
 
   const logSet = async (inputs: SessionDraft["inputs"] = d.inputs) => {
+    if (inFlight.current) return;
     const t = Date.now();
-    if (stepFinished) return;
-    if (!pendingRef.current && isDoubleTap(lastTap.current, t)) return;
+    if (stepFinished || isDoubleTap(lastTap.current, t)) return;
+    inFlight.current = true;
+    try {
+      await logSetOnce(inputs, t);
+    } finally {
+      inFlight.current = false;
+    }
+  };
+
+  const logSetOnce = async (inputs: SessionDraft["inputs"], t: number) => {
     lastTap.current = t;
     let item;
     try {
@@ -129,6 +150,7 @@ function Session() {
         loggedAt: new Date(t).toISOString(), isDemo,
       });
     } catch {
+      lastTap.current = null; // let Try again run right away
       setPendingSet(inputs);
       setWriteFailed(true);
       return;
@@ -155,19 +177,29 @@ function Session() {
       setWriteFailed(true);
       return;
     }
-    setWriteFailed(false);
+    if (!pendingUndoRef.current) setWriteFailed(false);
     setD(next);
     toast({
       text: `Set ${setNo} logged · saved on this device`,
-      undo: () => {
-        outbox.add(SET_LOG_DELETE, { sessionId: id, setKey: log.key }).catch(() => setWriteFailed(true));
-        update((cur) => ({
-          logs: cur.logs.filter((l) => l.key !== log.key),
-          restStartedAt: null,
-          stepIndex: steps.findIndex((s) => s.ref === log.ref),
-        }));
-      },
+      undo: () => void undoSet(log),
     });
+  };
+
+  /** Remove a set only after its delete is queued; otherwise keep it and offer Try again. */
+  const undoSet = async (log: LoggedSet) => {
+    try {
+      await outbox.add(SET_LOG_DELETE, { sessionId: id, setKey: log.key });
+    } catch {
+      setPendingUndo(log);
+      setWriteFailed(true);
+      return;
+    }
+    setPendingUndo(null);
+    update((cur) => ({
+      logs: cur.logs.filter((l) => l.key !== log.key),
+      restStartedAt: null,
+      stepIndex: steps.findIndex((s) => s.ref === log.ref),
+    }));
   };
 
   const end = (stopped = false) =>
@@ -177,12 +209,15 @@ function Session() {
     if (saving) return;
     setSaving(true);
     try {
-    await outbox.add(
-      SESSION_FINISH,
-      { id, completion: completionOf(steps, d.logs, d.stopped), endedAt: new Date(d.endedAt ?? Date.now()).toISOString(), feeling: d.feeling, note: d.note },
-      1, // a session row is created at version 1 and this is its first and only edit
-    );
-    await closeSession(user.id, id);
+      if (!finishKey.current) {
+        const item = await outbox.add(
+          SESSION_FINISH,
+          { id, completion: completionOf(steps, d.logs, d.stopped), endedAt: new Date(d.endedAt ?? Date.now()).toISOString(), feeling: d.feeling, note: d.note },
+          1, // a session row is created at version 1 and this is its first and only edit
+        );
+        finishKey.current = item.idempotencyKey;
+      }
+      await closeSession(user.id, id);
     } catch {
       setWriteFailed(true);
       setSaving(false);
@@ -206,7 +241,7 @@ function Session() {
             icon={<CircleAlert className="size-5 shrink-0 text-text-2" aria-hidden />}
             action={<DButton size="sm" variant="outline" onClick={retryWrite}>Try again</DButton>}
           >
-            This browser isn't keeping data between visits (private mode or storage full). Logging still works while this tab is open.{pendingSet && " That set wasn't logged."}
+            {bannerText}
           </Banner>
         )}
 
@@ -298,7 +333,7 @@ function Session() {
           icon={<CircleAlert className="size-5 shrink-0 text-text-2" aria-hidden />}
           action={<DButton size="sm" variant="outline" onClick={retryWrite}>Try again</DButton>}
         >
-          This browser isn't keeping data between visits (private mode or storage full). Logging still works while this tab is open.{pendingSet && " That set wasn't logged."}
+          {bannerText}
         </Banner>
       )}
 
