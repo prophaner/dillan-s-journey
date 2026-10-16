@@ -22,3 +22,6 @@
 - Schema lives in docs/phase0-schema.sql (applied); every UPDATE must send the version it read, built via src/lib/updates.ts or outbox kind "update:<table>" with expectedVersion. Why: DB trigger enforces optimistic concurrency only when a version is sent.
 - The service-role key is read from the sandbox environment at test time only (RUN_RLS_TESTS=1); never write it to .env or any repo file. Why: repo is public.
 - Routine edits never update a version: "routine:save_version" inserts version N+1 (client-made id, blocks, then locked_at) via src/lib/plan.server.ts; an unsent save is what loadRoutine returns. Why: AT-03, past snapshots untouched, Train works offline after an edit.
+
+- Profile/equipment/limitation edits go through outbox kinds update:profiles|equipment_items|limitations ({id, patch}) validated by src/lib/profile.ts; a second change to a row whose first is still unsent is merged into it (queueRowUpdate). Why: one version read per change, no self-conflict offline.
+- Units live in profiles.preferences.units (old weight_unit/length_unit columns kept in step) and change display only. Why: entries keep the unit they were typed in (AT-22).

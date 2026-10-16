@@ -31,10 +31,12 @@ Vision: Personal Gym, Personal Coach. Data driven: measure, analyze, improve.
   - Verified on phone: no
 - [x] S21 Your data, S20 first-visit offline, all states incl. conflict card (AT-29…36)
   - Verified on phone: no
-- [ ] Profile and Settings shells: equipment, goals, limitations, units; Your data section (FR-01, FR-17)
+- [x] Profile and Settings shells: equipment, limitations, availability, experience, units, time zone; Your data in Settings (FR-01, FR-04, FR-09, FR-17)
+  - Verified on phone: no
+- [ ] Start of week applied to Today's course strip and Progress steady weeks (stored, not yet used)
 - [ ] Exercise preferences: avoid / prefer with reason; swap alternatives honor them (FR-01, FR-08) — from docs/product/fitbod-feature-map.md
 - [ ] Log a past session from Train: date, time, exercises, sets; "Entered by you" (FR-07, FR-16)
-- [ ] S12 asks experience; Profile: experience, specific training days, start of week (FR-01)
+- [ ] S12 asks experience (Profile already has experience, training days, start of week)
 - [ ] Equipment locations and temporary availability; unavailable-gear note on Today (FR-04)
 - [ ] S04: a changed set prefills the next set (FR-07)
 - [ ] Duration-type sets and timed intervals in S04 and the routine editor (FR-05, FR-07)
