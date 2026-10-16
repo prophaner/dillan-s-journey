@@ -169,12 +169,12 @@ export async function drain(accountId: string, send: (item: OutboxItem) => Promi
       const fresh = (await d.get("outbox", item.localId)) as OutboxItem | undefined;
       if (!fresh || fresh.status !== "local") continue;
       sendingId = item.localId;
-      const res = await send(item).catch(
+      const res = await send(fresh).catch(
         (e: unknown): SendResult => ({ ok: false, reason: "retry", message: String(e) }),
       ).finally(() => { sendingId = null; });
       if (!res.ok && sid) blocked.add(sid);
       if (res.ok) {
-        await d.put("outbox", { ...item, status: "synced", syncedAt: Date.now(), error: undefined });
+        await d.put("outbox", { ...fresh, status: "synced", syncedAt: Date.now(), error: undefined });
         if (item.kind === "routine:save_version") unsentSaves.delete((item.payload as { id?: string } | null)?.id ?? "");
       } else if (res.reason === "offline") {
         break;
@@ -182,14 +182,14 @@ export async function drain(accountId: string, send: (item: OutboxItem) => Promi
         // Server reachable but no durable storage yet: stay local, don't burn retries.
         continue;
       } else {
-        const attempts = item.attempts + 1;
+        const attempts = fresh.attempts + 1;
         const status: OutboxStatus =
           res.reason === "conflict"
             ? "conflict"
             : res.reason === "permanent" || attempts >= MAX_ATTEMPTS
               ? "failed"
               : "local";
-        await d.put("outbox", { ...item, attempts, status, error: res.message });
+        await d.put("outbox", { ...fresh, attempts, status, error: res.message });
       }
       emit();
     }
