@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { deleteDraft, listDraftKeys, loadDraft, saveDraft } from "./outbox";
+import { applyTimePlan, type TimeChoice } from "./time-plan";
 import { localDate, type LoggedSet, type PlanSnapshot, type Prescription, type Swaps } from "./workout";
 
 /** Everything a running session needs, kept in IndexedDB so reloads and locked screens lose nothing. */
@@ -37,14 +38,14 @@ export async function loadRoutine(uid: string): Promise<PlanSnapshot | null> {
   try {
     const { data, error } = await supabase
       .from("routine_template_versions")
-      .select("id, routine_id, version_no, title, is_demo, routine_blocks(position, block_type, priority, rounds, rest_seconds, prescriptions)")
+      .select("id, routine_id, version_no, title, purpose, is_demo, routine_blocks(position, block_type, priority, rounds, rest_seconds, prescriptions)")
       .eq("owner_id", uid).eq("status", "approved").is("archived_at", null)
       .order("is_demo", { ascending: true }).order("created_at", { ascending: false }).limit(1);
     if (error) throw error;
     const v = data?.[0];
     const snap: PlanSnapshot | null = v
       ? {
-          templateVersionId: v.id, routineId: v.routine_id, versionNo: v.version_no, title: v.title, isDemo: v.is_demo,
+          templateVersionId: v.id, routineId: v.routine_id, versionNo: v.version_no, title: v.title, isDemo: v.is_demo, purpose: v.purpose ?? null,
           blocks: (v.routine_blocks ?? []).map((b) => ({
             position: b.position, blockType: b.block_type, priority: b.priority, rounds: b.rounds,
             restSeconds: b.rest_seconds, prescriptions: (b.prescriptions as unknown as Prescription[]) ?? [],
@@ -104,6 +105,24 @@ export async function loadExercises(uid: string): Promise<{ id: string; name: st
   }
 }
 
+/** Undo of a discard: put the session back on this device exactly as it was. */
+export async function restoreSession(uid: string, d: SessionDraft) {
+  await saveSession(uid, d);
+  await saveDraft(activeKey(uid), d.id);
+}
+
+export interface WeekSession { local_date: string; completion: string; shortened: boolean }
+/** This week's sessions (Mon–Sun, your local dates) for the Course strip. */
+export async function loadWeek(uid: string, monday: string, sunday: string): Promise<WeekSession[]> {
+  const { data, error } = await supabase.from("sessions").select("local_date, completion, plan_snapshot")
+    .eq("owner_id", uid).gte("local_date", monday).lte("local_date", sunday).limit(30);
+  if (error) throw error;
+  return (data ?? []).map((s) => ({
+    local_date: s.local_date, completion: s.completion,
+    shortened: ((s.plan_snapshot as { timePlan?: { choice?: string } } | null)?.timePlan?.choice ?? "full") !== "full",
+  }));
+}
+
 export async function closeSession(uid: string, id: string) {
   await deleteDraft(activeKey(uid));
   await deleteDraft(draftKey(uid, id));
@@ -114,14 +133,18 @@ export async function beginSession(
   uid: string,
   snapshot: PlanSnapshot,
   enqueue: (kind: string, payload: unknown) => Promise<unknown>,
+  choice: TimeChoice = "full",
 ): Promise<string> {
   const existing = await getActiveSession(uid);
   if (existing) return existing.id;
+  // Full plan stays in the snapshot; the chosen time plan records what's left out (AT-04).
+  snapshot = applyTimePlan(snapshot, choice);
   const id = crypto.randomUUID();
   const now = Date.now();
   const ids = snapshot.blocks.flatMap((b) => b.prescriptions.map((p) => p.exercise_id)).filter(Boolean);
   const last = await lastValues(uid, ids).catch(() => ({}));
-  const first = snapshot.blocks[0]?.prescriptions[0];
+  const omitted = new Set(snapshot.timePlan?.omittedPositions ?? []);
+  const first = [...snapshot.blocks].sort((a, b) => a.position - b.position).find((b) => !omitted.has(b.position))?.prescriptions[0];
   const draft: SessionDraft = {
     id, snapshot, startedAt: now, stepIndex: 0, logs: [], restStartedAt: null, restTotalMs: 0,
     phase: "training", stopped: false, endedAt: null, last,

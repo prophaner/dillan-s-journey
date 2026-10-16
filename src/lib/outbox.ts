@@ -129,9 +129,13 @@ export async function unsyncedCount(accountId: string) {
 }
 
 let draining = false;
+let sendingId: string | null = null;
+/** A discard waits this long before it is sent, so "Undo" can take it back while it's still local. */
+export const DISCARD_HOLD_MS = 8000;
 
 /** Send pending items in order. Safe to call repeatedly; one drain at a time. */
-export async function drain(accountId: string, send: (item: OutboxItem) => Promise<SendResult>) {
+export async function drain(accountId: string, send: (item: OutboxItem) => Promise<SendResult>, opts: { discardHoldMs?: number } = {}) {
+  const hold = opts.discardHoldMs ?? 0;
   if (draining) return;
   draining = true;
   try {
@@ -146,9 +150,14 @@ export async function drain(accountId: string, send: (item: OutboxItem) => Promi
         continue;
       }
       if (sid && blocked.has(sid)) continue;
+      if (item.kind === "delete:sessions" && Date.now() - item.createdAt < hold) {
+        if (sid) blocked.add(sid);
+        continue;
+      }
+      sendingId = item.localId;
       const res = await send(item).catch(
         (e: unknown): SendResult => ({ ok: false, reason: "retry", message: String(e) }),
-      );
+      ).finally(() => { sendingId = null; });
       if (!res.ok && sid) blocked.add(sid);
       if (res.ok) {
         await d.put("outbox", { ...item, status: "synced", syncedAt: Date.now(), error: undefined });
@@ -181,6 +190,17 @@ export async function retryItem(localId: string) {
     await d.put("outbox", { ...item, status: "local", attempts: 0 });
     emit();
   }
+}
+
+/** Take back an item that hasn't left this device. False if it is being sent or already sent. */
+export async function removeIfLocal(localId: string): Promise<boolean> {
+  if (sendingId === localId) return false;
+  const d = await db();
+  const item = (await d.get("outbox", localId)) as OutboxItem | undefined;
+  if (!item || item.status === "synced") return false;
+  await d.delete("outbox", localId);
+  emit();
+  return true;
 }
 
 /** Put this account's failed/conflict items back in the queue. */

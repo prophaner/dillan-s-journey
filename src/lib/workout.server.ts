@@ -16,6 +16,9 @@ export async function storeSessionStart(sb: SB, userId: string, key: string, raw
   if (!uuid(p?.id) || !uuid(p.snapshot?.templateVersionId) || !/^\d{4}-\d{2}-\d{2}$/.test(p.localDate)) {
     throw new Error("400 bad session");
   }
+  const tp = p.snapshot.timePlan;
+  if (tp !== undefined && (!["full", "short", "priority"].includes(tp?.choice) || !Array.isArray(tp.omittedPositions)
+    || !tp.omittedPositions.every((n) => Number.isInteger(n)))) throw new Error("400 bad time plan");
   // The plan version must be the caller's own (RLS hides anyone else's).
   const { data: v, error: vErr } = await sb
     .from("routine_template_versions").select("id, is_demo").eq("id", p.snapshot.templateVersionId).maybeSingle();
@@ -110,6 +113,11 @@ export async function discardSession(sb: SB, userId: string, raw: unknown) {
   fail(error, "session discard");
 }
 
+/** limitations.context for a session report: session id and local date first, then your note. */
+export function offReportContext(sessionId: string, day: string, tz: string | null, note: string) {
+  return `Session ${sessionId} · ${day}${tz ? ` (${tz})` : ""}${note ? ` · ${note}` : ""}`;
+}
+
 const AREAS = ["shoulder", "elbow", "wrist", "neck", "back", "hip", "knee", "ankle", "other"];
 const ACTION_WORDS: Record<string, string> = { stop_exercise: "stopped this exercise", gentler: "tried a gentler option", end_session: "ended the session" };
 
@@ -118,18 +126,22 @@ const ACTION_WORDS: Record<string, string> = { stop_exercise: "stopped this exer
  * origin "session", linked to the exercise. Replays of the same key store nothing new.
  */
 export async function storeOffReport(sb: SB, userId: string, key: string, raw: unknown) {
-  const p = raw as { sessionId?: unknown; exerciseId?: unknown; area?: unknown; side?: unknown; note?: unknown; action?: unknown; reportedAt?: unknown };
+  const p = raw as { sessionId?: unknown; exerciseId?: unknown; area?: unknown; side?: unknown; note?: unknown; action?: unknown; reportedAt?: unknown; localDate?: unknown; timezone?: unknown };
   if (!uuid(p?.sessionId) || !uuid(p.exerciseId) || typeof p.action !== "string" || !ACTION_WORDS[p.action]) throw new Error("400 bad report");
   const area = typeof p.area === "string" && AREAS.includes(p.area.toLowerCase()) ? p.area.toLowerCase() : null;
   const side = p.side === "left" || p.side === "right" || p.side === "both" ? p.side : null;
   const note = typeof p.note === "string" ? p.note.trim().slice(0, 140) : "";
   const at = typeof p.reportedAt === "string" && !Number.isNaN(Date.parse(p.reportedAt)) ? p.reportedAt : new Date().toISOString();
+  // Dated by the calendar day where you were, like sessions; UTC only as a fallback.
+  const day = typeof p.localDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(p.localDate) ? p.localDate : at.slice(0, 10);
+  const tz = typeof p.timezone === "string" ? p.timezone.slice(0, 64) : null;
   const { data: ex, error: exErr } = await sb.from("exercises").select("id").eq("id", p.exerciseId as string).maybeSingle();
   fail(exErr, "exercise read");
   if (!ex) throw new Error("400 exercise not found");
 
   const { error } = await sb.from("limitations").upsert({
-    owner_id: userId, category: "discomfort", location: area, side, context: note || null,
+    owner_id: userId, category: "discomfort", location: area, side,
+    context: offReportContext(p.sessionId as string, day, tz, note),
     status: "active", origin: "session", source: "user", idempotency_key: key,
   }, idem);
   fail(error, "limitation insert");
@@ -144,7 +156,7 @@ export async function storeOffReport(sb: SB, userId: string, key: string, raw: u
   if (link) return;
   const { error: iErr } = await sb.from("limitation_links").insert({
     owner_id: userId, limitation_id: lim.id, exercise_id: ex.id,
-    relationship_note: `Felt off on ${at.slice(0, 10)} · you ${ACTION_WORDS[p.action]}.`,
+    relationship_note: `Felt off on ${day} · you ${ACTION_WORDS[p.action]}.`,
   });
   fail(iErr, "link insert");
 }

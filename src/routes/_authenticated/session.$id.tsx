@@ -1,20 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeftRight, Check, CircleAlert, Hand, Minus, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Check, CircleAlert, CircleStop, Hand, Minus, Pencil, Plus, SkipForward, Trash2 } from "lucide-react";
 import { pageHead } from "@/lib/head";
 import { sessionSaveState, useOutbox } from "@/lib/use-outbox";
 import { elapsedMs, formatClock, remainingMs, useNow, useWakeLock } from "@/lib/timer";
-import { closeSession, draftKey, lastValues, loadExercises, saveSession, type SessionDraft } from "@/lib/workout-store";
-import { listItems, loadDraft, sessionOf } from "@/lib/outbox";
+import { closeSession, draftKey, lastValues, loadExercises, restoreSession, saveSession, type SessionDraft } from "@/lib/workout-store";
+import { listItems, loadDraft, removeIfLocal, sessionOf } from "@/lib/outbox";
+import { blockName, choiceLabel, listOf } from "@/lib/time-plan";
 import {
-  activeTurns, applySwaps, completionOf, OFF_AREAS, OFF_SIDES, reconcileLogs, SESSION_OFF_REPORT, type OffAction, headlineFor, isDoubleTap, nextTurn, SESSION_DISCARD, SESSION_FINISH, SET_LOG, SET_LOG_DELETE,
+  activeTurns, applySwaps, completionOf, localDate, OFF_AREAS, OFF_SIDES, reconcileLogs, SESSION_OFF_REPORT, type OffAction, headlineFor, isDoubleTap, nextTurn, SESSION_DISCARD, SESSION_FINISH, SET_LOG, SET_LOG_DELETE,
   SET_LOG_EDIT, stepResult, stepsOf, supersetPattern, turnsOf, type LoggedSet, type Step,
 } from "@/lib/workout";
 import { DButton } from "@/components/dillan/button";
 import { Chip, DemoLabel, SaveState, StatusTag } from "@/components/dillan/tags";
 import { NumericInput, RestTimer, SetPips } from "@/components/dillan/training-pieces";
 import { Sheet, StickyActions, useToast } from "@/components/dillan/overlays";
-import { Banner, Card, ScreenState } from "@/components/dillan/surfaces";
+import { Banner, Card, OptionRow, ScreenState } from "@/components/dillan/surfaces";
 import { SpotMark } from "@/components/dillan/spot-mark";
 
 export const Route = createFileRoute("/_authenticated/session/$id")({
@@ -50,6 +51,7 @@ function Session() {
   const pendingUndoRef = useRef<LoggedSet | null>(null);
   const setPendingUndo = (v: LoggedSet | null) => { pendingUndoRef.current = v; setPendingUndoState(v); };
   const inFlight = useRef(false);
+  const offBusy = useRef(false);
   type Vals = SessionDraft["inputs"];
   const [editing, setEditing] = useState<LoggedSet | null>(null);
   const [editVals, setEditVals] = useState<Vals>({ reps: 0, load: null, rir: null });
@@ -100,6 +102,9 @@ function Session() {
   const stepIndex = turn?.stepIndex ?? steps.length - 1;
   const restLeft = d?.restStartedAt ? remainingMs(d.restStartedAt, d.restTotalMs, now) : 0;
   const resting = !!d && d.phase === "training" && d.restStartedAt !== null && restLeft > 0;
+  // During rest, "Something feels off" is about the exercise just performed, not the next one.
+  const lastLog = d?.logs[d.logs.length - 1];
+  const offStep: Step | undefined = (resting && lastLog && steps.find((s) => s.ref === lastLog.ref)) || turn?.step || steps[steps.length - 1];
 
   // Desktop tab shows the countdown (S05).
   useEffect(() => {
@@ -264,8 +269,10 @@ function Session() {
       const version = log.version ?? 1;
       await outbox.add(SET_LOG_EDIT, { sessionId: id, setKey: log.key, ...editVals }, version);
       const logs = d.logs.map((l) => (l.key === log.key ? { ...l, ...editVals, version: version + 1 } : l));
-      await saveSession(user.id, { ...d, logs });
-      setD({ ...d, logs });
+      // The corrected values become the starting point for the next set of this exercise.
+      const next = { ...d, logs, inputsByRef: { ...d.inputsByRef, [log.ref]: { ...editVals } } };
+      await saveSession(user.id, next);
+      setD(next);
       setEditing(null);
       draftSaved();
       toast({ text: `Set ${log.setNo} changed · saved on this device` });
@@ -299,6 +306,15 @@ function Session() {
 
   /** S11: queue the dated note. The chosen action has already happened. */
   const queueReport = async (r: { payload: Record<string, unknown>; exerciseName: string }) => {
+    if (offBusy.current) return;
+    offBusy.current = true;
+    try {
+      await queueReportOnce(r);
+    } finally {
+      offBusy.current = false;
+    }
+  };
+  const queueReportOnce = async (r: { payload: Record<string, unknown>; exerciseName: string }) => {
     let item;
     try {
       item = await outbox.add(SESSION_OFF_REPORT, r.payload);
@@ -314,14 +330,20 @@ function Session() {
 
   /** Takes effect on tap: no confirmation (S11, AT-05). */
   const offAction = (action: OffAction) => {
+    if (offBusy.current) return; // two fast taps make one report
     setOffSheet(false);
+    const os = offStep ?? step;
+    const at = new Date();
     const r = {
-      exerciseName: step.name,
-      payload: { sessionId: id, exerciseId: step.exerciseId, area: offArea, side: offArea ? offSide : null, note: offNote.trim(), action, reportedAt: new Date().toISOString() },
+      exerciseName: os.name,
+      payload: {
+        sessionId: id, exerciseId: os.exerciseId, area: offArea, side: offArea ? offSide : null, note: offNote.trim(), action,
+        reportedAt: at.toISOString(), localDate: localDate(at), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      },
     };
     if (action === "end_session") end(true);
     else if (action === "stop_exercise") {
-      update((c) => ({ skipped: [...new Set([...(c.skipped ?? []), step.ref])], restStartedAt: null }));
+      update((c) => ({ skipped: [...new Set([...(c.skipped ?? []), os.ref])], restStartedAt: null }));
       if (editing) setEditing(null);
     }
     setOffArea(null); setOffSide(null); setOffNote("");
@@ -332,15 +354,26 @@ function Session() {
   const discard = async () => {
     if (saving || finishItem || finishKey.current) return;
     setSaving(true);
+    const before = d;
+    let item = discardItem;
     try {
-      if (!discardItem) await outbox.add(SESSION_DISCARD, { sessionId: id });
+      if (!item) item = await outbox.add(SESSION_DISCARD, { sessionId: id });
       await closeSession(user.id, id);
     } catch {
       setWriteFailed(true);
       setSaving(false);
       return;
     }
-    toast({ text: "Session discarded" });
+    const queued = item;
+    toast({
+      text: "Session discarded",
+      // Undo works while the discard is still on this device (it waits a few seconds before sending).
+      undo: () => void (async () => {
+        if (!(await removeIfLocal(queued.localId))) { toast({ text: "Already discarded on the server" }); return; }
+        await restoreSession(user.id, before);
+        void navigate({ to: "/session/$id", params: { id } });
+      })(),
+    });
     void navigate({ to: "/train" });
   };
 
@@ -373,6 +406,7 @@ function Session() {
   // ---------- S07 · Session complete ----------
   if (d.phase === "done") {
     const completion = completionOf(steps, d.logs, d.stopped);
+    const tp = d.snapshot.timePlan;
     const minutes = Math.max(1, Math.round(((d.endedAt ?? Date.now()) - d.startedAt) / 60000));
     return (
       <div className="mx-auto flex min-h-dvh max-w-[640px] flex-col px-margin pb-6 pt-[calc(var(--safe-t)+32px)]">
@@ -389,7 +423,17 @@ function Session() {
           </Banner>
         )}
 
-        <ul className="mt-6 flex flex-col gap-2">
+        {tp && tp.choice !== "full" && (
+          <Card className="mt-6">
+            <p className="text-footnote font-bold uppercase tracking-wide text-text-2">{choiceLabel[tp.choice]} plan</p>
+            <p className="mt-1 text-subhead">
+              Kept {listOf(d.snapshot.blocks.filter((b) => !tp.omittedPositions.includes(b.position)).sort((a, b) => a.position - b.position).map(blockName))}.
+              {tp.omittedPositions.length > 0 && ` Left out ${listOf(d.snapshot.blocks.filter((b) => tp.omittedPositions.includes(b.position)).sort((a, b) => a.position - b.position).map(blockName))} today.`}
+            </p>
+            <p className="mt-1 text-footnote text-text-2">Your full plan v{d.snapshot.versionNo} is unchanged.</p>
+          </Card>
+        )}
+        <ul className="mt-4 flex flex-col gap-2">
           {steps.map((s) => {
             const r = stepResult(s, d.logs);
             return (
@@ -642,9 +686,11 @@ function Session() {
       <Sheet open={offSheet} onClose={() => setOffSheet(false)} title="Stop or adjust. Your call.">
         <p className="text-subhead text-text-2">Your sets so far are saved.</p>
         <div className="mt-4 flex flex-col gap-2">
-          {!allDone && <DButton variant="secondary" onClick={() => offAction("stop_exercise")}>Stop this exercise</DButton>}
-          {/* "Try a gentler option" appears only when a reviewed alternative exists; none are stored yet. */}
-          <DButton variant="secondary" onClick={() => offAction("end_session")}>End the session</DButton>
+          {!allDone && (
+            <OptionRow icon={<SkipForward className="size-6" aria-hidden />} title="Stop this exercise" detail="Skip ahead. Sets you've done stay saved." trailing={null} onClick={() => offAction("stop_exercise")} />
+          )}
+          {/* "Try a gentler option" (OptionRow, Feather icon) appears only when a reviewed alternative exists; none are stored yet. */}
+          <OptionRow icon={<CircleStop className="size-6" aria-hidden />} title="End the session" detail="Stops here and keeps everything you logged." trailing={null} onClick={() => offAction("end_session")} />
         </div>
         <fieldset className="mt-5">
           <legend className="text-subhead font-bold">Where? <span className="font-normal text-text-2">· optional</span></legend>
@@ -665,7 +711,7 @@ function Session() {
         <input id="off-note" type="text" maxLength={140} value={offNote} onChange={(e) => setOffNote(e.target.value)} placeholder="What did you notice?"
           className="mt-2 h-12 w-full rounded-btn border border-line bg-surface px-3 text-body" />
         <Banner className="mt-4">
-          Saved as a dated note on {step.name}, not a diagnosis. If pain is sharp, getting worse, or comes with numbness or swelling, stop and get it checked by a clinician.
+          Saved as a dated note on {offStep?.name ?? step.name}, not a diagnosis. If pain is sharp, getting worse, or comes with numbness or swelling, stop and get it checked by a clinician.
           <span className="mt-1 block text-footnote font-bold">Placeholder wording · to be reviewed before release</span>
         </Banner>
         <DButton variant="quiet" size="md" className="mt-2 w-full" onClick={() => setOffSheet(false)}>Keep going</DButton>
