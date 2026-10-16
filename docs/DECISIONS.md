@@ -12,6 +12,12 @@ Decision:
 Consequence:
 ```
 
+## 2026-10-16 — Goal level Improve / Maintain / Defer lives on goals.level
+Question: Where does the FR-02 level live?
+Options: (a) a goals.level column (migration 0004), set in the Plan slice; (b) a periodic-review table later.
+Decision: (a), decided by the lead under the owner's standalone delegation; migration 0004 approved by schema-guardian on 2026-10-16 and applied.
+Consequence: Plan sets the level per goal; S08 reads it. The brief names the three levels without defining them; the manual gives plain meanings and Dillan does not plan around the level yet.
+
 ## 2026-10-16 — Lead runs the cycle standalone through Phase 3
 Question: How much of the review–fix–accept loop does the owner want to approve by hand?
 Options: (a) owner approves each verdict, merge and prompt; (b) lead decides and acts, stopping only for schema rejects, secrets, and decisions only the owner can make.
@@ -37,11 +43,17 @@ Options: (a) Lovable's rule: Short drops the optional blocks; Priority only keep
 Recommendation: (a) for Phase 1; add a priority flag with the routine editor.
 Consequence: Estimates are labelled as estimates on screen. A real priority block needs a schema change.
 
-## Goal level Improve / Maintain / Defer
-Question: Where does the FR-02 level live?
-Options: (a) a goals.level column (migration 0004), set in the Plan slice; (b) a periodic-review table later.
-Recommendation: (a) goals.level as nullable text with a check constraint, set in the Plan slice; S08 shows Not yet known until then.
-Consequence: schema-guardian review before it lands. S08 is accepted against FR-10 now, not FR-02.
+## Monetization (equipment and clothing offers, paid live coaching classes)
+Question: When and how?
+Options: (a) after the core coaching loop ships (brief §17 item 9 forbids billing before then); (b) now.
+Recommendation: (a), post-launch, Phase 5 or later. The coach access and proposal model already supports paid coaching without a schema change.
+Consequence: No billing code before the Phase 3 exit gate.
+
+## AI analysis of recorded exercise videos
+Question: Build AI form feedback from video?
+Options: (a) AI analysis; (b) video to a human coach only.
+Recommendation: (b), unless the brief's §17 item 8 ("do not imply form recognition") is changed by the owner.
+Consequence: The Phase 5 roadmap line covers human-coach video only.
 
 ## Lovable is the only product coder
 Question: Should Claude Code subagents patch product code directly when Lovable fails a fix?

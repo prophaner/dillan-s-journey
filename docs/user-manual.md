@@ -26,10 +26,10 @@ The strip needs this week's sessions from the server. Until they load, or if the
 What each choice keeps:
 
 - **Full** keeps every block.
-- **Short** keeps the main blocks and leaves out the optional ones. If your plan has no main blocks, it keeps the first block.
-- **Priority only** keeps only the first main block, the one tagged Priority, and leaves out the rest.
+- **Short** keeps the required and priority blocks and leaves out the optional ones. If your plan has only optional blocks, it keeps the first block.
+- **Priority only** keeps only the block marked Priority, and leaves out the rest.
 
-Your routine does not have a priority block of its own yet, so Dillan treats the first main block as the priority.
+You mark the priority block in the Plan editor. If no block is marked, Dillan treats the first required block as the priority.
 
 **The minutes are estimates.** Dillan counts about a minute of setup per exercise, 45 seconds per set, and the rest from your plan between sets (90 seconds when the plan does not say). In a superset he counts the transition between exercises as well (20 seconds when the plan does not say). The card says so: "Estimates include setup and rest. Your pace decides the real time." The session clock is what counts.
 
@@ -86,7 +86,7 @@ The Session screen runs one exercise at a time: log a set, rest, log the next on
 
 ### The set screen
 
-At the top: an **End** button, your routine name, and the time since you started. Below that, a thin bar with one segment per exercise shows where you are. Then the exercise: a Main or Optional tag, "Exercise N of M" (or "Round N of M" in a superset), the save word for this session, and the name with the plan line (sets × reps, and the weight if there is one). Until you log the first set of an exercise, a **Swap** button sits next to its name. A row of set pips shows which sets are done and which one is next; under it, once a set is done, "Tap a done set to change it."
+At the top: an **End** button, your routine name, and the time since you started. Below that, a thin bar with one segment per exercise shows where you are. Then the exercise: a Main, Priority or Optional tag, "Exercise N of M" (or "Round N of M" in a superset), the save word for this session, and the name with the plan line (sets × reps, and the weight if there is one). Until you log the first set of an exercise, a **Swap** button sits next to its name. A row of set pips shows which sets are done and which one is next; under it, once a set is done, "Tap a done set to change it."
 
 **Reps** and **Load** have big minus and plus buttons. Reps move by 1. Load moves by 2.5 and takes decimals. Tap the number itself to type it. Under each number you see "last time N" when Dillan has a previous value for that exercise, or "—" when he does not. Reps and load start from the plan; if the plan has no value, they start from what you logged last time.
 
@@ -207,7 +207,7 @@ One card per active goal, in priority order, then the Steady weeks card. On a de
 
 **A goal card**, top to bottom:
 
-- A **Level not yet known** tag. Whether a goal is set to Improve, Maintain or Defer is not stored yet, so Dillan does not guess.
+- The goal's level this period: an **Improve**, **Maintain** or **Defer** tag, set on the Plan screen. Until you set one, the tag reads **Level not yet known**; Dillan does not guess.
 - "Goal N of M".
 - The goal in your words, or its title.
 - A big number: your latest measurement for what the goal tracks (for example weight), in the goal's unit, with its date. If there is no entry yet, you see "—" with the Not yet known tag.
@@ -218,7 +218,7 @@ One card per active goal, in priority order, then the Steady weeks card. On a de
 
 If the goals cannot load: "Couldn't load your goals" with Try again. If you have none: "No goals yet. Goals you add in onboarding or your profile show here."
 
-**Steady weeks.** A card with a "Habit" tag and your weekly target ("3 sessions a week", or "Weekly target not set"). The heading reads **Steady weeks N of 7**: the last eight weeks, with the current week shown as "now" and never counted against you. A week is steady when the sessions you logged in it reach your weekly target; finished, shortened and unfinished sessions all count. If your weekly target is not set, the count shows Not yet known, and the dots still show what happened.
+**Steady weeks.** A card with a "Habit" tag and your weekly target ("3 sessions a week", or "Weekly target not set"). The heading reads **Steady weeks N of M**: the last eight weeks, with the current week shown as "now" and never counted against you. Weeks before your first session do not count either, so M grows as you go, up to 7. A week is steady when the sessions you logged in it reach your weekly target; finished, shortened and unfinished sessions all count. If your weekly target is not set, or you have no finished session yet, the count shows Not yet known, and the dots still show what happened.
 
 Under the heading, one column per week, labelled with the Monday's date. Each dot is a session: a filled dot is Done, a half-filled dot is Shortened, a dot with a dot inside is Logged, not finished. Empty rings fill the column up to your target. If the sessions cannot load, the heading shows Not yet known and a line reads "Couldn't load your sessions." or, offline, "Your weeks load when you're online."
 
@@ -226,7 +226,7 @@ Under the heading, one column per week, labelled with the Monday's date. Each do
 
 **Add a measurement** sits at the top; see Adding a measurement below. Under it, one card per thing you measure: Weight, Height, Waist, Hips, Arm / biceps, Thigh, or Other with the name you gave it. Arm and thigh are kept by side: a Left card and a Right card, never mixed. Each card shows your latest value in the unit from your profile (lb or kg, in or cm) and its date. If you entered it in another unit, a line says "Entered as 32.5 in". If the entry is still waiting on this device, its save word (Saved on this device or Didn't sync) takes the place of the date. With more than one entry, the card has the same chart as a goal card. On a desktop the cards sit in two columns.
 
-**BMI** has its own card with a **derived** tag. It is worked out from your latest weight and height, and shows "—" with Not yet known until both exist. The card says: "Worked out from your latest weight and height. It isn't a full picture of fitness."
+**BMI** has its own card with a **Derived** tag and the line "kg / m² · v1", which names the formula. It is worked out from your latest weight and height, and shows "—" with Not yet known until both exist. The card says: "Worked out from your latest weight and height. It isn't a full picture of fitness."
 
 If you have no measurements: "No measurements yet. Add one when you want to track it. Nothing here is required." If they cannot load and none are on this device: "Couldn't load measurements. Anything you add now is saved on this device." with Try again.
 
@@ -250,7 +250,83 @@ Two cards, both marked **Coming later**. Reviews: "Past goal reviews will appear
 Coming later.
 
 ## Plan
-Coming later.
+
+Plan shows the routine you train on, its versions, and the level you have set for each goal this period. From here you open the routine editor and a detail page for each exercise.
+
+### What it shows
+
+**The header.** The Plan title and the save word for everything waiting on this device: Saved on this device · N, Synced, or Didn't sync · N with **Retry**.
+
+**Your routine.** A card with an **In use** tag, "Version N", and a "Demo data" label when the routine is the sample one. Under the name: how many blocks it has and "about N min (estimate)" for the full session. Then one row per block: a dot (filled for a required block, a ring for an optional one, a marked dot for the priority block), the exercise names, and a line that reads Required, Priority or Optional, with "superset · N rounds" when the block is a superset. Under the list sits **Edit routine**.
+
+While the routine loads you see grey placeholders. If it cannot load: "Couldn't load your routine" with Try again. If you have none: "No routine yet. Add one in onboarding and it shows here."
+
+**How this plan works.** Your plan's purpose text in Dillan's voice, with "From your plan · vN" under it. If your plan has none: Not yet known, "Why this plan is built this way isn't written down yet."
+
+**Exercises in this routine.** One row per exercise. Tap one to open its detail page; see Exercise detail below. An exercise you added by name in the editor joins this list once that save has synced, because the server is what matches the name to the library.
+
+**Versions.** Newest first: vN with the date it was made, an **In use** tag on the version your sessions use, and a **Locked** tag on every version the server has stored. A locked version never changes again. A save that is still on this device sits at the top as vN+1 with its own save word. Under the list: "Saving an edit makes a new version. Sessions you've done keep the version they used." If the versions cannot load: "Couldn't load versions." or, offline, "Versions load when you're online."
+
+**Goals · this period.** One card per active goal, in your words, with three chips: **Improve**, **Maintain** and **Defer**.
+
+- **Improve** — this goal gets the work this period.
+- **Maintain** — hold where you are; keep it, do not push it.
+- **Defer** — set aside for now. It stays a goal.
+
+Until you pick one, the card reads "Level not yet set." The level you pick also shows as a tag on the goal's card in Progress. Dillan does not plan around the level yet; it is a record of your choice. A sample goal is marked "Demo data". If the goals cannot load: "Couldn't load your goals" with Try again. If you have none: "No goals yet. Goals you add in onboarding show here."
+
+### What you can do
+
+- **Set a goal's level.** Tap Improve, Maintain or Defer. It saves at once, through the same queue as your sets, and works offline. The card shows its own save word (Saved on this device, or Didn't sync with Retry) until the server confirms. Tap another chip to change your mind; only the last choice is sent. If this device cannot store it: "Couldn't save on this device. Nothing changed." If the same goal was changed on another device first, the change shows Didn't sync.
+- **Edit routine.** Opens the editor; see Editing your routine below.
+- **Open an exercise.** Tap its row, or its name inside the editor.
+
+On a desktop, at 1024 px and wider, Plan has two columns: the routine on the left, Versions and Goals on the right. On a phone everything is one column (unverified on a phone).
+
+### Editing your routine
+
+The editor is headed "Editing <routine name>" with a **Draft of vN+1** tag. A banner reads "Saving creates version N+1. Sessions you've already done keep version N exactly as it was." Every change is kept as a draft on this device as you go, so a reload, a locked screen or going offline loses nothing (unverified on a phone). The draft belongs to the version you started from; if that version changes, the draft is set aside. If this browser is not keeping data, a banner says "This browser isn't keeping data between visits (private mode or storage full). Your edits stay while this tab is open."
+
+The routine's name and purpose text cannot be changed here.
+
+**Blocks.** Each block is a card headed "Block N", with "· Superset" when it is one. Three chips set what the block is for:
+
+- **Required** — runs in Full and Short.
+- **Priority** — the one block Today keeps for Priority only. There can be only one, so marking a block Priority turns the previous one back to Required. If no block is marked, Today keeps the first required block.
+- **Optional** — left out in Short and Priority only.
+
+**Move up** and **Move down** swap the block with its neighbour, one place at a time. **Remove block** removes it at once. There is no Undo in the editor; Discard draft puts everything back to the saved version.
+
+**Exercise fields.** For each exercise: **Sets**, **Reps**, **Load** in your unit, and **Rest (s)**. Rest belongs to the block, so every exercise in a block shares it. Load takes decimals, and a comma works as a decimal point. An empty field means not set and shows "—". Sets must be between 1 and 20. Tap an exercise's name to open its detail page.
+
+**Supersets.** **Group with next** joins a block with the one under it into one superset. The rounds become the larger of the two set counts, and each exercise keeps its reps and load. A superset card shows **Rounds**, **Rest between (s)** — the pause from A to B, 20 seconds unless you change it — and **Round rest (s)**, the pause after the last exercise in the round. Each exercise in it carries a letter (A, B, …), its Reps and Load, and its own remove button. Rounds must be between 1 and 20. **Ungroup** splits the superset back into one block per exercise, each with as many sets as the superset had rounds.
+
+**Add an exercise.** Type a name under "Add an exercise" and tap **Add** (or press Enter). It becomes a new Required block at the end: 3 sets of 10, no load, the default rest. The line under it says "Matched to the exercise library by name; otherwise saved as your own exercise." The match happens when the save reaches the server.
+
+**Dillan's check.** Marked **Coming with Dillan**: "A check against your goals, limitations and equipment." Nothing is checked yet.
+
+**What changed from vN.** A plain list of your changes against the version you started from: "Added <exercise>", "Removed <exercise>", "<exercise>: reps 10 → 8", the same for sets, load and rest, "Required → Priority", "moved to position N", "now in a superset" or "no longer in a superset", and for a superset "<A + B>: rounds 3 → 4", "round rest" and "rest between". When nothing has changed it reads "Nothing yet." Under it, **Why** is optional, up to 300 characters, for example "Knee felt better with fewer reps"; it is stored with the new version. Anything that blocks saving is listed here too, for example "Add at least one exercise." or "<exercise>: sets must be 1–20."
+
+**Time estimate.** Minutes for Full, Short and Priority only, worked out the same way as on Today: "Minutes, estimated from sets, rest and setup." They update as you edit.
+
+**Save as vN+1.** Greyed out until something has changed and nothing blocks saving. On a keyboard, Ctrl+S or Cmd+S does the same. The save goes through the same queue as your sets: you see "Saved as vN+1 · saved on this device" and return to Plan, where the new version sits at the top of Versions with its save word. Train and Today use the new version right away, even offline. A session you start on it syncs after the version does, so the server never sees a session on a version it does not have. Sessions you have already done keep the version they used, exactly as it was.
+
+**Discard draft.** Throws the draft away and returns you to Plan. There is no question first. The saved version is untouched.
+
+### A save that did not sync
+
+If the server refuses the save — most often because a newer version was saved on another device — the Versions card shows vN+1 with Didn't sync and two buttons. **Keep editing** reopens the editor on the newest version with your blocks laid over it, so "What changed" is worked out against that version; save again as the next number. **Discard this save** removes it from this device. While a save shows Didn't sync, Train and Today use the version stored on the server, not your unsent one.
+
+### Exercise detail
+
+Opened from Plan or from the editor. A **Plan** link takes you back. Under the name sits a badge: **Reviewed** for a library exercise that has been reviewed, **Yours** for one you added, **Not reviewed** for a library exercise that has not been reviewed yet. A sample exercise is marked "Demo data".
+
+- **Intended emphasis** — the movement and the muscles the exercise aims at, or Not yet known. Under it: "What the exercise aims at. How it feels doesn't prove which muscles worked."
+- **Cues** — a short list, or Not yet known.
+- **Equipment** — what it needs, or Not yet known.
+- **Alternatives** — Not yet known: "No reviewed alternatives are stored yet."
+
+Exercise detail needs a connection. If it cannot load: "Couldn't load this exercise" with Try again. If the exercise no longer exists: "Exercise not found".
 
 ## Profile
 This section is not written yet.

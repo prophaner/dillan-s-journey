@@ -1,3 +1,5 @@
+Vision: Personal Gym, Personal Coach. Data driven: measure, analyze, improve.
+
 # Roadmap — Phase 0
 - [x] Docs copied into /docs and /design
 - [x] Tokens, three self-hosted fonts, Lucide, Night Gym
@@ -26,6 +28,7 @@
   - Verified on phone: no
 - [ ] "Why this is here" per block, Dillan's sentence, S03 check-in, missed-session card, custom time
 - [x] Plan + Routine editor (D02), exercise detail; transition rest editable (FR-05)
+  - Verified on phone: no
 - [ ] S21 Your data, S20 first-visit offline, all states incl. conflict card (AT-29…36)
 - [ ] Profile and Settings shells: equipment, goals, limitations, units; Your data section (FR-01, FR-17)
 - [ ] Exercise preferences: avoid / prefer with reason; swap alternatives honor them (FR-01, FR-08) — from docs/product/fitbod-feature-map.md
@@ -41,6 +44,7 @@
 # Phase 2
 - [ ] ai-reviewer agent added to .claude/agents before the first Phase 2 review
 - [ ] S09 Dillan chat + proposal card lifecycle (FR-12, §7.3)
+- [ ] Ask Dillan from the session screen with the current exercise as context; answers about cues and emphasis, never a plan change without a proposal card (FR-12, §7.3)
 - [ ] S10 Override sheet (FR-15)
 - [ ] S13 Directives, S14 Memory, periodic review (FR-13, FR-08, FR-11)
 - [ ] Dillan's sentence on Today replaces the stored purpose text, with fallback
@@ -51,8 +55,18 @@
 # Phase 3
 - [ ] Release gate: review the S11 escalation placeholder copy before release
 - [ ] S15 Coach workspace, coach invite, privacy & data (FR-14, FR-17)
+- [ ] Coach client overview: goals and levels, adherence, limitations with status, recent sessions, measurements; read-only within granted scopes (FR-14)
+- [ ] Coach program changes as proposals: coach edits a copy, client approves, Dillan reviews for conflicts; never self-applied (FR-14, §7.3)
+- [ ] Coach catch-up: coach notes to the client and a check-in request; client sees who wrote what and when (FR-14, FR-11)
+- [ ] Coach history view per client: session log, measurement trends, decisions and overrides; AI and human sources always labelled (FR-14)
 - [ ] S19 Install, S22 Reminders with push detection and email fallback, S23 Health data (FR-11, FR-16)
 - [ ] Offline / resume / update behavior tested against AT-29…36
+- [ ] Live session display: a /session/:id/display route for a TV browser or cast tab, synced from the phone (timers, sets, rest vs active); no sensors required
+
+# Phase 4 (optional data integrations)
+- [ ] Live heart rate from Web Bluetooth straps (Polar, Garmin, Wahoo) on Android and desktop Chrome; not iOS Safari; shown on the session display with provenance (FR-16)
+- [ ] Apple Watch / Fitbit: after-the-fact import only (export file or approved provider API); no native companion app (brief §15 Phase 4, §17 item 3)
 
 # Phase 5
 - [ ] Optional baseline assessments: reviewed protocols, versioned, skippable, no percentile or reminder dot (FR-01, FR-10)
+- [ ] Send a session video to your human coach for feedback; stored with consent and provenance (FR-14, FR-17)

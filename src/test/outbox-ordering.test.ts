@@ -20,6 +20,10 @@
  *   "Values convert correctly; comparability qualifications preserved"
  *   A measurement ("measurement:add") belongs to no session, so a stuck session chain must not hold it
  *   back, and a retry must replay the same idempotency key so reconnecting never duplicates it.
+ * brief §9.1: "A logged session points to the version actually performed; later template edits do not mutate it."
+ * brief §13 AT-03 (User edits routine after past workout): "Past session and prescription snapshot remain unchanged"
+ *   A session started on a routine version saved on this device ("routine:save_version") must not reach the
+ *   server before that version does, or the session would point at a version the server has never stored.
  *
  * jsdom has no IndexedDB and fake-indexeddb is not installed, so the `idb` module boundary is
  * replaced with an in-memory store below. Product code is exercised unchanged.
@@ -28,6 +32,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { drain, enqueue, listItems, nextSeq, retryAccount, sessionOf, type OutboxItem, type SendResult } from "@/lib/outbox";
 import { sessionSaveState } from "@/lib/use-outbox";
 import { MEASUREMENT_ADD } from "@/lib/measurements";
+import { ROUTINE_SAVE } from "@/lib/plan";
 import { SESSION_DISCARD, SESSION_FINISH, SESSION_START, SET_LOG, SET_LOG_DELETE, SET_LOG_EDIT } from "@/lib/workout";
 
 // Hoisted so tests can reach the in-memory store (e.g. to insert rows out of order).
@@ -369,6 +374,85 @@ describe("a measurement belongs to no session: it is not held behind a stuck ses
     expect(rows).toHaveLength(1);
     expect(rows[0]!.idempotencyKey).toBe(keyBefore);
     expect(rows[0]!.status).toBe("synced");
+  });
+});
+
+describe("a session started on a routine version that is not yet stored waits behind that save (§9.1 'points to the version actually performed', §10.2 ordered replay, AT-03)", () => {
+  const V = "00000000-0000-4000-8000-0000000000aa";
+  const savePayload = {
+    id: V, routineId: "00000000-0000-4000-8000-0000000000bb", baseVersionId: "00000000-0000-4000-8000-0000000000cc", baseVersionNo: 1,
+    title: "Full body", purpose: null, isDemo: false, reason: null,
+    blocks: [{ position: 1, blockType: "single", priority: "main", rounds: 1, restSeconds: 90, prescriptions: [{ exercise_id: "a", name: "Squat", sets: 3, reps: 10, load: null, unit: "lb" }] }],
+  };
+  const statuses = async (acct: string) => Object.fromEntries((await listItems(acct)).map((i) => [i.localId, i.status]));
+
+  it("pass 1 (save → retry): only the save is sent and the session's items stay local; pass 2: save, start, log replay in order", async () => {
+    const acct = "acct-save-chain";
+    const save = await enqueue(acct, ROUTINE_SAVE, savePayload);
+    const start = await enqueue(acct, SESSION_START, { id: "S", snapshot: { templateVersionId: V } });
+    const log = await enqueue(acct, SET_LOG, { sessionId: "S", id: "S1", reps: 8 });
+
+    let failSave = true;
+    const sent: OutboxItem[] = [];
+    const send = vi.fn(async (i: OutboxItem): Promise<SendResult> => {
+      sent.push(i);
+      if (failSave && i.localId === save.localId) return { ok: false, reason: "retry", message: "503" };
+      return { ok: true };
+    });
+
+    await drain(acct, send);
+    expect(sent.map((i) => i.localId)).toEqual([save.localId]);
+    const after1 = await statuses(acct);
+    expect(after1[save.localId]).toBe("local"); // a retry is not a failure
+    expect(after1[start.localId]).toBe("local");
+    expect(after1[log.localId]).toBe("local");
+
+    failSave = false;
+    sent.length = 0;
+    await drain(acct, send);
+    expect(sent.map((i) => i.localId)).toEqual([save.localId, start.localId, log.localId]);
+    expect(Object.values(await statuses(acct))).toEqual(["synced", "synced", "synced"]);
+    // The save replayed with the same idempotency key, so the server stores version V once.
+    const saveSends = send.mock.calls.map((c) => c[0]).filter((i) => i.localId === save.localId);
+    expect(saveSends.map((i) => i.idempotencyKey)).toEqual([save.idempotencyKey, save.idempotencyKey]);
+    expect(saveSends.map((i) => (i.payload as { id: string }).id)).toEqual([V, V]);
+  });
+
+  it("save → conflict: the session's items stay local across three further drains and are sent only after Retry and a successful save", async () => {
+    const acct = "acct-save-conflict";
+    const save = await enqueue(acct, ROUTINE_SAVE, savePayload);
+    const start = await enqueue(acct, SESSION_START, { id: "S", snapshot: { templateVersionId: V } });
+    const log = await enqueue(acct, SET_LOG, { sessionId: "S", id: "S1", reps: 8 });
+
+    const firstPass: string[] = [];
+    await drain(acct, async (i): Promise<SendResult> => {
+      firstPass.push(i.localId);
+      return i.localId === save.localId ? { ok: false, reason: "conflict", message: "409" } : { ok: true };
+    });
+    expect(firstPass).toEqual([save.localId]);
+    const after1 = await statuses(acct);
+    expect(after1[save.localId]).toBe("conflict");
+    expect(after1[start.localId]).toBe("local");
+    expect(after1[log.localId]).toBe("local");
+
+    // Even a server that would now accept anything gets nothing: the conflict needs an explicit Retry,
+    // and the session must not run ahead of the version it points to.
+    const send = vi.fn(async (_i: OutboxItem): Promise<SendResult> => ({ ok: true }));
+    await drain(acct, send);
+    await drain(acct, send);
+    await drain(acct, send);
+    expect(send).toHaveBeenCalledTimes(0);
+    const after4 = await statuses(acct);
+    expect(after4[save.localId]).toBe("conflict");
+    expect(after4[start.localId]).toBe("local");
+    expect(after4[log.localId]).toBe("local");
+
+    await retryAccount(acct);
+    await drain(acct, send);
+    const order = send.mock.calls.map((c) => c[0].localId);
+    expect(order).toEqual([save.localId, start.localId, log.localId]);
+    expect(send.mock.calls[0]![0].idempotencyKey).toBe(save.idempotencyKey);
+    expect(Object.values(await statuses(acct))).toEqual(["synced", "synced", "synced"]);
   });
 });
 
