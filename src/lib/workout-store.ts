@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
-import { deleteDraft, listDraftKeys, loadDraft, saveDraft } from "./outbox";
+import { deleteDraft, listDraftKeys, listItems, loadDraft, saveDraft } from "./outbox";
+import { ROUTINE_SAVE, type RoutineSavePayload } from "./plan";
 import { applyTimePlan, type TimeChoice } from "./time-plan";
 import { localDate, type LoggedSet, type PlanSnapshot, type Prescription, type Swaps } from "./workout";
 
@@ -35,6 +36,15 @@ const routineKey = (uid: string) => `routine:${uid}`;
 
 /** Current routine: newest approved version, your own before the demo. Cached for offline. */
 export async function loadRoutine(uid: string): Promise<PlanSnapshot | null> {
+  // A new version saved on this device but not yet stored wins: Train uses it right away.
+  const pendingSave = (await listItems(uid).catch(() => []))
+    .filter((i) => i.kind === ROUTINE_SAVE && i.status !== "synced").at(-1)?.payload as RoutineSavePayload | undefined;
+  if (pendingSave) {
+    return {
+      templateVersionId: pendingSave.id, routineId: pendingSave.routineId, versionNo: pendingSave.baseVersionNo + 1,
+      title: pendingSave.title, isDemo: pendingSave.isDemo, purpose: pendingSave.purpose, blocks: pendingSave.blocks,
+    };
+  }
   try {
     const { data, error } = await supabase
       .from("routine_template_versions")
