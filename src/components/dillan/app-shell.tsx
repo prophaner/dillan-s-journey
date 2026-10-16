@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { checkStorage } from "@/lib/device";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Sun, Dumbbell, TrendingUp, ClipboardList, User, Settings, LogOut, FlaskConical, Component, HardDrive } from "lucide-react";
@@ -63,6 +64,8 @@ export function AppShell({ user, children }: { user: { id: string; email: string
   const [dataOpen, setDataOpen] = useState(false);
   const { state, pending, failed, retryNow, syncNow, loaded, items } = useOutbox(user.id);
   useRegisterServiceWorker();
+  // Storage probe at app start (AT-34); Today reads the same cached result.
+  useEffect(() => { void checkStorage(); }, []);
   const navigate = useNavigate();
   const signOut = useSignOut(user.id);
 

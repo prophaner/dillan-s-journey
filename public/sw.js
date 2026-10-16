@@ -1,5 +1,5 @@
 /* Dillan service worker — app shell only. Never caches signed-in data. */
-const VERSION = "dillan-shell-v2";
+const VERSION = "dillan-shell-v3";
 const PRECACHE = ["/offline.html", "/tokens.css", "/fonts/Satoshi-Variable.woff2", "/fonts/Newsreader-Variable.woff2", "/apple-touch-icon.png", "/manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
@@ -27,13 +27,12 @@ self.addEventListener("fetch", (e) => {
     // Network first; once loaded, offline reopens the shell (Today shows an offline banner) instead of S20.
     e.respondWith(
       fetch(req).then((res) => {
-        if (res.ok && res.headers.get("content-type")?.includes("text/html")) {
+        if (res.ok && !res.redirected && res.headers.get("content-type")?.includes("text/html")) {
           const copy = res.clone();
-          const last = res.clone();
-          caches.open(VERSION).then((c) => { c.put(url.pathname, copy); c.put("/__shell", last); });
+          caches.open(VERSION).then((c) => c.put("/__shell", copy));
         }
         return res;
-      }).catch(async () => (await caches.match(url.pathname)) || (await caches.match("/__shell")) || caches.match("/offline.html")),
+      }).catch(async () => (await caches.match("/__shell")) || caches.match("/offline.html")),
     );
     return;
   }

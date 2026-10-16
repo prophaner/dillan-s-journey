@@ -3,7 +3,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { CircleAlert, CircleCheck, CircleDot, Info, RefreshCw } from "lucide-react";
 import type { OutboxItem } from "@/lib/outbox";
 import { isResolvable } from "@/lib/conflicts";
-import { compare, keepTheirs, keepYours } from "@/lib/conflicts.client";
 import { versionInUse } from "@/lib/conflicts";
 import { ROUTINE_SAVE, type RoutineSavePayload } from "@/lib/plan";
 import { Sheet, useToast } from "./overlays";
@@ -60,7 +59,8 @@ export function ConflictCards({ items, onResolved, onDraft }: { items: OutboxIte
   return <div className="mt-4 flex flex-col gap-3">{list.map((i) => <ConflictCard key={i.localId} item={i} all={items} onResolved={onResolved} onDraft={onDraft} />)}</div>;
 }
 
-type Cmp = Awaited<ReturnType<typeof compare>>;
+type Cmp = Awaited<ReturnType<typeof import("@/lib/conflict-actions").compare>>;
+const client = () => import("@/lib/conflict-actions");
 
 function ConflictCard({ item, all, onResolved, onDraft }: { item: OutboxItem; all: OutboxItem[]; onResolved: () => void; onDraft: () => void }) {
   const qc = useQueryClient();
@@ -73,8 +73,9 @@ function ConflictCard({ item, all, onResolved, onDraft }: { item: OutboxItem; al
     try { await f(); } catch { toast({ text: navigator.onLine ? "Couldn't do that. Try again." : "You're offline. Try again when you're back." }); } finally { setBusy(false); }
   };
   const yours = () => run(async () => {
-    const r = await keepYours(item);
-    if (r === "draft") { toast({ text: "Your edit is back as a draft on the newest version." }); onDraft(); }
+    const r = await (await client()).keepYours(item);
+    if (r === "kept") { toast({ text: "A session on this version hasn't synced yet, so the save stays; your edit is also a draft on the newest version." }); onDraft(); }
+    else if (r === "draft") { toast({ text: "Your edit is back as a draft on the newest version." }); onDraft(); }
     else if (r === "gone") toast({ text: "That item no longer exists, so there's nothing to keep." });
     onResolved();
   });
@@ -83,19 +84,19 @@ function ConflictCard({ item, all, onResolved, onDraft }: { item: OutboxItem; al
       toast({ text: "A session you started on this version hasn't synced yet, so this save has to stay until it does." });
       return;
     }
-    await keepTheirs(item);
+    await (await client()).keepTheirs(item);
     await qc.invalidateQueries();
     onResolved();
   });
   const show = () => run(async () => {
-    try { setCmp(await compare(item)); } catch { setCmp("failed"); }
+    try { setCmp(await (await client()).compare(item)); } catch { setCmp("failed"); }
   });
   return (
     <Card className="border-2 border-text">
       <p className="flex items-center gap-2 text-footnote font-bold uppercase tracking-wider text-text-2">
         <CircleAlert className="size-4 text-hold" aria-hidden /> Changed on another device
       </p>
-      <p className="mt-2 text-headline font-bold">Your plan changed on another device. Keep yours, keep theirs, or compare?</p>
+      <p className="mt-2 text-headline font-bold">{item.kind === ROUTINE_SAVE || item.kind === "update:goals" ? "Your plan" : "This"} changed on another device. Keep yours, keep theirs, or compare?</p>
       {cmp === "failed" && <p className="mt-2 text-footnote text-text-2">Couldn't load their version. Check your connection.</p>}
       {cmp && cmp !== "failed" && (
         cmp.rows.length ? (

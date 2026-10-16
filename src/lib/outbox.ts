@@ -1,5 +1,6 @@
 import { openDB, type IDBPDatabase } from "idb";
 import { assertVersion, isUpdateKind } from "./updates";
+import { hasCard } from "./conflicts";
 
 /**
  * Local-first outbox (brief §10.2, 05-web-platform §2).
@@ -219,12 +220,12 @@ export async function removeIfLocal(localId: string): Promise<boolean> {
   return true;
 }
 
-/** Put this account's failed items back in the queue. Conflicts stay put: the conflict card resolves them. */
+/** Put this account's failed items back in the queue. Conflicts with a card stay put (the card resolves them); conflicts without one are requeued. */
 export async function retryAccount(accountId: string) {
   const d = await db();
   let changed = false;
   for (const item of await listItems(accountId)) {
-    if (item.status === "failed") {
+    if (item.status === "failed" || (item.status === "conflict" && !hasCard(item.kind))) {
       await d.put("outbox", { ...item, status: "local", attempts: 0, error: undefined });
       changed = true;
     }
