@@ -42,13 +42,18 @@ function Session() {
   const [saving, setSaving] = useState(false);
   const [writeFailed, setWriteFailed] = useState(false);
   const lastTap = useRef<number | null>(null);
+  const [pendingSet, setPendingSetState] = useState<SessionDraft["inputs"] | null>(null);
+  const pendingRef = useRef<SessionDraft["inputs"] | null>(null);
+  const setPendingSet = (v: SessionDraft["inputs"] | null) => { pendingRef.current = v; setPendingSetState(v); };
+  /** Clear the warning only when no set is waiting to be re-logged. */
+  const draftSaved = () => { if (!pendingRef.current) setWriteFailed(false); };
   useWakeLock(d?.phase === "training");
 
   useEffect(() => {
     void loadDraft<SessionDraft>(draftKey(user.id, id)).then((x) => {
       if (x && finish && x.phase === "training") {
         const next = { ...x, phase: "done" as const, endedAt: Date.now(), restStartedAt: null };
-        void saveSession(user.id, next).then(() => setWriteFailed(false)).catch(() => setWriteFailed(true));
+        void saveSession(user.id, next).then(draftSaved).catch(() => setWriteFailed(true));
         setD(next);
       } else setD(x ?? null);
     });
@@ -58,7 +63,7 @@ function Session() {
     setD((cur) => {
       if (!cur) return cur;
       const next = { ...cur, ...(typeof patch === "function" ? patch(cur) : patch) };
-      saveSession(user.id, next).then(() => setWriteFailed(false)).catch(() => setWriteFailed(true));
+      saveSession(user.id, next).then(draftSaved).catch(() => setWriteFailed(true));
       return next;
     });
 
@@ -100,7 +105,8 @@ function Session() {
   const isDemo = d.snapshot.isDemo;
 
   const retryWrite = () => {
-    saveSession(user.id, d).then(() => setWriteFailed(false)).catch(() => setWriteFailed(true));
+    if (pendingRef.current) { void logSet(pendingRef.current); return; }
+    saveSession(user.id, d).then(draftSaved).catch(() => setWriteFailed(true));
   };
 
   const prefill = (i: number) => {
@@ -110,24 +116,27 @@ function Session() {
     return { reps: s.reps ?? last?.reps ?? 0, load: s.load ?? last?.load ?? null, rir: null };
   };
 
-  const logSet = async () => {
+  const logSet = async (inputs: SessionDraft["inputs"] = d.inputs) => {
     const t = Date.now();
-    if (isDoubleTap(lastTap.current, t) || stepFinished) return;
+    if (stepFinished) return;
+    if (!pendingRef.current && isDoubleTap(lastTap.current, t)) return;
     lastTap.current = t;
     let item;
     try {
       item = await outbox.add(SET_LOG, {
         sessionId: id, exerciseId: step.exerciseId, ref: step.ref, setNo,
-        reps: d.inputs.reps, load: d.inputs.load, unit: step.unit, rir: d.inputs.rir,
+        reps: inputs.reps, load: inputs.load, unit: step.unit, rir: inputs.rir,
         loggedAt: new Date(t).toISOString(), isDemo,
       });
     } catch {
+      setPendingSet(inputs);
       setWriteFailed(true);
       return;
     }
+    setPendingSet(null);
     const log: LoggedSet = {
-      key: item.idempotencyKey, ref: step.ref, setNo, reps: d.inputs.reps, load: d.inputs.load,
-      unit: step.unit, rir: d.inputs.rir, loggedAt: new Date(t).toISOString(),
+      key: item.idempotencyKey, ref: step.ref, setNo, reps: inputs.reps, load: inputs.load,
+      unit: step.unit, rir: inputs.rir, loggedAt: new Date(t).toISOString(),
     };
     const lastOfStep = setNo >= step.sets;
     const lastOfAll = lastOfStep && d.stepIndex >= steps.length - 1;
@@ -141,6 +150,8 @@ function Session() {
     try {
       await saveSession(user.id, next);
     } catch {
+      // The set is queued; show it as logged so it isn't logged twice.
+      setD(next);
       setWriteFailed(true);
       return;
     }
@@ -163,13 +174,20 @@ function Session() {
     update({ phase: "done", stopped, endedAt: Date.now(), restStartedAt: null });
 
   const saveAndClose = async () => {
+    if (saving) return;
     setSaving(true);
+    try {
     await outbox.add(
       SESSION_FINISH,
       { id, completion: completionOf(steps, d.logs, d.stopped), endedAt: new Date(d.endedAt ?? Date.now()).toISOString(), feeling: d.feeling, note: d.note },
       1, // a session row is created at version 1 and this is its first and only edit
     );
     await closeSession(user.id, id);
+    } catch {
+      setWriteFailed(true);
+      setSaving(false);
+      return;
+    }
     void navigate({ to: "/train" });
   };
 
@@ -186,9 +204,9 @@ function Session() {
           <Banner
             className="mt-3"
             icon={<CircleAlert className="size-5 shrink-0 text-text-2" aria-hidden />}
-            action={<DButton size="sm" variant="secondary" onClick={retryWrite}>Try again</DButton>}
+            action={<DButton size="sm" variant="outline" onClick={retryWrite}>Try again</DButton>}
           >
-            This browser isn't keeping data between visits (private mode or storage full).
+            This browser isn't keeping data between visits (private mode or storage full). Logging still works while this tab is open.{pendingSet && " That set wasn't logged."}
           </Banner>
         )}
 
@@ -235,7 +253,7 @@ function Session() {
         </fieldset>
 
         <div className="mt-auto pt-6">
-          <DButton variant="primary" loading={saving} onClick={saveAndClose}>Save session</DButton>
+          <DButton variant="primary" loading={saving} disabled={saving} onClick={saveAndClose}>Save session</DButton>
           {outbox.loaded && (saveState === "failed" ? (
             <div className="mt-3 flex justify-center"><SaveState state="failed" count={unsyncedCount} onRetry={outbox.retryNow} /></div>
           ) : (
@@ -278,9 +296,9 @@ function Session() {
         <Banner
           className="mt-3"
           icon={<CircleAlert className="size-5 shrink-0 text-text-2" aria-hidden />}
-          action={<DButton size="sm" variant="secondary" onClick={retryWrite}>Try again</DButton>}
+          action={<DButton size="sm" variant="outline" onClick={retryWrite}>Try again</DButton>}
         >
-          This browser isn't keeping data between visits (private mode or storage full).
+          This browser isn't keeping data between visits (private mode or storage full). Logging still works while this tab is open.{pendingSet && " That set wasn't logged."}
         </Banner>
       )}
 
@@ -339,7 +357,7 @@ function Session() {
         {!resting && (allDone ? (
           <DButton variant="primary" size="log" icon={<Check className="size-6" aria-hidden />} onClick={() => end(false)}>Finish session</DButton>
         ) : (
-          <DButton variant="primary" size="log" icon={<Check className="size-6" aria-hidden />} onClick={logSet}>Log set</DButton>
+          <DButton variant="primary" size="log" icon={<Check className="size-6" aria-hidden />} onClick={() => void logSet()}>Log set</DButton>
         ))}
         <DButton variant="quiet" size="md" className="mt-1 w-full" icon={<Hand className="size-5" aria-hidden />} onClick={() => setOffSheet(true)}>
           Something feels off
