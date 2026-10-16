@@ -14,6 +14,12 @@
  *   'Synced' only after server ack."
  * AGENTS.md: "every UPDATE must send the version it read, built via src/lib/updates.ts or outbox
  *   kind "update:<table>" with expectedVersion."
+ * brief §5 FR-10 (Body measurements, assessments, and progress):
+ *   "Store unit, body site/side, method, timestamp, and optional conditions."
+ * brief §13 AT-22 (Measurement units or protocol change):
+ *   "Values convert correctly; comparability qualifications preserved"
+ *   A measurement ("measurement:add") belongs to no session, so a stuck session chain must not hold it
+ *   back, and a retry must replay the same idempotency key so reconnecting never duplicates it.
  *
  * jsdom has no IndexedDB and fake-indexeddb is not installed, so the `idb` module boundary is
  * replaced with an in-memory store below. Product code is exercised unchanged.
@@ -21,6 +27,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { drain, enqueue, listItems, nextSeq, retryAccount, sessionOf, type OutboxItem, type SendResult } from "@/lib/outbox";
 import { sessionSaveState } from "@/lib/use-outbox";
+import { MEASUREMENT_ADD } from "@/lib/measurements";
 import { SESSION_DISCARD, SESSION_FINISH, SESSION_START, SET_LOG, SET_LOG_DELETE, SET_LOG_EDIT } from "@/lib/workout";
 
 // Hoisted so tests can reach the in-memory store (e.g. to insert rows out of order).
@@ -298,6 +305,70 @@ describe("sessionSaveState: 'Synced' only after every write for the session is a
       item(SESSION_FINISH, { id: "A" }, "conflict"),
     ];
     expect(sessionSaveState(conflict, "A", [k1]).state).toBe("failed");
+  });
+});
+
+describe("a measurement belongs to no session: it is not held behind a stuck session chain (FR-10, AT-22, §9.1 idempotency)", () => {
+  const measurement = { id: "22222222-2222-4222-8222-222222222222", type: "weight", side: "none", enteredValue: "180", unit: "lb", observedAt: "2026-10-16T08:00:00Z" };
+
+  it("is sent on the same drain pass even when an earlier set_log of some session is failed", async () => {
+    const acct = "acct-measure";
+    const start = await enqueue(acct, SESSION_START, { id: "M" });
+    const logM1 = await enqueue(acct, SET_LOG, { sessionId: "M", id: "M1", reps: 8 });
+    const measure = await enqueue(acct, MEASUREMENT_ADD, measurement);
+    const logM2 = await enqueue(acct, SET_LOG, { sessionId: "M", id: "M2", reps: 8 });
+    expect(sessionOf(measure)).toBeUndefined();
+
+    // First pass: the set log fails permanently; its session chain is now blocked.
+    await drain(acct, async (i): Promise<SendResult> =>
+      i.localId === logM1.localId ? { ok: false, reason: "permanent", message: "400" } : { ok: true },
+    );
+    const after1 = Object.fromEntries((await listItems(acct)).map((i) => [i.localId, i.status]));
+    expect(after1[start.localId]).toBe("synced");
+    expect(after1[logM1.localId]).toBe("failed");
+    expect(after1[measure.localId]).toBe("synced"); // same pass, not held back
+    expect(after1[logM2.localId]).toBe("local"); // the session chain is held, as it should be
+
+    // A later measurement is still sent while the session stays stuck.
+    const later = await enqueue(acct, MEASUREMENT_ADD, { ...measurement, id: "33333333-3333-4333-8333-333333333333" });
+    const sent: string[] = [];
+    await drain(acct, async (i): Promise<SendResult> => { sent.push(i.localId); return { ok: true }; });
+    expect(sent).toEqual([later.localId]);
+    expect(sent).not.toContain(logM2.localId);
+  });
+
+  it("a 'retry' result re-sends it on the next pass with the identical idempotencyKey and no new key", async () => {
+    const acct = "acct-measure-retry";
+    const measure = await enqueue(acct, MEASUREMENT_ADD, measurement);
+    const keyBefore = measure.idempotencyKey;
+
+    let failOnce = true;
+    const sent: OutboxItem[] = [];
+    const send = vi.fn(async (i: OutboxItem): Promise<SendResult> => {
+      sent.push(i);
+      if (failOnce) {
+        failOnce = false;
+        return { ok: false, reason: "retry", message: "503" };
+      }
+      return { ok: true };
+    });
+
+    await drain(acct, send);
+    const after1 = (await listItems(acct)).find((i) => i.localId === measure.localId)!;
+    expect(after1.status).toBe("local"); // a retry keeps it "Saved on this device", never "failed"
+    expect(after1.attempts).toBe(1);
+    expect(after1.idempotencyKey).toBe(keyBefore);
+
+    await drain(acct, send);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(sent.map((i) => i.localId)).toEqual([measure.localId, measure.localId]);
+    expect(sent.map((i) => i.idempotencyKey)).toEqual([keyBefore, keyBefore]);
+    expect(sent.map((i) => i.payload)).toEqual([measurement, measurement]);
+    // Exactly one outbox row for this measurement: a retry never creates a second key.
+    const rows = (await listItems(acct)).filter((i) => i.kind === MEASUREMENT_ADD);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.idempotencyKey).toBe(keyBefore);
+    expect(rows[0]!.status).toBe("synced");
   });
 });
 

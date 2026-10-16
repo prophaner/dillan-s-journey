@@ -22,8 +22,9 @@
 - [x] S11 review fixes (one report per tap, local date + session in note, rest links last exercise, option rows, discard undo, edited set prefills next)
 - [x] Today S01/S02/D01: Full/Short/Priority only from the routine, Course strip, plan purpose, resume card, time plan recorded in the session
   - Verified on phone: no
+- [x] S08 Progress (goals, steady weeks, body, measurement entry); Improve/Maintain/Defer level blocked: needs a goals column
+  - Verified on phone: no
 - [ ] "Why this is here" per block, Dillan's sentence, S03 check-in, missed-session card, custom time
-- [ ] S08 Progress: objectives, Steady weeks, measurements + manual entry (FR-10)
 - [ ] Plan + Routine editor (D02), exercise detail; transition rest editable (FR-05)
 - [ ] S21 Your data, S20 first-visit offline, all states incl. conflict card (AT-29…36)
 - [ ] Profile and Settings shells: equipment, goals, limitations, units; Your data section (FR-01, FR-17)
@@ -55,5 +56,3 @@
 
 # Phase 5
 - [ ] Optional baseline assessments: reviewed protocols, versioned, skippable, no percentile or reminder dot (FR-01, FR-10)
-
-- [x] S08 Progress (goals, steady weeks, body, measurement entry); Improve/Maintain/Defer level blocked: needs a goals column
