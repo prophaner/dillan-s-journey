@@ -1,6 +1,6 @@
 # Changelog
 
-Reviewed through: 03aefe0
+Reviewed through: e0e1f52
 
 One entry per accepted slice, newest first, written by the docs-writer agent after the owner
 accepts. Tooling changes merged by the owner (agent config, docs scaffolding) get a short
@@ -9,6 +9,40 @@ entry under "Tooling" so the history stays complete; they are not slices.
 ## Unreleased
 
 - 0002/0003: prescriptions reference exercises by id; backfill for existing routines
+  (0003 landed at 0f55c7b, approved by the owner; see DECISIONS 2026-10-15)
+
+### 2026-10-16 — S11 Something feels off, with carry-over fixes
+Commits 0f55c7b..e0e1f52 (migration 0003 at 0f55c7b; Lovable build e0e1f52).
+Screens: S11 Something feels off, S07 Session complete ("Noted today" card, Finish and save,
+one-step Discard), S04 Set logging (stacked edit buttons, swap prefill, queued-set recovery),
+S16 Train (account-wide save state in the header). FRs/ATs: FR-08 partial (stop or end from the
+sheet; no gentler option yet); FR-09 partial (dated limitation note with area and side; origin
+session); AT-05. Verified on phone: no.
+
+- "Something feels off" is one tap away on every training screen: set, rest, superset round
+  and while changing a set. The sheet reads "Stop or adjust. Your call." / "Your sets so far
+  are saved."; every action takes effect at once, with no confirmation.
+- Stop this exercise drops that exercise's remaining sets, keeps the done ones, cancels rest
+  and moves to the next exercise; hidden once every set is done.
+- End the session ends it as stopped ("Stopping was the right call. Your sets are saved.").
+- Optional "Where?" area chips (Shoulder … Other) with Left / Right / Both, and a 140-character
+  note ("What did you notice?"). Keep going closes the sheet and saves nothing.
+- The note is saved through the outbox as a dated limitation linked to the exercise (origin:
+  session), works offline, and two fast taps make one note.
+- Done screen shows a "Noted today" card: exercise, area and side, each with its own save
+  word and Retry; "A dated note, not a diagnosis."
+- Storage banner adds "Your note wasn't saved." with Try again when the note could not be stored.
+- The sheet's escalation sentence ("If pain is sharp, getting worse, or comes with numbness or
+  swelling, stop and get it checked by a clinician.") is marked "Placeholder wording · to be
+  reviewed before release".
+- "Try a gentler option" is not shown; it appears only once reviewed alternatives exist.
+- Done screen: Save session is now "Finish and save"; Discard session is one tap with no inline
+  question and no Undo.
+- Fix: Save change and Cancel are stacked one above the other while changing a set.
+- Fix: a swapped exercise prefills from its own last values first, then the plan.
+- Fix: a set queued before a failed draft save is recovered when the session is reopened and
+  shows once; the Train header shows the account-wide save state (Saved on this device · N,
+  Synced, Didn't sync · N with Retry) and the outbox keeps order across page loads.
 
 ### 2026-10-16 — S04 edits + S06 Superset, with carry-over fixes
 Commits 885b071..03aefe0 (fix rounds 33edd78, 3475a13, 47e1751, d8840de, 5c8dc07; Lovable build 03aefe0).
