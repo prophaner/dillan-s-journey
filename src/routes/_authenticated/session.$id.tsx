@@ -332,17 +332,18 @@ function Session() {
   const offAction = (action: OffAction) => {
     if (offBusy.current) return; // two fast taps make one report
     setOffSheet(false);
+    const os = offStep ?? step;
     const at = new Date();
     const r = {
-      exerciseName: offStep.name,
+      exerciseName: os.name,
       payload: {
-        sessionId: id, exerciseId: offStep.exerciseId, area: offArea, side: offArea ? offSide : null, note: offNote.trim(), action,
+        sessionId: id, exerciseId: os.exerciseId, area: offArea, side: offArea ? offSide : null, note: offNote.trim(), action,
         reportedAt: at.toISOString(), localDate: localDate(at), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       },
     };
     if (action === "end_session") end(true);
     else if (action === "stop_exercise") {
-      update((c) => ({ skipped: [...new Set([...(c.skipped ?? []), offStep.ref])], restStartedAt: null }));
+      update((c) => ({ skipped: [...new Set([...(c.skipped ?? []), os.ref])], restStartedAt: null }));
       if (editing) setEditing(null);
     }
     setOffArea(null); setOffSide(null); setOffNote("");
@@ -405,6 +406,7 @@ function Session() {
   // ---------- S07 · Session complete ----------
   if (d.phase === "done") {
     const completion = completionOf(steps, d.logs, d.stopped);
+    const tp = d.snapshot.timePlan;
     const minutes = Math.max(1, Math.round(((d.endedAt ?? Date.now()) - d.startedAt) / 60000));
     return (
       <div className="mx-auto flex min-h-dvh max-w-[640px] flex-col px-margin pb-6 pt-[calc(var(--safe-t)+32px)]">
@@ -421,7 +423,17 @@ function Session() {
           </Banner>
         )}
 
-        <ul className="mt-6 flex flex-col gap-2">
+        {tp && tp.choice !== "full" && (
+          <Card className="mt-6">
+            <p className="text-footnote font-bold uppercase tracking-wide text-text-2">{choiceLabel[tp.choice]} plan</p>
+            <p className="mt-1 text-subhead">
+              Kept {listOf(d.snapshot.blocks.filter((b) => !tp.omittedPositions.includes(b.position)).sort((a, b) => a.position - b.position).map(blockName))}.
+              {tp.omittedPositions.length > 0 && ` Left out ${listOf(d.snapshot.blocks.filter((b) => tp.omittedPositions.includes(b.position)).sort((a, b) => a.position - b.position).map(blockName))} today.`}
+            </p>
+            <p className="mt-1 text-footnote text-text-2">Your full plan v{d.snapshot.versionNo} is unchanged.</p>
+          </Card>
+        )}
+        <ul className="mt-4 flex flex-col gap-2">
           {steps.map((s) => {
             const r = stepResult(s, d.logs);
             return (
