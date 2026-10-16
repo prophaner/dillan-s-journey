@@ -41,7 +41,7 @@ The Session screen runs one exercise at a time: log a set, rest, log the next on
 
 ### The set screen
 
-At the top: an **End** button, your routine name, and the time since you started. Below that, a thin bar with one segment per exercise shows where you are. Then the exercise: a Main or Optional tag, "Exercise N of M", the save word for this session, and the name with the plan line (sets × reps, and the weight if there is one). A row of set pips shows which sets are done and which one is next.
+At the top: an **End** button, your routine name, and the time since you started. Below that, a thin bar with one segment per exercise shows where you are. Then the exercise: a Main or Optional tag, "Exercise N of M" (or "Round N of M" in a superset), the save word for this session, and the name with the plan line (sets × reps, and the weight if there is one). Until you log the first set of an exercise, a **Swap** button sits next to its name. A row of set pips shows which sets are done and which one is next; under it, once a set is done, "Tap a done set to change it."
 
 **Reps** and **Load** have big minus and plus buttons. Reps move by 1. Load moves by 2.5 and takes decimals. Tap the number itself to type it. Under each number you see "last time N" when Dillan has a previous value for that exercise, or "—" when he does not. Reps and load start from the plan; if the plan has no value, they start from what you logged last time.
 
@@ -51,17 +51,37 @@ If the exercise has no weight, the Load row says "No weight · bodyweight" with 
 
 **Log set** records the set with the numbers on screen. You see "Set N logged · saved on this device" with **Undo** for about six seconds. A second tap within one second is ignored, so a nervous thumb does not log the set twice. After the last set of an exercise, Dillan moves you to the next one and fills in its numbers.
 
-**Undo** removes the set you just logged, cancels the rest, and takes you back to that exercise. Undo is the only way to change a set right now. You cannot edit a set after the toast goes away; that comes in a later slice.
+**Undo** removes the set you just logged, cancels the rest, and takes you back to that exercise. Undo runs once, even if you tap it twice. While an undo is still being stored on this device, Log set is greyed out, so a new set cannot land on top of one that is going away. After the toast goes away you can still change the set; see Changing a set below.
 
 **Pause** is not available yet. The session clock keeps running until you end the session.
 
 **Something feels off** opens a sheet: "Thanks for telling me. You can stop right now, and what you did still counts." You can **Stop the session here**, which ends it as stopped and keeps every set, or **Keep going, lighter**, which closes the sheet and leaves the session as it is.
 
-**End** (top left) ends the session in one tap. There is no confirmation. You go to the Done screen, and nothing you logged is lost.
+**End** (top left) ends the session in one tap. There is no confirmation. You go to the Done screen, where you can save the session or discard it. Nothing you logged is lost unless you choose Discard.
 
 When you type a number, the Log set button moves up to stay above the keyboard. The exercise card does not shrink to make room, so on a small screen you may need to scroll (unverified on a phone).
 
 Dillan asks your browser to keep the screen awake during a session. Not every browser allows this (unverified on a phone).
+
+### Changing a set
+
+Tap a done pip to reopen that set. The chip reads "Changing set N", and Reps, Load and Reps left in the tank show what you logged for it. Change what you need and tap **Save change**. You see "Set N changed · saved on this device". A change corrects the same set; it does not add a new one, and there is no Undo on a change. To put it back, tap the pip again and change it again. **Cancel** closes the set as it was.
+
+You can change a set only while you are still on its exercise and not resting. Once Dillan moves you to the next exercise, the sets of the one before are no longer on screen; to change a set during rest, Skip the rest first. While you are changing a set, Log set and Swap are hidden. If the change could not be stored on this device, the storage banner appears; tap **Try again**. On a small screen the numbers may sit under the keyboard while you type (unverified on a phone).
+
+### Swapping an exercise
+
+**Swap** opens a sheet, "Swap <exercise>", with the exercises you can do instead: the shared library and the ones you added. Tap one and it takes the exercise's place for this session only. Your plan stays the same. Under the name you see "Swapped for <planned exercise> · this session only", and the Done screen says the same. Reps and load start again from the plan, or from what you logged last time for the new exercise.
+
+The alternatives are not yet matched to your equipment or limitations; the sheet says so. To go back, open Swap again and tap **Back to <planned exercise>**. Once a set of the exercise is logged, Swap goes away; the swap is settled for that exercise.
+
+The list needs a connection the first time; after that a copy stays on this device. Offline without a copy you see "Exercises load once you're online." If the list cannot load, "Couldn't load exercises" with Try again. If there is nothing else to pick, "No other exercises yet". The list scrolls inside the sheet (unverified on a phone).
+
+### Supersets
+
+When your routine pairs exercises in a superset, the Session screen runs them as rounds: A, then B, then a longer rest, then the next round. Instead of "Exercise N of M" you see a Superset tag and "Round N of M". A line spells out the pattern, for example "Go A → B · rest 20s between · 75s after the round." Under it, a list shows each exercise in the round with its letter, how many of its sets are done, and the reps. The one you are on is outlined. A finished one shows Done instead of the count.
+
+The plan line reads rounds instead of sets. Log set works the same. After A you rest for the transition rest: 20 seconds unless your routine says otherwise. After the last exercise in the round you rest for the round rest: 90 seconds unless the routine says otherwise. During rest, Up next reads "Round N · <exercise>". −15s, +15s and Skip work as on any rest. The numbers you type for A and for B are kept apart, so moving between them does not mix them up. Undo and Changing a set work the same inside a round.
 
 ### Rest
 
@@ -69,7 +89,7 @@ After each set except the very last one, the screen switches to a rest timer: a 
 
 - **−15s** and **+15s** change this rest. It will not go below 15 seconds.
 - **Skip** ends the rest now.
-- **Up next** tells you which set and exercise come next.
+- **Up next** tells you which set and exercise come next. In a superset it names the round and the exercise.
 
 The timer counts from the clock, not from ticks, so it stays correct if your screen locks. There is no sound while the screen is off. If the rest ran out while your screen was locked, you come back to the next set with no message about it. On a laptop, the browser tab title shows the countdown.
 
@@ -95,7 +115,13 @@ Below it: each exercise with Done, "Partial · x of y sets", or Skipped; the tim
 
 **How did it feel?** is optional: Easy, Solid, Hard, or Too much. Tap again to clear. **Note** is optional, up to 1000 characters.
 
-**Save session** finishes the session, removes the working copy from this device, and returns you to Train. Under the button you see the footer: "N sets synced · nothing waiting", "N changes saved on this device · will sync when you're online", or "Didn't sync · N" with **Retry**. You can save while offline; the finish syncs later with the rest.
+**Save session** finishes the session, removes the working copy from this device, and returns you to Train. It saves once, even if you tap it twice or come back after a reload. Under it sits **Discard session**; see Discarding a session below. Under the buttons you see the footer: "N sets synced · nothing waiting", "N changes saved on this device · will sync when you're online", or "Didn't sync · N" with **Retry**. You can save while offline; the finish syncs later with the rest.
+
+### Discarding a session
+
+On the Done screen, **Discard session** throws the session away instead of saving it. Dillan asks once more, inline: "This removes the session and its N sets from your history." with **Discard** and **Keep it**. Keep it closes the question and changes nothing. Discard removes the session and every set in it, shows "Session discarded", and returns you to Train. There is no Undo on a discard.
+
+Discard works offline; the removal is queued and sent with the rest of your changes. While a discard is waiting to be stored, Save session is greyed out, so a session is never both saved and removed.
 
 ### If a session is not on this device
 
