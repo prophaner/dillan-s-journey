@@ -17,3 +17,7 @@
 - [x] Edit a done set, swap (this session only), discard session, supersets (S06)
   - Verified on phone: no
 - [ ] Swap alternatives filtered by equipment/intent/limitations; "Use from now on" proposals (FR-15)
+- [x] S11 review fixes (one report per tap, local date + session in note, rest links last exercise, option rows, discard undo, edited set prefills next)
+- [x] Today S01/S02/D01: Full/Short/Priority only from the routine, Course strip, plan purpose, resume card, time plan recorded in the session
+  - Verified on phone: no
+- [ ] "Why this is here" per block, Dillan's sentence, S03 check-in, missed-session card, custom time
