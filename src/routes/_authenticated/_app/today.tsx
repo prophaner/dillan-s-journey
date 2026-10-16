@@ -186,7 +186,7 @@ function Today() {
                 <p className="mt-2 text-headline font-bold">{active.snapshot.title}</p>
                 <div className="mt-3 flex flex-col gap-1 lg:max-w-[480px]">
                   <DButton variant="primary" icon={<Play className="size-5" aria-hidden />} onClick={() => navigate({ to: "/session/$id", params: { id: active.id } })}>
-                    <span className="whitespace-nowrap">Resume · {minIn} min in</span>
+                    <span className="whitespace-nowrap">Resume session · {minIn} min in</span>
                   </DButton>
                   <DButton variant="quiet" size="md" className="w-full" onClick={() => navigate({ to: "/session/$id", params: { id: active.id }, search: { finish: true } })}>
                     Finish here
@@ -225,7 +225,7 @@ function Today() {
             <Card>
               <p className="text-footnote font-bold uppercase tracking-wide text-text-2">Your goal</p>
               {goal.isPending ? (
-                <ScreenState kind="loading" />
+                <div className="mt-2 h-12 animate-pulse rounded-btn bg-surface-2" aria-busy="true" aria-label="Loading your goal" />
               ) : goal.isError || !goal.data ? (
                 <p className="mt-1 flex flex-wrap items-center gap-2 text-subhead text-text-2">
                   {goal.isError ? <><UnknownValue /> Loads when you're online.</> : "No goal yet. Add one in your profile."}
