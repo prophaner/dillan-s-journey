@@ -114,8 +114,8 @@ export async function keepYours(item: OutboxItem): Promise<"sent" | "draft" | "r
   }
   // Onboarding is one change: its resend keeps the original key so child rows are never doubled.
   const opts = item.kind === ONBOARDING_KIND ? { idempotencyKey: item.idempotencyKey } : {};
-  await removeIfLocal(item.localId);
   await enqueue(item.accountId, item.kind, item.payload, cur.version, opts);
+  await removeIfLocal(item.localId);
   return "sent";
 }
 
