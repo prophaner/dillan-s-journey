@@ -32,7 +32,7 @@ describe("measurements (FR-10)", () => {
     expect(parseValue("0")).toBeNull();
   });
   it("conversion round-trips without changing meaning", () => {
-    expect(convert(convert(180, "lb", "kg"), "kg", "lb")).toBeCloseTo(180, 6);
+    expect(convert(convert(180, "lb", "kg")!, "kg", "lb")).toBeCloseTo(180, 6);
   });
   it("BMI is unknown without both weight and height", () => {
     expect(bmi({ value: 180, unit: "lb" }, null)).toBeNull();
@@ -68,9 +68,9 @@ describe("validateMeasurement: unit must match the type's kind (FR-10 store unit
     expect(validateMeasurement({ ...base, type: "weight", side: "none", enteredValue: "82", unit: "kg" }).unit).toBe("kg");
     expect(validateMeasurement({ ...base, type: "waist", side: "none", enteredValue: "34", unit: "in" }).unit).toBe("in");
   });
-  // validateMeasurement only checks that observedAt parses (Date.parse !== NaN); a date in the future
-  // passes today. Flip to `it` once the product rejects it — do not change product code from here.
-  it.todo("an observed_at in the future is rejected");
+  it("an observed_at in the future is rejected", () => {
+    expect(() => validateMeasurement({ ...base, observedAt: new Date(Date.now() + 86400000).toISOString() })).toThrow(/future/);
+  });
   it("an observed_at that is not a date is rejected", () => {
     expect(() => validateMeasurement({ ...base, observedAt: "yesterday-ish" })).toThrow(/date/);
     expect(() => validateMeasurement({ ...base, observedAt: "" })).toThrow(/date/);
@@ -83,15 +83,25 @@ describe("convert: display-only conversion (AT-22)", () => {
     expect(convert(80, "kg", "kg")).toBe(80);
   });
   it("length round-trips without changing meaning", () => {
-    expect(convert(convert(86.4, "cm", "in"), "in", "cm")).toBeCloseTo(86.4, 6);
+    expect(convert(convert(86.4, "cm", "in")!, "in", "cm")).toBeCloseTo(86.4, 6);
   });
-  // Current behavior, documented on purpose: a pair convert() does not know (mass↔length, or an
-  // unknown unit string) returns the input unchanged rather than throwing or returning NaN/null.
-  // If this is later made strict, this test is the one that should flip — deliberately.
-  it("an unknown unit pair returns the input unchanged", () => {
-    expect(convert(180, "lb", "cm")).toBe(180);
-    expect(convert(34, "in", "kg")).toBe(34);
-    expect(convert(5, "stone", "kg")).toBe(5);
+  // Flipped deliberately (S08 review): an unknown pair is unknown, never the raw number.
+  it("an unknown unit pair returns null", () => {
+    expect(convert(180, "lb", "cm")).toBeNull();
+    expect(convert(34, "in", "kg")).toBeNull();
+    expect(convert(5, "stone", "kg")).toBeNull();
+  });
+});
+
+describe("steadyWeeks: only weeks since the first session count", () => {
+  it("weeks before the first session are left out", () => {
+    const s = [{ local_date: "2026-10-06", completion: "complete", shortened: false }];
+    const r = steadyWeeks(s, "2026-10-16", 1, 8, "2026-10-06");
+    expect(r.of).toBe(1);
+    expect(r.steady).toBe(1);
+  });
+  it("no session ever means unknown", () => {
+    expect(steadyWeeks([], "2026-10-16", 3, 8, null).steady).toBeNull();
   });
 });
 

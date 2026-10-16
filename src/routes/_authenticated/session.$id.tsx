@@ -550,7 +550,7 @@ function Session() {
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
-        {step.priority === "optional" ? <StatusTag kind="neutral" icon={false}>Optional</StatusTag> : <StatusTag kind="priority" icon={false}>Main</StatusTag>}
+        {step.priority === "optional" ? <StatusTag kind="neutral" icon={false}>Optional</StatusTag> : <StatusTag kind="priority" icon={false}>{step.priority === "priority" ? "Priority" : "Main"}</StatusTag>}
         {group.length > 0 ? (
           <>
             <StatusTag kind="neutral" icon={false}>Superset</StatusTag>

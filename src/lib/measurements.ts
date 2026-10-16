@@ -53,6 +53,8 @@ export function validateMeasurement(raw: unknown): MeasurementInput & { value: n
   const side: Side = info.sided ? (p.side === "left" || p.side === "right" || p.side === "both" ? p.side : "none") : "none";
   if (info.sided && side === "none") throw new Error("400 side required");
   if (!p.observedAt || Number.isNaN(Date.parse(p.observedAt))) throw new Error("400 bad date");
+  // A few minutes of clock drift is allowed; anything later is a future date.
+  if (Date.parse(p.observedAt) > Date.now() + 5 * 60000) throw new Error("400 bad date: in the future");
   const s = (v: unknown, n: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, n) : null);
   return {
     id: p.id, type: info.id, site: s(p.site, 60), side, enteredValue: String(p.enteredValue).trim(),
@@ -60,14 +62,14 @@ export function validateMeasurement(raw: unknown): MeasurementInput & { value: n
   };
 }
 
-/** Display-only conversion. Never written back. */
-export function convert(value: number, from: string, to: string): number {
+/** Display-only conversion. Never written back. Null for a pair it doesn't know. */
+export function convert(value: number, from: string, to: string): number | null {
   if (from === to) return value;
   if (from === "kg" && to === "lb") return value * 2.2046226218;
   if (from === "lb" && to === "kg") return value / 2.2046226218;
   if (from === "cm" && to === "in") return value / 2.54;
   if (from === "in" && to === "cm") return value * 2.54;
-  return value;
+  return null;
 }
 export const round1 = (n: number) => Math.round(n * 10) / 10;
 
@@ -75,7 +77,9 @@ export const round1 = (n: number) => Math.round(n * 10) / 10;
 export function bmi(weight: { value: number; unit: string } | null, height: { value: number; unit: string } | null): number | null {
   if (!weight || !height) return null;
   const kg = convert(weight.value, weight.unit, "kg");
-  const m = convert(height.value, height.unit, "cm") / 100;
+  const cm = convert(height.value, height.unit, "cm");
+  if (kg === null || cm === null) return null;
+  const m = cm / 100;
   if (!(kg > 0 && m > 0)) return null;
   return round1(kg / (m * m));
 }
@@ -121,7 +125,7 @@ export function mondayOf(date: string): string {
  * Target unknown → steady count is null (shown as "Not yet known"), pips still show what happened.
  * The current week is never counted against you.
  */
-export function steadyWeeks(sessions: WeekSessionRow[], today: string, target: number | null, weeks = 8) {
+export function steadyWeeks(sessions: WeekSessionRow[], today: string, target: number | null, weeks = 8, since?: string | null) {
   const thisMon = mondayOf(today);
   const cols: { monday: string; current: boolean; pips: WeekPip[] }[] = [];
   for (let w = weeks - 1; w >= 0; w--) {
@@ -135,7 +139,10 @@ export function steadyWeeks(sessions: WeekSessionRow[], today: string, target: n
     while (pips.length < slots) pips.push(w === 0 ? "planned" : "empty");
     cols.push({ monday, current: w === 0, pips });
   }
-  const past = cols.filter((c) => !c.current);
+  // `since` = date of the first session ever: weeks before it don't count (null = none yet → unknown).
+  const firstMon = since ? mondayOf(since) : null;
+  const past = cols.filter((c) => !c.current && (since === undefined || (firstMon !== null && c.monday >= firstMon)));
+  if (since === null) return { cols, steady: null, of: 0 };
   const steady = target ? past.filter((c) => c.pips.filter((p) => p !== "empty" && p !== "planned").length >= target).length : null;
   return { cols, steady, of: past.length };
 }

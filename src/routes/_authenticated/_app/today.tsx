@@ -186,8 +186,9 @@ function Today() {
                 <p className="mt-2 text-headline font-bold">{active.snapshot.title}</p>
                 <div className="mt-3 flex flex-col gap-1 lg:max-w-[480px]">
                   <DButton variant="primary" icon={<Play className="size-5" aria-hidden />} onClick={() => navigate({ to: "/session/$id", params: { id: active.id } })}>
-                    <span className="whitespace-nowrap">Resume session · {minIn} min in</span>
+                    <span className="text-balance">Resume session<span className="max-[359px]:hidden"> · {minIn} min in</span></span>
                   </DButton>
+                  <p className="text-center text-footnote text-text-2 min-[360px]:hidden">{minIn} min in</p>
                   <DButton variant="quiet" size="md" className="w-full" onClick={() => navigate({ to: "/session/$id", params: { id: active.id }, search: { finish: true } })}>
                     Finish here
                   </DButton>

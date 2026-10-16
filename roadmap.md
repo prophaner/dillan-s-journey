@@ -25,7 +25,7 @@
 - [x] S08 Progress (goals, steady weeks, body, measurement entry); Improve/Maintain/Defer level blocked: needs a goals column
   - Verified on phone: no
 - [ ] "Why this is here" per block, Dillan's sentence, S03 check-in, missed-session card, custom time
-- [ ] Plan + Routine editor (D02), exercise detail; transition rest editable (FR-05)
+- [x] Plan + Routine editor (D02), exercise detail; transition rest editable (FR-05)
 - [ ] S21 Your data, S20 first-visit offline, all states incl. conflict card (AT-29…36)
 - [ ] Profile and Settings shells: equipment, goals, limitations, units; Your data section (FR-01, FR-17)
 - [ ] Exercise preferences: avoid / prefer with reason; swap alternatives honor them (FR-01, FR-08) — from docs/product/fitbod-feature-map.md

@@ -203,7 +203,8 @@ export async function removeIfLocal(localId: string): Promise<boolean> {
   if (sendingId === localId) return false;
   const d = await db();
   const item = (await d.get("outbox", localId)) as OutboxItem | undefined;
-  if (!item || item.status === "synced") return false;
+  // A drain may have started sending it while we were reading.
+  if (!item || item.status === "synced" || sendingId === localId) return false;
   await d.delete("outbox", localId);
   emit();
   return true;

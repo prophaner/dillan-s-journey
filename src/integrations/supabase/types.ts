@@ -319,6 +319,7 @@ export type Database = {
           id: string
           idempotency_key: string | null
           is_demo: boolean
+          level: string | null
           metric: string | null
           owner_id: string
           parent_id: string | null
@@ -340,6 +341,7 @@ export type Database = {
           id?: string
           idempotency_key?: string | null
           is_demo?: boolean
+          level?: string | null
           metric?: string | null
           owner_id: string
           parent_id?: string | null
@@ -361,6 +363,7 @@ export type Database = {
           id?: string
           idempotency_key?: string | null
           is_demo?: boolean
+          level?: string | null
           metric?: string | null
           owner_id?: string
           parent_id?: string | null
