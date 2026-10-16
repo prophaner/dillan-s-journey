@@ -1,5 +1,7 @@
 Vision: Personal Gym, Personal Coach. Data driven: measure, analyze, improve.
 
+Status 2026-10-16: paused after the Profile and Settings slice for owner phone testing; next prompt drafted in docs/product/next-prompts.md
+
 # Roadmap — Phase 0
 - [x] Docs copied into /docs and /design
 - [x] Tokens, three self-hosted fonts, Lucide, Night Gym

@@ -3,6 +3,7 @@
 One section per screen. Status words you will see:
 
 - **Saved on this device** — your entry is stored on your phone and will sync when you are online.
+- **Kept in this tab only** — takes the place of Saved on this device when this browser is not keeping data (private mode or storage full). Closing the tab loses it; sync before you close.
 - **Synced** — the server has confirmed your entry.
 - **Didn't sync** — the entry could not be sent. Tap Retry.
 - **Not yet known** — there is no value yet. Shown as "—".
@@ -315,7 +316,7 @@ The routine's name and purpose text cannot be changed here.
 
 ### A save that did not sync
 
-If the server refuses the save — most often because a newer version was saved on another device — the Versions card shows vN+1 with Didn't sync and two buttons. **Keep editing** reopens the editor on the newest version with your blocks laid over it, so "What changed" is worked out against that version; save again as the next number. **Discard this save** removes it from this device. While a save shows Didn't sync, Train and Today use the version stored on the server, not your unsent one.
+If the server refuses the save — most often because a newer version was saved on another device — the Versions card shows vN+1 with Didn't sync and two buttons. **Keep editing** reopens the editor on the newest version with your blocks laid over it, so "What changed" is worked out against that version; save again as the next number. If a session you started on the refused save has not synced yet, Keep editing instead moves the save onto the newest version and sends it again: "A session on this version hasn't synced yet, so your save moved onto the newest version and will send first." **Discard this save** removes it from this device. While a save shows Didn't sync, Train and Today use the version stored on the server, not your unsent one.
 
 ### Exercise detail
 
@@ -337,7 +338,7 @@ Dillan keeps a copy of your work on this device and sends it to your account whe
 Tap your initials, then **Your data** in the menu. The sheet is called "Your data on this phone". It counts the changes on this device, straight from the queue that holds them, in three rows:
 
 - **Synced** — "Stored on your account. Safe if this phone is lost." The server has them.
-- **Saved on this device** — "Kept here. Sends when you're online and Dillan is open." They are waiting to go.
+- **Saved on this device** — "Kept here. Sends when you're online and Dillan is open." They are waiting to go. When this browser is not keeping data, the row reads **Kept in this tab only** with "This browser isn't keeping data, so closing this tab loses it. Sync before you close."
 - **Didn't sync** — "Tried and stopped. Retry, or choose a version if it changed elsewhere." Items the server refused, and items that changed on another device; see When something changed on another device below.
 
 **Sync now** puts every Didn't sync item back in the queue and sends everything that is waiting. The button shows a spinner while it works. Items that changed on another device stay put; their card is what settles them.
@@ -360,13 +361,13 @@ Dillan's offline copy holds only the app itself, never your signed-in data; your
 
 If you change something on this device while the same thing was changed on another device first, the server refuses the later change rather than overwrite silently. Dillan then shows a **conflict card** and waits for you. Nothing resolves itself.
 
-**Where it appears.** At the top of every app screen: Today, Train, Progress, Dillan, Plan, Profile and Settings, above the screen's own content. One card per item. It has a "Changed on another device" eyebrow and the question "Your plan changed on another device. Keep yours, keep theirs, or compare?" for a routine save or a goal level, or "This changed on another device. Keep yours, keep theirs, or compare?" for a set change, a session finish or your setup.
+**Where it appears.** At the top of every app screen: Today, Train, Progress, Dillan, Plan, Profile and Settings, above the screen's own content. One card per item. It has a "Changed on another device" eyebrow and the question "Your plan changed on another device. Keep yours, keep theirs, or compare?" for a routine save or a goal level, "Your profile changed on another device. Keep yours, keep theirs, or compare?" for a change made on Profile or Settings (your profile, a piece of equipment, a limitation), or "This changed on another device. Keep yours, keep theirs, or compare?" for a set change, a session finish or your setup.
 
 **The three buttons**, in plain words:
 
-- **Keep yours** — your change wins. Dillan reads the newest version from the server and sends your change again on top of it. You chose it, so this is not a silent overwrite. For a routine save, your edit comes back as a draft on the newest version and the editor opens: "Your edit is back as a draft on the newest version." If a session you started on your unsent version has not synced yet, the save stays as well, and you see "A session on this version hasn't synced yet, so the save stays; your edit is also a draft on the newest version." If the item no longer exists on the server: "That item no longer exists, so there's nothing to keep."
+- **Keep yours** — your change wins. Dillan reads the newest version from the server and sends your change again on top of it. You chose it, so this is not a silent overwrite. For a routine save, your edit comes back as a draft on the newest version and the editor opens: "Your edit is back as a draft on the newest version." If a session you started on your unsent version has not synced yet, the save itself is moved onto the newest version instead, with the next number, and the session follows it: "Kept yours as the newest version. The session you started on it will sync after it." Your blocks are unchanged. If the item no longer exists on the server: "That item no longer exists, so there's nothing to keep."
 - **Keep theirs** — their change wins. Your change is removed from this device and the screen reloads from the server. For a routine save that a not-yet-synced session was started on, Dillan refuses: "A session you started on this version hasn't synced yet, so this save has to stay until it does."
-- **Compare** — shows Yours and Theirs side by side before you decide. For a goal: Goal level. For a set: Reps, Load, Reps in reserve. For a session finish: Ended as, Feeling, Note. For your setup: Setup. For a routine save: "Yours compared with theirs (vN):" with the same plain list as "What changed" in the editor, or "No differences in the exercises." Compare needs a connection; otherwise "Couldn't load their version. Check your connection."
+- **Compare** — shows Yours and Theirs side by side before you decide. For a goal: Goal level. For a set: Reps, Load, Reps in reserve. For a session finish: Ended as, Feeling, Note. For your setup: Setup. For a Profile change: one row per field you changed, in plain words (for example "lb · in", Available or Not available, Removed or Kept, a status word). For a routine save: "Yours compared with theirs (vN):" with the same plain list as "What changed" in the editor, or "No differences in the exercises." Compare needs a connection; otherwise "Couldn't load their version. Check your connection."
 
 If a button cannot do its work: "Couldn't do that. Try again." or, offline, "You're offline. Try again when you're back."
 
@@ -382,15 +383,100 @@ If a button cannot do its work: "Couldn't do that. Try again." or, offline, "You
 
 **After that, a calm banner.** Once Dillan has loaded on this device and your routine is on it, going offline shows a banner on Today: "You're offline. Logging works; it'll sync when you're back." Starting a session, logging sets, resting, changing a set, finishing and discarding all work offline, through the same queue. Things that need the server say so in place: "This week loads when you're online.", "Versions load when you're online.", "Exercises load once you're online."
 
-**Reopening offline.** You can close Dillan and open it again without a connection; it trusts the sign-in stored on this device. This works for about an hour after your last online use. After that you see the sign-in page until you are online once (unverified on a phone). Being sent to the sign-in page this way does not clear this device's copy; only Sign out does (unverified).
+**Reopening offline.** You can close Dillan and open it again without a connection; it trusts the sign-in stored on this device. This works for about an hour after your last online use. After that you see the sign-in page until you are online once (unverified on a phone). Offline, the sign-in page does not try to send a link; it reads "Dillan needs a connection to sign you in again. Open it online once." with **Try again**, which reloads once the connection is back. Being sent to the sign-in page this way does not clear this device's copy; only Sign out does (unverified).
 
 **Private mode and full storage.** When Dillan starts it checks that this browser can keep data. If it cannot, Today shows: "This browser isn't keeping data between visits (private mode or storage full). Logging still works while the tab is open; nothing is saved here when you leave." The Session screen and the editor show their own version of the same warning when a set, undo, note or edit could not be stored; see If the device cannot save under Session. Dillan does not yet stop a set from being logged when storage is unavailable; it warns and lets you keep going while the tab is open.
 
 ## Profile
-This section is not written yet.
+
+Profile is where you tell Dillan what you train with, what to be careful of, when you train, how long you have been lifting, which units you read, and your time zone. Six sections, top to bottom: Equipment, Limitations, Availability, Experience, Units, Time zone.
+
+Every change here saves at once, through the same queue as your sets, and works offline. The screen shows your choice right away; what is still waiting is counted in Settings under Your data on this phone. If you change the same thing again before the first change has synced, the two are sent as one. If this device cannot store a change, a banner reads "That didn't save. This browser isn't keeping data between visits (private mode or storage full)." with **Try again**.
+
+Each section needs a connection the first time it loads. If one cannot: "Couldn't load your equipment" (or your limitations, or your profile) with "Check your connection and try again." and **Try again**. Offline it reads "Open Profile online once to see this."
+
+### Equipment
+
+One row per item: its name, a detail line (or "—" when there is none), and a "Demo data" label on sample gear. At the end of the row sits an **Available** box. Untick it and the row reads **Not available**; the item stays in your list, so you do not have to delete gear that is away for a while. Nothing in the app is matched to your equipment yet; the Swap sheet says so.
+
+If you have none: "No equipment yet. Add what you train with. Dillan only plans with what's here and available."
+
+- **Add.** Type a name in the box under the list, for example "Kettlebell 16 kg" (up to 80 characters), and tap **Add** or press Enter. Add is greyed out while the box is empty. The item joins the list at once, marked Available, and syncs with the rest.
+- **Remove.** Tap the bin on a row. The row goes and a toast reads "<name> removed" with **Undo** for about six seconds. Undo puts it back. Removing never deletes the item from your account; it is set aside, so your history is untouched. See Known issues for gear removed before it ever synced.
+
+### Limitations
+
+Everything you noted with Something feels off, newest first, with anything from onboarding or a coach. Each card shows:
+
+- The area and side, for example "Knee (left)", or "Something felt off" when you did not pick one.
+- Who noted it and when: "You, during a session", "You, onboarding", "You, in Profile" or "Coach note", then the date.
+- "Linked: <exercise>" for the exercise you were on, or "Linked exercise: —" when there is none.
+- A status tag. A fresh note reads **Noted** until you pick a status.
+
+Four status chips, in plain words:
+
+- **Accommodated** — you train around it. The exercise stays, with a change you can manage.
+- **Avoided** — you leave the exercises that bother it out for now.
+- **Pending** — not decided yet. It needs a closer look first.
+- **Resolved** — it is behind you.
+
+Tap a chip to set it; the tag changes at once. Dillan does not plan around the status yet; it is a record of your choice, and a note is never marked Resolved on its own. The status you set also shows next to that note on the Done screen of the session it came from.
+
+**Note** is a text box you can edit, up to 280 characters. Tap outside the box to save it. Under it: "A dated note, not a diagnosis." **Remove** sets the limitation aside and shows "Limitation removed" with **Undo**; see Known issues.
+
+If there is nothing: "Nothing noted. Anything you mark with "Something feels off" shows up here with its date."
+
+### Availability
+
+- **Days per week** — 1 to 7, or **Not sure**. This is the weekly target Progress uses for Steady weeks.
+- **Training days** — tap the days you train. They are listed in the order of your week. "—" until you pick one.
+- **Typical session** — 20, 30, 45, 60, 75 or 90 minutes, or **Not sure**.
+- **Week starts on** — Mon, Sun or Sat. Until you choose: "Monday until you choose."
+
+Training days, Typical session and Week starts on are stored but not used yet: Today's week strip and Progress still count from Monday, and nothing plans around your days or minutes.
+
+### Experience
+
+**New to lifting**, **Coming back** or **Experienced**. "—" until you choose. Under the chips: "Helps Dillan explain things at the right level. It's never used to pick your loads."
+
+### Units
+
+Weight in **Pounds (lb)** or **Kilograms (kg)**; length in **Inches (in)** or **Centimeters (cm)**. The card says it plainly: "Changes how numbers are shown. What you entered is kept as you typed it." Switching units changes the display only: Progress converts your measurements on screen, and every entry keeps the unit it was typed in. The chips are greyed out until your profile has loaded. The same card is on Settings. If the change cannot be stored: "That didn't save on this device. This browser isn't keeping data between visits (private mode or storage full)."
+
+### Time zone
+
+A list of time zones with yours selected. "Sessions are dated by the day where you train." When this device is in a different zone, a button offers **Use this device's (<zone>)**.
+
+### When Profile changed on another device
+
+If the same thing was changed on another device first, the change shows a conflict card at the top of the screen: "Your profile changed on another device. Keep yours, keep theirs, or compare?" Compare lists each field you changed, Yours and Theirs. See When something changed on another device above.
 
 ## Settings
-The Settings screen is a placeholder for now: "Notifications, privacy, AI data permissions, export and deletion." The Your data sheet lives in the menu for now: tap your initials, then **Your data**. See Your data and updates above.
+
+**On this phone.** One row, **Your data on this phone**, with "N not synced yet" or "Everything is synced". Tap it to open the Your data sheet; see Your data and updates above. The sheet is also in the menu: tap your initials, then **Your data**.
+
+**Units.** The same card as on Profile. See Known issues: the choice may flip back on this screen.
+
+**Coming later.** Six cards, each tagged Coming later, with one line that says where things stand:
+
+- **Notifications** — "No reminders are sent yet. You'll choose them here."
+- **Privacy** — "Your data is stored on your account and shared with no one unless you invite a coach."
+- **AI data permissions** — "Dillan's AI isn't on yet, so nothing is sent to it."
+- **Export** — "Downloading a copy of everything isn't built yet."
+- **Deletion** — "Deleting your account from here isn't built yet."
+- **Accessibility** — "Dillan follows your phone's text size, motion and dark mode settings for now."
+
+**Account.** "Signed in as <your email>", a **Sign out** button, and "Signing out clears this device's copy." If changes are still waiting to sync, Dillan asks first; see Signing out under Session.
 
 ## Coaching
 Coming later.
+
+## Known issues
+
+These are in the app right now. They are accepted for the moment; the fixes come after the owner's phone testing.
+
+- **Units on Settings may flip back.** After you change units on Settings, the card can show the old choice again once the change has synced, until you leave the screen and come back. Your choice did save. To be sure of what you see, change units on Profile.
+- **Undo after removing gear that never synced does nothing.** If you add a piece of equipment and remove it before it has synced, the add is simply taken back, so Undo has nothing to put back. Add it again.
+- **Undo on a removed limitation may set it to Pending.** When you remove a limitation and tap Undo, it comes back, but a note that was still Noted comes back as Pending. Tap the status you want.
+- **The routine editor shows loads in the unit they were saved in.** It does not yet follow the units you picked. The number is right; only the unit label may differ from the rest of the app.
+- **Two very fast taps on the same Profile setting can show a conflict card.** If you tap one setting twice within a moment, the second change can race the first and come back as "Changed on another device". Tap **Keep yours**; your last choice is sent again.

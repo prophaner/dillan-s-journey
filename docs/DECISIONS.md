@@ -12,6 +12,12 @@ Decision:
 Consequence:
 ```
 
+## 2026-10-16 — Pause after Phase 1 shells for phone testing
+Question: Continue to swap alternatives and Phase 2 now, or test first?
+Options: (a) continue; (b) pause, owner runs the seven phone checklists, then resume.
+Decision: (b), decided by the owner (Lovable credits running low).
+Consequence: Profile slice accepted with known issues listed in CHANGELOG; the next prompt is saved in docs/product/next-prompts.md; the ai-reviewer agent is in place for Phase 2.
+
 ## 2026-10-16 — Goal level Improve / Maintain / Defer lives on goals.level
 Question: Where does the FR-02 level live?
 Options: (a) a goals.level column (migration 0004), set in the Plan slice; (b) a periodic-review table later.

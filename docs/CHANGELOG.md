@@ -1,6 +1,6 @@
 # Changelog
 
-Reviewed through: f1afd3a
+Reviewed through: a4e8574
 
 One entry per accepted slice, newest first, written by the docs-writer agent after the owner
 accepts. Tooling changes merged by the owner (agent config, docs scaffolding) get a short
@@ -9,6 +9,91 @@ entry under "Tooling" so the history stays complete; they are not slices.
 ## Unreleased
 - 0002/0003: prescriptions reference exercises by id; backfill for existing routines
   (0003 landed at 0f55c7b, approved by the owner; see DECISIONS 2026-10-15)
+
+### 2026-10-16 — Profile and Settings shells, migration 0005, with states fixes
+Commits 133775c..a4e8574 (migration 0005 at a4e8574, approved by the owner; Lovable build a4e8574).
+Accepted with known issues (listed below): the owner paused Lovable spending for manual phone testing.
+Screens: Profile (equipment, limitations, availability, experience, units, time zone), Settings (Your
+data on this phone, units, Coming later, Sign out), S21 Your data (storage label), S20/sign-in offline,
+conflict card (profile rows, routine-save rebase), S04/S07 Session (storage phrase, note status), Plan
+(fix), D02 Routine editor (loads in your unit), S08 Progress (units from preferences). FRs/ATs: FR-01
+partial (equipment, limitations, availability, experience, units, time zone; no preferences or
+integrations); FR-04 partial (available toggle; no locations or temporary availability); FR-09 partial
+(status accommodated / avoided / pending / resolved on each note, editable note; no per-routine view);
+FR-17 partial (Your data and Sign out on Settings; privacy, export and deletion are Coming later);
+AT-22 held (units change display only); AT-34 label ("Kept in this tab only"). Verified on phone: no.
+
+- Profile lists your equipment: name, detail or "—", "Demo data" on sample gear, an Available /
+  Not available box, and a bin. "No equipment yet. Add what you train with. Dillan only plans with
+  what's here and available." when empty.
+- Add equipment by name (up to 80 characters; "e.g. Kettlebell 16 kg"); it shows at once and syncs
+  through the outbox with a device-made id, so offline edits to it follow.
+- Remove equipment sets it aside (archived, never deleted); toast "<name> removed" with Undo.
+- Limitations, newest first: area and side (or "Something felt off"), origin ("You, during a
+  session", "You, onboarding", "You, in Profile", "Coach note") with date, "Linked: <exercise>" or
+  "Linked exercise: —", a status tag ("Noted" for a fresh note), four status chips Accommodated /
+  Avoided / Pending / Resolved, an editable note (280 characters, saved when you leave the box),
+  "A dated note, not a diagnosis.", Remove with Undo. Empty: "Nothing noted. Anything you mark with
+  “Something feels off” shows up here with its date."
+- Availability: Days per week (1–7, Not sure), Training days in the order of your week, Typical
+  session (20–90 min, Not sure), Week starts on (Mon, Sun, Sat; "Monday until you choose."). Days
+  per week is the weekly target Progress uses for Steady weeks; the other three are stored and not
+  yet used by Today or Progress.
+- Experience: New to lifting / Coming back / Experienced; "Helps Dillan explain things at the right
+  level. It's never used to pick your loads."
+- Units card on Profile and Settings: Pounds (lb) / Kilograms (kg), Inches (in) / Centimeters (cm);
+  "Changes how numbers are shown. What you entered is kept as you typed it." Units now live in
+  profiles.preferences.units (the old columns kept in step); Progress reads them from there.
+- Time zone: a list of zones, "Sessions are dated by the day where you train.", and "Use this
+  device's (<zone>)" when the device differs.
+- Every Profile change goes through the outbox as a versioned row update (update:profiles |
+  equipment_items | limitations), validated on the device and the server; a second change to a row
+  whose first has not left this device is merged into it, so an offline session of edits never
+  conflicts with itself. A replay of a change already stored is accepted silently.
+- Write-failure banner on Profile: "That didn't save. This browser isn't keeping data between visits
+  (private mode or storage full)." with Try again; the Units card has its own.
+- Load states per section: skeleton; "Couldn't load your equipment / limitations / profile" with
+  "Check your connection and try again." or, offline, "Open Profile online once to see this."
+- Settings: "On this phone" row "Your data on this phone" with "N not synced yet" / "Everything is
+  synced" opens the Your data sheet (still in the menu too); Units; six "Coming later" cards
+  (Notifications, Privacy, AI data permissions, Export, Deletion, Accessibility) with one honest
+  line each; Account: "Signed in as <email>", Sign out, "Signing out clears this device's copy."
+- Session Done screen: each "Noted today" line shows the status you set in Profile (for example
+  Resolved) next to its save word; nothing extra while it is just Noted.
+- Conflict card: profile, equipment and limitation changes are resolvable ("Your profile changed on
+  another device. Keep yours, keep theirs, or compare?"); Compare lists each changed field with
+  Yours / Theirs (units as "lb · in", status words, Available / Not available, Removed / Kept).
+- States fix (AT-34): when storage is unavailable, "Saved on this device" reads "Kept in this tab
+  only" in every save word and toast, and the Your data sheet row explains "This browser isn't
+  keeping data, so closing this tab loses it. Sync before you close."
+- States fix (sign-in): offline, the sign-in page no longer tries the server check; it shows "Dillan
+  needs a connection to sign you in again. Open it online once." with Try again.
+- States fix (conflicts): Keep yours on a routine save that an unsynced session depends on now moves
+  the save itself onto the newest version (new id, next number) and re-points the queued session and
+  its on-device copy, instead of leaving the save behind: "Kept yours as the newest version. The
+  session you started on it will sync after it." Keep editing on Plan does the same and retries.
+- States fix (conflicts): Keep yours on your setup (onboarding) resends with the original
+  idempotency key, so child rows are never doubled; the server checks the profile version before
+  writing anything.
+- Fix (outbox): an item rewritten while queued is sent and marked from its fresh copy, not the
+  stale one read at the start of the drain.
+- Migration 0005 (a4e8574): limitations.status check now allows accommodated, avoided, pending
+  (alongside active, resolved, archived); profiles.experience (new, returning, experienced),
+  profiles.training_days smallint[], profiles.week_start 0–6. Mirrored in docs/profile-schema.sql.
+  Approved by the owner.
+
+Known issues (accepted as is; see the manual's Known issues):
+- The Units card on Settings may flip back to the old value after a sync until the screen is
+  reopened. Profile shows the right value; use Profile to change units.
+- Undo after removing gear that never synced does nothing: the add was taken back, so there is
+  nothing to restore.
+- Undo on a removed limitation may put it back as Pending instead of its earlier status (a fresh
+  "Noted" note comes back as Pending).
+- The routine editor shows loads in the unit they were saved in, not your display unit.
+- Tapping the same Profile setting twice very quickly can produce a "Changed on another device"
+  card (the second change raced the first); Keep yours resolves it.
+
+Phase 1 code-complete except swap alternatives + exercise preferences; paused for owner phone testing.
 
 ### 2026-10-16 — Your data, offline and conflicts (S21, S20), with Plan fixes
 Commits 4827521..f1afd3a (Lovable build 42eeca5, fix round f1afd3a). No migration.
@@ -316,5 +401,5 @@ AT-31, AT-33, AT-34. Verified on phone: no.
 ## Tooling
 - 2026-10-15 — Added `.claude/` (agents, commands) and `CLAUDE.md` lead instructions; docs
   scaffolding (changelog, user manual, decision log, test-plans). No user-visible change.
-
-- 2026-10-16 · Migration 0005: limitation statuses (accommodated/avoided/pending), profiles.experience, training_days, week_start. Profile and Settings shells.
+- 2026-10-16 — Lovable's note at a4e8574 (migration 0005, Profile and Settings shells) is folded
+  into the slice entry above.
