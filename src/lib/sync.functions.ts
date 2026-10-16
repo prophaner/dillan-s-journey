@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { MEASUREMENT_ADD } from "./measurements";
+import { GOAL_LEVEL, ROUTINE_SAVE } from "./plan";
 import { ONBOARDING_KIND, validateOnboardingPayload } from "./onboarding";
 import { SESSION_DISCARD, SESSION_FINISH, SESSION_START, SET_LOG, SET_LOG_DELETE, SET_LOG_EDIT, SESSION_OFF_REPORT } from "./workout";
 
@@ -28,6 +29,15 @@ export const syncOutboxItem = createServerFn({ method: "POST" })
       if (typeof data.expectedVersion !== "number") throw new Error("400 version required");
       const { storeOnboarding } = await import("./onboarding.server");
       await storeOnboarding(sb, userId, data.idempotencyKey, data.expectedVersion, payload);
+      stored = true;
+    } else if (data.kind === GOAL_LEVEL) {
+      if (typeof data.expectedVersion !== "number") throw new Error("400 version required");
+      const { storeGoalLevel } = await import("./plan.server");
+      await storeGoalLevel(sb, userId, data.expectedVersion, data.payload);
+      stored = true;
+    } else if (data.kind === ROUTINE_SAVE) {
+      const { storeRoutineVersion } = await import("./plan.server");
+      await storeRoutineVersion(sb, userId, data.idempotencyKey, data.payload);
       stored = true;
     } else if (data.kind === MEASUREMENT_ADD) {
       const { storeMeasurement } = await import("./measurements.server");
