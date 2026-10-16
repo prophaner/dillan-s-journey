@@ -29,7 +29,7 @@
  * replaced with an in-memory store below. Product code is exercised unchanged.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { drain, enqueue, listItems, nextSeq, retryAccount, sessionOf, type OutboxItem, type SendResult } from "@/lib/outbox";
+import { drain, enqueue, listItems, nextSeq, retryAccount, retryItem, sessionOf, type OutboxItem, type SendResult } from "@/lib/outbox";
 import { sessionSaveState } from "@/lib/use-outbox";
 import { MEASUREMENT_ADD } from "@/lib/measurements";
 import { ROUTINE_SAVE } from "@/lib/plan";
@@ -447,7 +447,7 @@ describe("a session started on a routine version that is not yet stored waits be
     expect(after4[start.localId]).toBe("local");
     expect(after4[log.localId]).toBe("local");
 
-    await retryAccount(acct);
+    await retryItem(save.localId); // conflicts are only re-sent by an explicit per-item choice, never by Retry-all
     await drain(acct, send);
     const order = send.mock.calls.map((c) => c[0].localId);
     expect(order).toEqual([save.localId, start.localId, log.localId]);
