@@ -257,17 +257,17 @@ describe("drain does not re-send failed or conflict items until Retry (§9.1 ide
 
     await retryAccount(acct);
     await drain(acct, send);
-    expect(send).toHaveBeenCalledTimes(2);
+    // Retry only re-queues "failed"; a conflict waits for the conflict card (keep yours / theirs).
+    expect(send).toHaveBeenCalledTimes(1);
     const calls = send.mock.calls.map((c) => c[0]);
-    const sentConflicting = calls.filter((i) => i.localId === conflicting.localId);
+    expect(calls.filter((i) => i.localId === conflicting.localId)).toHaveLength(0);
     const sentPermanent = calls.filter((i) => i.localId === permanent.localId);
-    expect(sentConflicting).toHaveLength(1);
     expect(sentPermanent).toHaveLength(1);
-    expect(sentConflicting[0]?.idempotencyKey).toBe(conflicting.idempotencyKey);
-    expect(sentConflicting[0]?.expectedVersion).toBe(3);
     expect(sentPermanent[0]?.idempotencyKey).toBe(permanent.idempotencyKey);
     expect(sentPermanent[0]?.expectedVersion).toBeNull();
-    expect((await listItems(acct)).every((i) => i.status === "synced")).toBe(true);
+    const after = Object.fromEntries((await listItems(acct)).map((i) => [i.localId, i.status]));
+    expect(after[conflicting.localId]).toBe("conflict");
+    expect(after[permanent.localId]).toBe("synced");
   });
 });
 

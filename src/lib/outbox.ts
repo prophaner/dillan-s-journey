@@ -219,12 +219,12 @@ export async function removeIfLocal(localId: string): Promise<boolean> {
   return true;
 }
 
-/** Put this account's failed/conflict items back in the queue. */
+/** Put this account's failed items back in the queue. Conflicts stay put: the conflict card resolves them. */
 export async function retryAccount(accountId: string) {
   const d = await db();
   let changed = false;
   for (const item of await listItems(accountId)) {
-    if (item.status === "failed" || item.status === "conflict") {
+    if (item.status === "failed") {
       await d.put("outbox", { ...item, status: "local", attempts: 0, error: undefined });
       changed = true;
     }

@@ -70,7 +70,8 @@ export async function storeRoutineVersion(sb: SB, userId: string, key: string, r
       // A concurrent try of this same save may have won the race.
       const { data: again } = await sb.from("routine_template_versions")
         .select("id, locked_at").eq("owner_id", userId).eq("idempotency_key", key).maybeSingle();
-      if (again) return;
+      if (again?.locked_at) return;
+      if (again) throw new Error("retry: version still being written");
       throw new Error("409 conflict: that version number already exists");
     }
     fail(iErr, "version insert");

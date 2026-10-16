@@ -241,7 +241,7 @@ function BlockCard({ b, i, last, onMove, onGroup, onUngroup, onRemove, onRemoveE
       {sup && (
         <div className="mt-4 grid grid-cols-1 gap-3 min-[400px]:grid-cols-3">
           <NumField label="Rounds" value={b.rounds} onChange={(v) => setBlock({ rounds: v ?? 1 })} />
-          <NumField label="Rest between (s)" value={b.prescriptions[0]?.transition_seconds === undefined ? DEFAULT_TRANSITION_SECONDS : b.prescriptions[0].transition_seconds}
+          <NumField label="Rest between (s)" value={b.prescriptions[0]?.transition_seconds ?? null} hint={`default ${DEFAULT_TRANSITION_SECONDS} s`}
             onChange={(v) => setBlock({ prescriptions: b.prescriptions.map((p, q) => (q < b.prescriptions.length - 1 ? { ...p, transition_seconds: v } : p)) })} />
           <NumField label="Round rest (s)" value={b.restSeconds} onChange={(v) => setBlock({ restSeconds: v })} />
         </div>
@@ -287,7 +287,7 @@ function IconBtn({ label, children, ...rest }: { label: string; children: React.
 }
 
 /** Text input with a numeric keyboard (never type="number"). Empty = not set. */
-function NumField({ label, value, onChange, decimal }: { label: string; value: number | null; onChange: (v: number | null) => void; decimal?: boolean }) {
+function NumField({ label, value, onChange, decimal, hint }: { label: string; value: number | null; onChange: (v: number | null) => void; decimal?: boolean; hint?: string }) {
   const [text, setText] = useState(value === null ? "" : String(value));
   useEffect(() => {
     const parsed = text.trim() === "" ? null : Number(text.replace(",", "."));
