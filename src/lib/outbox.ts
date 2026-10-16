@@ -91,6 +91,7 @@ export async function enqueue(
   kind: string,
   payload: unknown,
   expectedVersion: number | null = null,
+  opts: { idempotencyKey?: string } = {},
 ): Promise<OutboxItem> {
   // Updates ("update:<table>") must carry the version the app read.
   if (isUpdateKind(kind)) assertVersion(kind.slice(7), expectedVersion);
@@ -98,7 +99,8 @@ export async function enqueue(
   const item: OutboxItem = {
     localId: crypto.randomUUID(),
     accountId,
-    idempotencyKey: crypto.randomUUID(),
+    // A resend of the same change keeps its key, so the server can recognise a replay.
+    idempotencyKey: opts.idempotencyKey ?? crypto.randomUUID(),
     kind,
     payload,
     expectedVersion,
@@ -218,6 +220,25 @@ export async function removeIfLocal(localId: string): Promise<boolean> {
   await d.delete("outbox", localId);
   emit();
   return true;
+}
+
+/**
+ * Rewrite items that haven't left this device (not synced, not mid-send). `fn` returns the
+ * new item, or null to leave it alone. Order (seq) is kept. Returns how many changed.
+ */
+export async function rewriteUnsent(accountId: string, fn: (item: OutboxItem) => OutboxItem | null) {
+  const d = await db();
+  let n = 0;
+  for (const item of await listItems(accountId)) {
+    if (item.status === "synced" || sendingId === item.localId) continue;
+    const next = fn(item);
+    if (!next) continue;
+    if (sendingId === item.localId) continue;
+    await d.put("outbox", { ...next, localId: item.localId, seq: item.seq, accountId: item.accountId });
+    n++;
+  }
+  if (n) emit();
+  return n;
 }
 
 /** Put this account's failed items back in the queue. Conflicts with a card stay put (the card resolves them); conflicts without one are requeued. */
