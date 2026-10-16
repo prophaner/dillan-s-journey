@@ -11,7 +11,7 @@ import { versionInUse } from "@/lib/conflicts";
 import { rebaseRoutineSave } from "@/lib/conflicts.client";
 import { useOutbox } from "@/lib/use-outbox";
 import { estimateMinutes, blockName } from "@/lib/time-plan";
-import { GOAL_LEVEL, GOAL_LEVELS, LEVEL_LABEL, ROUTINE_SAVE, toEdit, type GoalLevel, type RoutineSavePayload } from "@/lib/plan";
+import { GOAL_LEVEL, GOAL_LEVELS, LEVEL_LABEL, ROUTINE_SAVE, type GoalLevel, type RoutineSavePayload } from "@/lib/plan";
 import { Card, PageHeader, ScreenState, SectionLabel, VoiceBlock } from "@/components/dillan/surfaces";
 import { DButton } from "@/components/dillan/button";
 import { Chip, DemoLabel, SaveState, StatusTag, UnknownValue } from "@/components/dillan/tags";
