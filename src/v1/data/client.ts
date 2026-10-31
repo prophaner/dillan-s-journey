@@ -54,7 +54,10 @@ export function getApi(): Promise<DillanApi> {
           mockRequested(true, window.location.search, sessionStore())
         ) {
           const m = await import("./mock-api");
-          api = m.createMockApi();
+          // The TV surface keeps its own mock sign-in so a phone tab and a TV tab can pair.
+          api = window.location.pathname.startsWith("/tv")
+            ? m.createMockApi({ sessionKey: m.MOCK_TV_SESSION_KEY })
+            : m.createMockApi();
         }
       }
       current = api ?? createSupabaseApi();

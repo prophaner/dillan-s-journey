@@ -38,6 +38,9 @@ import { clearLocalUserData } from "@/v1/session/local-data";
 
 export const MOCK_DB_KEY = "dillan.mock.db.v1";
 export const MOCK_SESSION_KEY = "dillan.mock.session";
+/** The TV tab signs in on its own (two tabs = phone + TV in one browser). */
+export const MOCK_TV_SESSION_KEY = "dillan.mock.session.tv";
+const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
 export interface MockOptions {
   storage?: Storage | null;
@@ -45,6 +48,8 @@ export interface MockOptions {
   db?: MockDb;
   /** simulated strap state; default reads localStorage["dillan.mock.hr"] (see mock-hr.ts) */
   hrMode?: () => MockHrMode;
+  /** where the signed-in user id is kept (default MOCK_SESSION_KEY; the TV uses its own) */
+  sessionKey?: string;
 }
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
@@ -52,6 +57,7 @@ const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): void; db(): MockDb } {
   const storage = opts.storage === undefined ? safeLocalStorage() : opts.storage;
   const now = opts.now ?? (() => Date.now());
+  const sessionKey = opts.sessionKey ?? MOCK_SESSION_KEY;
   let db: MockDb = opts.db ?? load() ?? seedMockDb(now());
   let me: string | null = readSession();
 
@@ -84,7 +90,7 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
   }
   function readSession(): string | null {
     try {
-      return storage?.getItem(MOCK_SESSION_KEY) ?? null;
+      return storage?.getItem(sessionKey) ?? null;
     } catch {
       return null;
     }
@@ -92,8 +98,8 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
   function writeSession(id: string | null) {
     me = id;
     try {
-      if (id) storage?.setItem(MOCK_SESSION_KEY, id);
-      else storage?.removeItem(MOCK_SESSION_KEY);
+      if (id) storage?.setItem(sessionKey, id);
+      else storage?.removeItem(sessionKey);
     } catch {
       /* ignore */
     }
@@ -109,7 +115,7 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
         db = load() ?? db;
         for (const s of db.sessions) if (before.get(s.id) !== s.revision) emitSession(s);
       }
-      if (e.key === MOCK_SESSION_KEY) {
+      if (e.key === sessionKey) {
         me = readSession();
         const u = authUser();
         authListeners.forEach((cb) => cb(u));
@@ -614,20 +620,7 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
         }
         p.status = "approved";
         p.approved_user_id = u.id;
-        // In the real flow the TV registers its grant after it signs in; the mock does it here.
-        db.grants = db.grants.filter(
-          (g) => !(g.user_id === u.id && g.device_id === p.device_id && !g.revoked_at),
-        );
-        db.grants.push({
-          id: newId(),
-          user_id: u.id,
-          device_id: p.device_id,
-          label: p.device_label,
-          session_id: null,
-          created_at: iso(),
-          last_seen_at: iso(),
-          revoked_at: null,
-        });
+        // As in the real flow, the TV registers its grant when it signs in (tv.pairPoll).
         persist();
         return { ok: true, device_label: p.device_label };
       },
@@ -638,6 +631,93 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
         l.p.status = "denied";
         persist();
         return { ok: true };
+      },
+    },
+
+    tv: {
+      async pairStart(device, forUserId) {
+        // Same lifecycle as pairing_create: one live code per device, 5 minutes.
+        for (const p of db.pairings)
+          if (p.device_id === device.id && p.status === "awaiting") p.status = "cancelled";
+        let code = "";
+        do {
+          code = "DLN-";
+          for (let i = 0; i < 4; i++)
+            code += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
+        } while (db.pairings.some((p) => p.code === code && p.status === "awaiting"));
+        const p = {
+          id: newId(),
+          secret: newId().replace(/-/g, ""),
+          code,
+          device_id: device.id,
+          device_label: device.label,
+          status: "awaiting" as const,
+          created_at: iso(),
+          expires_at: iso(now() + 5 * 60_000),
+          for_user_id: forUserId,
+          approved_user_id: null,
+        };
+        db.pairings.push(p);
+        persist();
+        return {
+          ok: true,
+          challenge: { challengeId: p.id, code, expiresAt: p.expires_at, secret: p.secret },
+        };
+      },
+      async pairPoll(device, ch) {
+        db = load() ?? db;
+        const p = db.pairings.find((x) => x.id === ch.challengeId);
+        if (!p || p.secret !== ch.secret) return { status: "error", error: "bad_secret" };
+        if (p.status === "awaiting" && Date.parse(p.expires_at) <= now()) {
+          p.status = "expired";
+          persist();
+        }
+        if (p.status === "awaiting" || p.status === "denied" || p.status === "expired")
+          return { status: p.status };
+        if (p.status !== "approved" || !p.approved_user_id) return { status: "cancelled" };
+        p.status = "consumed";
+        const grant = {
+          id: newId(),
+          user_id: p.approved_user_id,
+          device_id: device.id,
+          label: device.label,
+          session_id: newId(),
+          created_at: iso(),
+          last_seen_at: iso(),
+          revoked_at: null,
+        };
+        db.grants.push(grant);
+        persist();
+        writeSession(p.approved_user_id);
+        const u = authUser();
+        if (!u) return { status: "error", error: "sign_in_failed" };
+        return { status: "signed_in", user: u, grantId: grant.id };
+      },
+      async pairCancel(ch) {
+        const p = db.pairings.find((x) => x.id === ch.challengeId);
+        if (p && p.secret === ch.secret && p.status === "awaiting") {
+          p.status = "cancelled";
+          persist();
+        }
+      },
+      async checkGrant(deviceId) {
+        db = load() ?? db;
+        if (!me) return { valid: false, grantId: null };
+        const g = db.grants.find(
+          (x) => x.user_id === me && x.device_id === deviceId && !x.revoked_at,
+        );
+        if (!g) return { valid: false, grantId: null };
+        g.last_seen_at = iso();
+        persist();
+        return { valid: true, grantId: g.id };
+      },
+      async lock(grantId) {
+        const g = grantId ? db.grants.find((x) => x.id === grantId) : undefined;
+        if (g && !g.revoked_at) {
+          g.revoked_at = iso();
+          persist();
+        }
+        writeSession(null);
       },
     },
 

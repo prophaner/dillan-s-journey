@@ -31,6 +31,9 @@ export interface MockUser {
 }
 
 export interface MockPairing {
+  /** challenge id and TV secret: set for codes a TV tab created (the seeded codes have none) */
+  id?: string;
+  secret?: string;
   code: string;
   device_id: string;
   device_label: string;

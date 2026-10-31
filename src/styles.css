@@ -132,6 +132,24 @@
   --spacing-safe-b: var(--safe-b);
   --spacing-safe-t: var(--safe-t);
   --spacing-sidebar: 240px;
+
+  /* TV surface (tokens.css "TV surface") */
+  --text-tv-xs: var(--tv-t-xs);
+  --text-tv-sm: var(--tv-t-sm);
+  --text-tv-base: var(--tv-t-base);
+  --text-tv-md: var(--tv-t-md);
+  --text-tv-lg: var(--tv-t-lg);
+  --text-tv-xl: var(--tv-t-xl);
+  --text-tv-2xl: var(--tv-t-2xl);
+  --text-tv-3xl: var(--tv-t-3xl);
+  --text-tv-metric: var(--tv-t-metric);
+  --spacing-tv-safe: var(--tv-safe);
+  --spacing-tv-tap: var(--tv-tap);
+  --spacing-tv-tile: var(--tv-chooser-tile);
+  --spacing-tv-qr: var(--tv-qr);
+  --radius-tv-sm: var(--tv-r-sm);
+  --radius-tv-md: var(--tv-r-md);
+  --radius-tv-lg: var(--tv-r-lg);
 }
 
 @layer base {
@@ -153,6 +171,22 @@
 }
 
 @utility tabular { font-variant-numeric: tabular-nums; }
+
+/* TV: D-pad focus ring (5 px + soft halo, outside the element so layout never shifts), no hover,
+   no native outline (the focus engine draws [data-focused]). */
+@layer components {
+  .tv-root { cursor: none; }
+  .tv-root :focus-visible { outline: none; }
+  .tv-root [data-focused] {
+    box-shadow:
+      0 0 0 var(--tv-focus-w) var(--text),
+      0 0 0 calc(var(--tv-focus-w) + 5px) color-mix(in oklab, var(--text) 25%, transparent);
+  }
+  .tv-root [data-focus] { transition: box-shadow var(--dur-quick) var(--ease-settle); }
+  @media (prefers-reduced-motion: reduce) {
+    .tv-root [data-focus] { transition: none; }
+  }
+}
 @utility screen-x { padding-left: var(--margin); padding-right: var(--margin); }
 @utility pb-nav { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 24px); }
 @utility press {

@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as TvRouteImport } from './routes/tv'
 import { Route as TvApproveRouteImport } from './routes/tv-approve'
 import { Route as AuthenticatedAppRouteRouteImport } from './routes/_authenticated/_app/route'
 import { Route as AuthenticatedAppIndexRouteImport } from './routes/_authenticated/_app/index'
@@ -34,6 +35,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TvRoute = TvRouteImport.update({
+  id: '/tv',
+  path: '/tv',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TvApproveRoute = TvApproveRouteImport.update({
@@ -125,6 +131,7 @@ const AuthenticatedAppWorkoutTemplateIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedAppIndexRoute
   '/auth': typeof AuthRoute
+  '/tv': typeof TvRoute
   '/tv-approve': typeof TvApproveRoute
   '/approve-tv': typeof AuthenticatedAppApproveTvRoute
   '/session/$id': typeof AuthenticatedSessionIdRoute
@@ -142,6 +149,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof AuthenticatedAppIndexRoute
   '/auth': typeof AuthRoute
+  '/tv': typeof TvRoute
   '/tv-approve': typeof TvApproveRoute
   '/approve-tv': typeof AuthenticatedAppApproveTvRoute
   '/session/$id': typeof AuthenticatedSessionIdRoute
@@ -160,6 +168,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/tv': typeof TvRoute
   '/tv-approve': typeof TvApproveRoute
   '/_authenticated/_app': typeof AuthenticatedAppRouteRouteWithChildren
   '/_authenticated/_app/approve-tv': typeof AuthenticatedAppApproveTvRoute
@@ -181,6 +190,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/tv'
     | '/tv-approve'
     | '/approve-tv'
     | '/session/$id'
@@ -198,6 +208,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/tv'
     | '/tv-approve'
     | '/approve-tv'
     | '/session/$id'
@@ -215,6 +226,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_authenticated'
     | '/auth'
+    | '/tv'
     | '/tv-approve'
     | '/_authenticated/_app'
     | '/_authenticated/_app/approve-tv'
@@ -235,6 +247,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  TvRoute: typeof TvRoute
   TvApproveRoute: typeof TvApproveRoute
 }
 
@@ -252,6 +265,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tv': {
+      id: '/tv'
+      path: '/tv'
+      fullPath: '/tv'
+      preLoaderRoute: typeof TvRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tv-approve': {
@@ -415,6 +435,7 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  TvRoute: TvRoute,
   TvApproveRoute: TvApproveRoute,
 }
 export const routeTree = rootRouteImport

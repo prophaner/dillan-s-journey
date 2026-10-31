@@ -91,6 +91,22 @@
   --dur-calm: 520ms;
 }
 
+/* ---- TV surface (design/v1/docs/04-design-system.md, prototype .tv): a fixed 1920×1080 canvas
+   scaled to the screen, always the dark theme, tuned for ~3 m viewing. Smallest text 20 px. ---- */
+:root {
+  --tv-w: 1920px;
+  --tv-h: 1080px;
+  --tv-safe: 64px;          /* overscan safe area on all sides */
+  --tv-tap: 72px;           /* minimum focusable size */
+  --tv-focus-w: 5px;        /* focus ring, drawn outside the element */
+  --tv-t-xs: 20px;  --tv-t-sm: 22px;  --tv-t-base: 28px; --tv-t-md: 32px;
+  --tv-t-lg: 40px;  --tv-t-xl: 48px;  --tv-t-2xl: 64px;  --tv-t-3xl: 88px;
+  --tv-t-metric: 168px;     /* BPM */
+  --tv-r-sm: 14px; --tv-r-md: 20px; --tv-r-lg: 28px;
+  --tv-chooser-tile: 280px;
+  --tv-qr: 300px;
+}
+
 /* ---- Night Gym (dark) ---- */
 [data-theme="dark"] {
   --bg:        #121210;

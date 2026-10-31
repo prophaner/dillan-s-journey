@@ -90,6 +90,31 @@ export type PairingResult =
   | { ok: true; device_label?: string }
   | { ok: false; error: PairingError; for_name?: string | null };
 
+/** This TV: a random id kept in localStorage and a label shown on the approving phone. */
+export interface TvDeviceInfo {
+  id: string;
+  label: string;
+}
+
+/** A pairing request held by the TV. The secret lives only in TV memory (build-plan D8). */
+export interface TvChallenge {
+  challengeId: string;
+  /** DLN-XXXX */
+  code: string;
+  expiresAt: string;
+  secret: string;
+}
+
+export type TvPairStartResult =
+  | { ok: true; challenge: TvChallenge }
+  | { ok: false; error: "rate_limited" | "network" | "unavailable" };
+
+export type TvPairPoll =
+  | { status: "awaiting" | "denied" | "expired" | "cancelled" }
+  /** approved: this TV is now signed in as `user` and its grant is registered */
+  | { status: "signed_in"; user: AuthUser; grantId: string | null }
+  | { status: "error"; error: string };
+
 export interface StartOptions {
   templateId: string;
   liveData: boolean;
@@ -217,6 +242,25 @@ export interface DillanApi {
     preview(code: string): Promise<PairingPreview>;
     approve(code: string, confirmOtherUser?: boolean): Promise<PairingResult>;
     deny(code: string): Promise<PairingResult>;
+  };
+
+  /** TV side of pairing and the shared-device grant (Slice D). */
+  tv: {
+    /** a new challenge for this TV (forUserId: a remembered profile was chosen) */
+    pairStart(device: TvDeviceInfo, forUserId: string | null): Promise<TvPairStartResult>;
+    /**
+     * One poll. On approval it consumes the challenge, signs this TV in with the one-time token
+     * returned only to the secret holder, and registers the device grant.
+     */
+    pairPoll(device: TvDeviceInfo, challenge: TvChallenge): Promise<TvPairPoll>;
+    pairCancel(challenge: TvChallenge): Promise<void>;
+    /** device_grant_touch: valid while the grant and its auth session exist; null = unreachable */
+    checkGrant(deviceId: string): Promise<{ valid: boolean; grantId: string | null } | null>;
+    /**
+     * Lock / switch / remove: revoke this TV's grant (deletes its auth session server-side), drop
+     * every Realtime channel, end the local session and wipe the auth storage.
+     */
+    lock(grantId: string | null): Promise<void>;
   };
 
   realtime: {

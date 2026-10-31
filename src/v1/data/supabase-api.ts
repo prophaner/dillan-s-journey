@@ -5,6 +5,7 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { clearLocalUserData } from "@/v1/session/local-data";
+import { isPlaceholderEmail } from "@/v1/core/placeholder-email";
 import type { Json } from "@/integrations/supabase/types";
 import type { HrLiveRow, StoredSample } from "@/v1/core/hr";
 import type {
@@ -32,6 +33,7 @@ import {
   type PairingResult,
   type Profile,
   type ProfilePatch,
+  type TvPairPoll,
 } from "./api";
 
 type AnyError =
@@ -87,7 +89,9 @@ function toUser(
   if (!u) return null;
   return {
     id: u.id,
-    email: u.email || null,
+    // A phone-only account that approved a TV carries a non-deliverable placeholder email
+    // (tv.functions.ts); it is not a contact and is never shown.
+    email: u.email && !isPlaceholderEmail(u.email) ? u.email : null,
     phone: u.phone ? (u.phone.startsWith("+") ? u.phone : `+${u.phone}`) : null,
   };
 }
@@ -97,6 +101,27 @@ async function uid(): Promise<string> {
   const id = data.session?.user.id;
   if (!id) throw new Error("not_authenticated");
   return id;
+}
+
+/** Removes every supabase-js auth entry (sb-<ref>-auth-token and its code verifier). */
+export function wipeSupabaseAuthStorage(store?: Storage | null) {
+  let st = store;
+  try {
+    st = st === undefined ? (typeof window !== "undefined" ? window.localStorage : null) : st;
+  } catch {
+    st = null;
+  }
+  if (!st) return;
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < st.length; i++) {
+      const k = st.key(i);
+      if (k && k.startsWith("sb-") && k.includes("-auth-token")) keys.push(k);
+    }
+    keys.forEach((k) => st?.removeItem(k));
+  } catch {
+    /* storage blocked: nothing was stored either */
+  }
 }
 
 function check<T>(res: { data: T; error: AnyError }): T {
@@ -523,6 +548,73 @@ export function createSupabaseApi(): DillanApi {
         const res = await supabase.rpc("deny_pairing", { p_code: code });
         if (res.error) return { ok: false, error: "network" as PairingError };
         return res.data as unknown as PairingResult;
+      },
+    },
+
+    tv: {
+      async pairStart(device, forUserId) {
+        try {
+          const { tvPairStart } = await import("./tv.functions");
+          const r = await tvPairStart({
+            data: { deviceId: device.id, label: device.label, forUserId },
+          });
+          return r.ok ? { ok: true, challenge: r.challenge } : { ok: false, error: r.error };
+        } catch {
+          return { ok: false, error: "network" };
+        }
+      },
+      async pairPoll(device, ch): Promise<TvPairPoll> {
+        const { tvPairStatus } = await import("./tv.functions");
+        let r;
+        try {
+          r = await tvPairStatus({ data: { challengeId: ch.challengeId, secret: ch.secret } });
+        } catch {
+          return { status: "error", error: "network" };
+        }
+        if (!r.ok) return { status: "error", error: r.error };
+        if (r.status !== "approved") return { status: r.status };
+        // The one-time token goes straight into this TV's own Supabase session.
+        const v = await supabase.auth.verifyOtp({ token_hash: r.tokenHash, type: "magiclink" });
+        const user = toUser(v.data.user);
+        if (v.error || !user) return { status: "error", error: "sign_in_failed" };
+        const g = await supabase.rpc("device_grant_register", {
+          p_device_id: device.id,
+          p_label: device.label,
+        });
+        const grant = (g.data as { ok?: boolean; grant?: { id?: string } } | null)?.grant;
+        return { status: "signed_in", user, grantId: grant?.id ?? null };
+      },
+      async pairCancel(ch) {
+        try {
+          const { tvPairCancel } = await import("./tv.functions");
+          await tvPairCancel({ data: { challengeId: ch.challengeId, secret: ch.secret } });
+        } catch {
+          /* the code expires by itself in 5 minutes */
+        }
+      },
+      async checkGrant(deviceId) {
+        const { data: s } = await supabase.auth.getSession();
+        if (!s.session) return { valid: false, grantId: null };
+        const res = await supabase.rpc("device_grant_touch", { p_device_id: deviceId });
+        if (res.error) {
+          // Auth errors mean the session is gone (revoked); anything else is "can't tell".
+          const status = (res.error as { status?: number }).status;
+          return status === 401 || status === 403 ? { valid: false, grantId: null } : null;
+        }
+        const d = res.data as { valid?: boolean; grant_id?: string } | null;
+        return { valid: !!d?.valid, grantId: d?.grant_id ?? null };
+      },
+      async lock(grantId) {
+        if (grantId) {
+          // Deletes this TV's auth session server-side (refresh token dies now, D9).
+          await Promise.race([
+            supabase.rpc("revoke_device_grant", { p_grant_id: grantId }),
+            new Promise((r) => setTimeout(r, 4_000)),
+          ]).catch(() => undefined);
+        }
+        await supabase.removeAllChannels();
+        await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+        wipeSupabaseAuthStorage();
       },
     },
 

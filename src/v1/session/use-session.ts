@@ -36,6 +36,8 @@ export function deviceSource(): CommandSource {
 export function useSessionController(
   sessionId: string,
   userId: string,
+  /** default: deviceSource(); the TV passes "tv" */
+  source?: CommandSource,
 ): { view: SessionView; controller: SessionController } {
   const api = useApi();
   const clock = useServerClock();
@@ -46,7 +48,7 @@ export function useSessionController(
         api,
         userId,
         sessionId,
-        source: deviceSource(),
+        source: source ?? deviceSource(),
         now: () => clock.now(),
         onEnded: (row: WorkoutSessionRow) => {
           // The client that ended the session finalizes its heart-rate summary.
@@ -54,7 +56,7 @@ export function useSessionController(
           void qc.invalidateQueries({ queryKey: ["v1", userId] });
         },
       }),
-    [api, userId, sessionId, clock, qc],
+    [api, userId, sessionId, clock, qc, source],
   );
   useEffect(() => {
     void controller.start();
