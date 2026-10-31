@@ -711,6 +711,8 @@ export class RelayController {
       return;
     }
     if (r.superseded) {
+      // A refused claim is not retried on its own: the user taps Use this device.
+      this.publisher.dropClaim();
       if (this.linkMode !== "superseded") {
         this.supersededAt = this.now();
         this.holderName = r.holder_name;

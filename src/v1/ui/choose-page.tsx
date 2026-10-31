@@ -1,7 +1,7 @@
 // S07 Choose a workout (phone/desktop). Workout Now always goes through a saved template; with
 // none, the empty state points to the editor and nothing is created (acceptance 17).
 
-import { Link } from "@tanstack/react-router";
+import { Link, useSearch } from "@tanstack/react-router";
 import { ChevronRight } from "lucide-react";
 import { useTemplates } from "@/v1/data/queries";
 import { templateSummary } from "./editor-model";
@@ -25,6 +25,9 @@ export const CHOOSE_COPY = {
 export function ChoosePage() {
   const user = useUser();
   const { data: templates, isLoading, isError, refetch } = useTemplates(user.id);
+  // S14 dev "Start demo workout": the choice is carried to preflight (dev builds only).
+  const demo = useSearch({ strict: false }) as { demo?: boolean };
+  const demoSearch: { demo?: boolean } = import.meta.env.DEV && demo.demo ? { demo: true } : {};
 
   if (isLoading) return <ScreenState kind="loading" />;
   if (isError)
@@ -70,6 +73,7 @@ export function ChoosePage() {
               <Link
                 to="/workout/$templateId"
                 params={{ templateId: t.id }}
+                search={demoSearch}
                 className="press flex items-center gap-3 rounded-card border border-line bg-surface p-4"
               >
                 <span className="min-w-0 flex-1">

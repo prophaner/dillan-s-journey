@@ -1,15 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { HeartPulse } from "lucide-react";
 import { useUser } from "@/v1/ui/user-context";
-import { useConfirmZones, useZones } from "@/v1/data/queries";
+import { useConfirmZones, useProfile, useZones } from "@/v1/data/queries";
+import { S14_COPY } from "@/v1/core/hr-views";
+import { StrapCard } from "@/v1/ui/strap-card";
 import { ZonesEditor } from "@/v1/ui/zones-editor";
 import { ScreenHeader } from "@/components/dillan/app-shell";
 import { Card, ScreenState } from "@/components/dillan/surfaces";
-import { Eyebrow } from "@/components/dillan/form-pieces";
 import { useToast } from "@/components/dillan/overlays";
 
-// S14 "Heart-rate strap & zones" (h10-design 6). Card 1 (strap) is a placeholder that Slice E
-// fills with the relay status; card 2 is the zones editor.
+// S14 "Heart-rate strap & zones" (h10-design 6). Card 1: the strap as the relay reports it
+// (strap-card.tsx; this screen never uses Bluetooth). Card 2: the zones editor.
 export const Route = createFileRoute("/_authenticated/_app/profile/zones")({
   head: () => ({ meta: [{ title: "Heart-rate strap & zones · Dillan" }] }),
   component: ZonesPage,
@@ -21,26 +21,12 @@ function ZonesPage() {
   const toast = useToast();
   const { data: config, isLoading, isError, refetch } = useZones(user.id);
   const confirm = useConfirmZones(user.id);
+  const profile = useProfile(user.id);
 
   return (
     <>
       <ScreenHeader title="Heart-rate strap & zones" back="/profile" />
-      <Card className="mt-2">
-        <div className="flex items-center justify-between gap-3">
-          <Eyebrow>Heart-rate strap</Eyebrow>
-          <span className="shrink-0 whitespace-nowrap rounded-chip bg-surface-2 px-3 py-1 text-footnote font-bold text-text-2">
-            Not set up
-          </span>
-        </div>
-        <p className="mt-2 text-subhead text-text-2">
-          Dillan reads a Polar H10 chest strap through a relay page on an Android phone or a
-          computer. The TV and other screens only show what the relay sends.
-        </p>
-        <p className="mt-2 flex items-center gap-2 text-footnote text-text-2">
-          <HeartPulse className="size-4 shrink-0" aria-hidden />
-          Strap setup and the relay page arrive in a later build.
-        </p>
-      </Card>
+      <StrapCard userId={user.id} userName={profile.data?.display_name ?? ""} />
 
       <section className="mt-4" aria-labelledby="zones-h">
         <Card>
@@ -88,6 +74,7 @@ function ZonesPage() {
               }
             />
           )}
+          <p className="mt-3 text-footnote text-text-2">{S14_COPY.zonesFootnote}</p>
         </Card>
       </section>
     </>

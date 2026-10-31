@@ -310,7 +310,7 @@ export class IngestPublisher {
       }
       this.failures++;
       this.retryAt = this.now() + Math.min(RETRY_MAX_MS, 1000 * 2 ** (this.failures - 1));
-      this.urgent = this.urgent || req.p_mode !== this.state().mode || req.p_claim;
+      this.urgent = true; // retry after the backoff, samples or not
       this.events.onNetwork(false);
     } finally {
       this.inFlight = false;

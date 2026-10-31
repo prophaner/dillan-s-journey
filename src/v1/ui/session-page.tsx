@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ChevronLeft, Check, CloudOff, Pause, Play, Slash, X } from "lucide-react";
+import { ChevronLeft, Check, CloudOff, Pause, Play, Slash, X, BatteryLow } from "lucide-react";
 import { isAfterLastSet } from "@/v1/core/engine";
 import { exerciseForStep } from "@/v1/core/steps";
 import { activeMs, formatDuration, restRemainingMs } from "@/v1/core/timing";
@@ -14,6 +14,7 @@ import { isWeight } from "@/v1/core/validate";
 import { useProfile } from "@/v1/data/queries";
 import type { SessionController, SessionView } from "@/v1/session/controller";
 import { doneText, loadText, repsText } from "@/v1/session/format";
+import { sourceLine } from "@/v1/core/health";
 import { healthFor, useLiveHr, useLiveZones } from "@/v1/session/live-hr";
 import { useNow, useSessionController, useWakeLock } from "@/v1/session/use-session";
 import { useUser } from "./user-context";
@@ -274,8 +275,20 @@ function Dashboard({ view, controller }: { view: SessionView; controller: Sessio
                 aria-hidden
               />
               <span className="font-bold">{health.label}</span>
+              {health.batteryLow && hr.live?.battery_pct != null && (
+                <span className="ml-1 inline-flex items-center gap-0.5 text-footnote text-hold">
+                  <BatteryLow className="size-3" aria-hidden />
+                  <span className="sr-only">Strap battery </span>
+                  {hr.live.battery_pct}%
+                </span>
+              )}
             </p>
             <p className="mt-1 text-footnote text-text-2">{health.detail}</p>
+            {row.live_data && health.via && health.id !== "H0_not_set_up" && (
+              <p className="mt-0.5 text-footnote text-text-2">
+                {sourceLine(health.via, name || "you")}
+              </p>
+            )}
             {row.live_data && (
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                 <ZonePill zone={zones.currentZone} cutoffs={cutoffs} />

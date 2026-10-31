@@ -15,6 +15,7 @@
 //  - Per-list memory: inside [data-focus-list="<id>"] the last focused data-focus-id is kept, so
 //    returning to Program/Choose restores the row. [data-autofocus="force"] marks an explicit
 //    selection (Calendar opened on a given day) and wins over the list memory.
+//  - data-focus-up/down/left/right="<focus-id>" routes that direction explicitly (S09 focus order).
 
 export type Direction = "up" | "down" | "left" | "right";
 
@@ -191,6 +192,16 @@ export class FocusEngine {
     if (!this.current || !list.includes(this.current)) {
       this.initial();
       return true;
+    }
+    // An explicit route wins over geometry (data-focus-down="pause": S09 Heart rate → Pause).
+    const routed = this.current.getAttribute(`data-focus-${dir}`);
+    if (routed) {
+      const target = list.find((el) => el.getAttribute("data-focus-id") === routed);
+      if (target) {
+        this.movedSinceAuto = true;
+        this.setFocus(target);
+        return true;
+      }
     }
     const from = this.rectOf(this.current);
     const others = list.filter((el) => el !== this.current);

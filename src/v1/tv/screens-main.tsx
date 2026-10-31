@@ -5,7 +5,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Play } from "lucide-react";
-import type { HealthState } from "@/v1/core/health";
 import { activeMinutes, weekMetrics, weekTrend } from "@/v1/core/week";
 import { activeMs, formatDuration } from "@/v1/core/timing";
 import { engineStateFromRow, type Block, type WorkoutTemplate } from "@/v1/core/types";
@@ -19,13 +18,15 @@ import {
   useZones,
 } from "@/v1/data/queries";
 import { formatDay, loadText, minutesText, repsText } from "@/v1/session/format";
-import { healthFor, useLiveHr } from "@/v1/session/live-hr";
-import { useNow } from "@/v1/session/use-session";
+import { sourceLine } from "@/v1/core/health";
+import { HOME_HR_COPY, homeHrCard, preflightChip } from "@/v1/core/hr-views";
+import { useLiveHeartRate } from "@/v1/session/live-hr";
 import { compareLine, HOME_COPY, toHistory } from "@/v1/ui/home-page";
 import { PREFLIGHT_COPY } from "@/v1/ui/preflight-page";
 import { SpotMark } from "@/components/dillan/spot-mark";
 import { cn } from "@/lib/utils";
 import { useTv } from "./context";
+import { TV_HR_COPY, TvRelayQrDialog } from "./hr-pieces";
 import type { TvScreen } from "./screens";
 import {
   loadView,
@@ -82,7 +83,7 @@ export function TvNavScreen({
   const profile = useProfile(tv.user.id);
   const go = (k: NavKey) => tv.go({ name: k } as TvScreen);
   return (
-    <div data-screen={screenKey} className="flex h-full flex-col">
+    <div data-screen={screenKey} className="relative flex h-full flex-col">
       <TvTopBar
         current={nav}
         name={profile.data?.display_name ?? ""}
@@ -94,18 +95,6 @@ export function TvNavScreen({
       <TvHints items={hints} />
     </div>
   );
-}
-
-function healthChip(h: HealthState): { label: string; tone: "live" | "warn" | "off" } {
-  switch (h.id) {
-    case "H3_live":
-      return { label: h.paused ? "Paused" : "Live", tone: "live" };
-    case "H0_not_set_up":
-    case "H10_off":
-      return { label: h.label, tone: "off" };
-    default:
-      return { label: h.label, tone: "warn" };
-  }
 }
 
 export function TvChip({ label, tone }: { label: string; tone: "live" | "warn" | "off" }) {
@@ -140,20 +129,16 @@ export function TvHome() {
   const history = useHistory(uid);
   const current = useCurrentSession(uid);
   const zones = useZones(uid);
-  const hr = useLiveHr(uid);
-  const now = useNow();
+  const hr = useLiveHeartRate(uid, { zonesConfirmed: !!zones.data?.confirmed_at });
+  const now = hr.now;
   const name = profile.data?.display_name ?? "";
   const tz = profile.data?.timezone ?? "UTC";
   const goal = profile.data?.weekly_goal ?? 3;
   const row = current.data;
   const live = row && (row.state === "active" || row.state === "paused") ? row : null;
-  const health = healthFor(
-    hr,
-    now,
-    { status: "none", liveData: true, isDemo: false },
-    !!zones.data?.confirmed_at,
-  );
-  const chip = healthChip(health);
+  const health = hr.health;
+  const hrCard = homeHrCard(health, hr.live, hr.sensorRow);
+  const host = typeof window !== "undefined" ? window.location.host : "";
   const items = history.data ?? [];
   const sessions = toHistory(items);
   const recent = items[0];
@@ -206,21 +191,51 @@ export function TvHome() {
               {HOME_COPY.workoutNow}
             </TvButton>
           </div>
-          <TvCard className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-4">
-              <TvEyebrow>Live data</TvEyebrow>
-              <TvChip {...chip} />
-            </div>
-            <p className="text-tv-base text-text-2">{health.detail}</p>
-            {health.id === "H0_not_set_up" ? (
-              <p className="text-tv-sm text-text-3">{TV_MAIN_COPY.liveDataPhone}</p>
-            ) : (
-              zones.data &&
-              !zones.data.confirmed_at && (
-                <p className="text-tv-sm text-text-3">{TV_MAIN_COPY.zonesHelp}</p>
-              )
+          {/* Focusable: OK shows the relay QR full screen, Back closes it (h10-design 6 S04). */}
+          <button
+            type="button"
+            data-focus=""
+            data-focus-id="hr-card"
+            className="flex items-center gap-8 rounded-tv-lg border-2 border-line bg-surface p-8 text-left data-[focused]:border-text"
+            onClick={() => tv.openModal({ kind: "relay_qr" })}
+          >
+            <span className="flex min-w-0 flex-1 flex-col gap-3">
+              <span className="flex items-center justify-between gap-4">
+                <TvEyebrow>{HOME_HR_COPY.eyebrow}</TvEyebrow>
+                <span className="flex items-center gap-3">
+                  {health.demo && (
+                    <span className="rounded-chip border-2 border-text px-3 text-tv-xs font-bold">
+                      DEMO
+                    </span>
+                  )}
+                  <TvChip {...hrCard.chip} />
+                </span>
+              </span>
+              <span className="line-clamp-2 text-tv-base text-text-2">{hrCard.text}</span>
+              {hrCard.battery && (
+                <span className="text-tv-sm font-bold text-hold">{hrCard.battery}</span>
+              )}
+              {hrCard.notSetUp ? (
+                <span className="text-tv-sm text-text-3">{HOME_HR_COPY.tvFallback}</span>
+              ) : hrCard.showRelayQr ? (
+                <span className="text-tv-sm text-text-3">
+                  {HOME_HR_COPY.tvOpenRelay(host, hr.live?.holder_name ?? "your relay device")}
+                </span>
+              ) : (
+                zones.data &&
+                !zones.data.confirmed_at && (
+                  <span className="text-tv-sm text-text-3">{TV_MAIN_COPY.zonesHelp}</span>
+                )
+              )}
+            </span>
+            {hrCard.showRelayQr && (
+              <TvQr
+                value={`${typeof window !== "undefined" ? window.location.origin : ""}/relay`}
+                label={`QR code for ${host}/relay`}
+                className="size-40"
+              />
             )}
-          </TvCard>
+          </button>
           {recent && (
             <button
               type="button"
@@ -272,6 +287,7 @@ export function TvHome() {
           )}
         </TvPanel>
       </div>
+      {tv.modal?.kind === "relay_qr" && <TvRelayQrDialog />}
     </TvNavScreen>
   );
 }
@@ -601,17 +617,22 @@ export function TvPreflight({ templateId }: { templateId: string }) {
   const profile = useProfile(user.id);
   const templates = useTemplates(user.id);
   const zones = useZones(user.id);
-  const hr = useLiveHr(user.id);
-  const now = useNow();
   const t = templates.data?.find((x) => x.id === templateId) ?? null;
   const zonesConfirmed = !!zones.data?.confirmed_at;
-  const health = healthFor(
-    hr,
-    now,
-    { status: "none", liveData: true, isDemo: false },
+  const hr = useLiveHeartRate(user.id, {
+    session: { status: "none", liveData: true, isDemo: false },
     zonesConfirmed,
-  );
+  });
+  const health = hr.health;
   const ready = health.id === "H3_live" && hr.live?.contact !== false;
+  // Acceptance 43: turning Live never moves focus; a polite live region says so.
+  const [announce, setAnnounce] = useState("");
+  const wasReady = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (!hr.loaded) return;
+    if (wasReady.current === false && ready) setAnnounce(PREFLIGHT_COPY.ready);
+    wasReady.current = ready;
+  }, [ready, hr.loaded]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const attempt = useRef(newId());
@@ -674,11 +695,9 @@ export function TvPreflight({ templateId }: { templateId: string }) {
     }
   }
 
-  const chip = ready
-    ? { label: "Live · ready", tone: "live" as const }
-    : health.id === "H0_not_set_up"
-      ? { label: "Not configured", tone: "off" as const }
-      : { label: health.label, tone: "warn" as const };
+  const chip = preflightChip(health, hr.live?.contact);
+  const name = profile.data?.display_name ?? "";
+  const host = typeof window !== "undefined" ? window.location.host : "";
 
   return (
     <TvNavScreen
@@ -717,7 +736,18 @@ export function TvPreflight({ templateId }: { templateId: string }) {
                 <TvChip {...chip} />
               </div>
               <p className="text-tv-base text-text-2">
-                {ready && health.bpm != null ? `Reading ${health.bpm} bpm.` : health.detail}
+                {ready && health.bpm != null
+                  ? `Reading ${health.bpm} bpm, ${Math.floor((health.ageMs ?? 0) / 1000)}s ago · ${sourceLine(health.via ?? "the relay", name || "you")}`
+                  : health.detail}
+                {health.demo && (
+                  <span className="ml-3 rounded-chip border-2 border-text px-3 text-tv-xs font-bold text-text">
+                    DEMO
+                  </span>
+                )}
+              </p>
+              {!ready && <p className="text-tv-sm text-text-2">{TV_HR_COPY.fixLine(host)}</p>}
+              <p className="sr-only" aria-live="polite">
+                {announce}
               </p>
             </TvCard>
             <TvCard className="flex flex-col gap-2 p-6">
@@ -764,6 +794,15 @@ export function TvPreflight({ templateId }: { templateId: string }) {
               >
                 {PREFLIGHT_COPY.withoutLive}
               </TvButton>
+              {!ready && (
+                <TvButton
+                  focusId="pre-relay-qr"
+                  size="md"
+                  onPress={() => tv.openModal({ kind: "relay_qr" })}
+                >
+                  {TV_HR_COPY.showQr}
+                </TvButton>
+              )}
               <TvButton
                 focusId="pre-back"
                 variant="ghost"
@@ -782,6 +821,7 @@ export function TvPreflight({ templateId }: { templateId: string }) {
           </TvPanel>
         </div>
       )}
+      {tv.modal?.kind === "relay_qr" && <TvRelayQrDialog />}
     </TvNavScreen>
   );
 }

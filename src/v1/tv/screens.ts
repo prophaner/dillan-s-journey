@@ -22,7 +22,9 @@ export type TvModal =
   | { kind: "running"; then: "switch" | "lock" | "remove" } // M4
   | { kind: "lock" } // M5
   | { kind: "remove" } // M6
-  | { kind: "zones" }; // All zones sheet
+  | { kind: "zones" } // All zones sheet
+  | { kind: "hr" } // S09 Heart rate sheet (h10-design 6)
+  | { kind: "relay_qr" }; // S04/S08 relay QR, full screen
 
 export type BackAction =
   /** return false to the shell: it may exit the app */

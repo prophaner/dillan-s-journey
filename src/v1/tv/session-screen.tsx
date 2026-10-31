@@ -4,13 +4,14 @@
 // dashboard pauses, Back on the paused overlay does nothing, Play/Pause toggles.
 
 import { useEffect, useMemo, useRef } from "react";
-import { Check, Pause, Play, Slash } from "lucide-react";
+import { BatteryLow, Check, Pause, Play, Slash } from "lucide-react";
 import { isAfterLastSet } from "@/v1/core/engine";
 import { exerciseForStep } from "@/v1/core/steps";
 import { activeMs, formatDuration, restRemainingMs } from "@/v1/core/timing";
 import type { Block, EngineState, Step, WorkoutSessionRow, ZoneCutoffs } from "@/v1/core/types";
 import { useProfile, useSummary } from "@/v1/data/queries";
 import { counts, loadText, repsText } from "@/v1/session/format";
+import { sourceLine } from "@/v1/core/health";
 import { healthFor, useLiveHr, useLiveZones } from "@/v1/session/live-hr";
 import { useNow, useSessionController, useWakeLock } from "@/v1/session/use-session";
 import { DASH_COPY } from "@/v1/ui/session-page";
@@ -19,6 +20,7 @@ import { ZONE_COPY } from "@/v1/ui/zone-pieces";
 import { formatClock } from "@/v1/ui/timezones";
 import { cn } from "@/lib/utils";
 import { useTv } from "./context";
+import { TV_HR_COPY, TvHrSheet } from "./hr-pieces";
 import { tvMemoryStorage } from "./memory-store";
 import { TvNoteText } from "./screens-history";
 import {
@@ -418,8 +420,20 @@ function TvDashboard({
                   )}
                 />
                 {health.label}
+                {health.batteryLow && hr.live?.battery_pct != null && (
+                  <span className="ml-2 inline-flex items-center gap-1 text-tv-xs text-hold">
+                    <BatteryLow className="size-3" aria-hidden />
+                    <span className="sr-only">Strap battery </span>
+                    {hr.live.battery_pct}%
+                  </span>
+                )}
               </p>
               <p className="line-clamp-3 text-tv-sm text-text-2">{health.detail}</p>
+              {row.live_data && health.via && health.id !== "H0_not_set_up" && (
+                <p className="truncate text-tv-xs text-text-3">
+                  {sourceLine(health.via, name || "you")}
+                </p>
+              )}
             </div>
             {row.live_data && (
               <>
@@ -456,11 +470,23 @@ function TvDashboard({
                 focusId="all-zones"
                 size="md"
                 className="mt-auto"
+                data-focus-down="hr-panel"
                 onPress={() => tv.openModal({ kind: "zones" })}
               >
                 {ZONE_COPY.allZones}
               </TvButton>
             )}
+            {/* h10-design acceptance 45: All zones ↓ Heart rate ↓ Pause */}
+            <TvButton
+              focusId="hr-panel"
+              size="md"
+              variant="ghost"
+              className={row.live_data ? undefined : "mt-auto"}
+              data-focus-down="pause"
+              onPress={() => tv.openModal({ kind: "hr" })}
+            >
+              {TV_HR_COPY.sheetTitle}
+            </TvButton>
           </TvPanel>
         </div>
         <TvHints
@@ -581,6 +607,9 @@ function TvDashboard({
           />
           <p className="mt-4 text-tv-sm">{ZONE_COPY.caption}</p>
         </TvDialog>
+      )}
+      {modal?.kind === "hr" && (
+        <TvHrSheet health={health} live={hr.live} sensor={hr.sensorRow} userName={name} />
       )}
     </div>
   );

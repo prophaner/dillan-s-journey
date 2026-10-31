@@ -32,7 +32,11 @@ export const SUMMARY_COPY = {
   zonesNotSet: "Zones weren't set for this session, so all time is Unmeasured.",
   loadFailed: "Couldn't load the heart-rate summary. Check your connection.",
   tryAgain: "Try again",
+  final: "Summary is final",
 } as const;
+
+/** Late relay readings can still be added for 2 minutes after End (h10-design 5.4 grace). */
+export const FINALIZE_GRACE_MS = 120_000;
 
 export function OutcomeTag({
   outcome,
@@ -59,6 +63,7 @@ export function ZonesCard({
   loading,
   error,
   onRetry,
+  showFinal,
 }: {
   row: Pick<WorkoutSessionRow, "live_data" | "zone_snapshot" | "is_demo">;
   summary: SessionSummaryRow | null | undefined;
@@ -66,6 +71,8 @@ export function ZonesCard({
   /** the summary query failed: say so and offer a retry instead of "Adding up…" forever */
   error?: boolean;
   onRetry?: () => void;
+  /** S11: say "Summary is final" once the grace window for late readings has passed */
+  showFinal?: boolean;
 }) {
   const cutoffs: ZoneCutoffs | null = row.zone_snapshot?.cutoffs ?? null;
   let body: React.ReactNode;
@@ -134,6 +141,13 @@ export function ZonesCard({
         {row.is_demo && <StatusTag kind="neutral">Demo data</StatusTag>}
       </div>
       {body}
+      {showFinal &&
+        row.live_data &&
+        summary?.hr_status === "final" &&
+        !summary.hr_finalize_dirty &&
+        Date.now() - Date.parse(summary.ended_at) >= FINALIZE_GRACE_MS && (
+          <p className="mt-2 text-footnote font-bold text-text-2">{SUMMARY_COPY.final}</p>
+        )}
     </Card>
   );
 }
@@ -205,6 +219,7 @@ export function SummaryView({ row }: { row: WorkoutSessionRow }) {
         loading={summary.isLoading}
         error={summary.isError}
         onRetry={() => void summary.refetch()}
+        showFinal
       />
       <Card>
         <NotesEditor sessionId={row.id} userId={user.id} timeZone={tz} />

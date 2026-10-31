@@ -20,6 +20,7 @@ import { useNow } from "@/v1/session/use-session";
 import { formatClock } from "./timezones";
 import { useUser } from "./user-context";
 import { RunningBanner } from "./running-banner";
+import { HomeHrCard } from "./home-hr-card";
 import { AvatarLink, ScreenHeader } from "@/components/dillan/app-shell";
 import { dButton } from "@/components/dillan/button";
 import { Eyebrow } from "@/components/dillan/form-pieces";
@@ -97,6 +98,7 @@ export function HomePage() {
           hasTemplates={(templates.data?.length ?? 0) > 0}
         />
       )}
+      <HomeHrCard userId={user.id} />
     </>
   );
 }

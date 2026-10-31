@@ -178,8 +178,15 @@ export function useSummary(uid: string, id: string, enabled = true) {
   return useQuery({
     queryKey: qk.summary(uid, id),
     enabled,
-    // Still finalizing (or finalize failed): check again instead of "Adding up…" forever.
-    refetchInterval: (q) => (q.state.data?.hr_status === "pending" ? 5_000 : false),
+    // Still finalizing (or finalize failed): check again instead of "Adding up…" forever. For
+    // 2 min after End late relay readings may mark the summary dirty: re-read (and re-finalize).
+    refetchInterval: (q) => {
+      const d = q.state.data;
+      if (!d) return false;
+      if (d.hr_status === "pending") return 5_000;
+      if (d.hr_status === "final" && Date.now() - Date.parse(d.ended_at) < 130_000) return 15_000;
+      return false;
+    },
     queryFn: async () => {
       const s = await api.sessions.summary(id);
       if (s && needsFinalize(s)) {

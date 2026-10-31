@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as RelayRouteImport } from './routes/relay'
 import { Route as TvRouteImport } from './routes/tv'
 import { Route as TvApproveRouteImport } from './routes/tv-approve'
 import { Route as AuthenticatedAppRouteRouteImport } from './routes/_authenticated/_app/route'
@@ -35,6 +36,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RelayRoute = RelayRouteImport.update({
+  id: '/relay',
+  path: '/relay',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TvRoute = TvRouteImport.update({
@@ -131,6 +137,7 @@ const AuthenticatedAppWorkoutTemplateIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedAppIndexRoute
   '/auth': typeof AuthRoute
+  '/relay': typeof RelayRoute
   '/tv': typeof TvRoute
   '/tv-approve': typeof TvApproveRoute
   '/approve-tv': typeof AuthenticatedAppApproveTvRoute
@@ -149,6 +156,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof AuthenticatedAppIndexRoute
   '/auth': typeof AuthRoute
+  '/relay': typeof RelayRoute
   '/tv': typeof TvRoute
   '/tv-approve': typeof TvApproveRoute
   '/approve-tv': typeof AuthenticatedAppApproveTvRoute
@@ -168,6 +176,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/relay': typeof RelayRoute
   '/tv': typeof TvRoute
   '/tv-approve': typeof TvApproveRoute
   '/_authenticated/_app': typeof AuthenticatedAppRouteRouteWithChildren
@@ -190,6 +199,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/relay'
     | '/tv'
     | '/tv-approve'
     | '/approve-tv'
@@ -208,6 +218,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/relay'
     | '/tv'
     | '/tv-approve'
     | '/approve-tv'
@@ -226,6 +237,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_authenticated'
     | '/auth'
+    | '/relay'
     | '/tv'
     | '/tv-approve'
     | '/_authenticated/_app'
@@ -247,6 +259,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  RelayRoute: typeof RelayRoute
   TvRoute: typeof TvRoute
   TvApproveRoute: typeof TvApproveRoute
 }
@@ -265,6 +278,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/relay': {
+      id: '/relay'
+      path: '/relay'
+      fullPath: '/relay'
+      preLoaderRoute: typeof RelayRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tv': {
@@ -435,6 +455,7 @@ const AuthenticatedRouteRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  RelayRoute: RelayRoute,
   TvRoute: TvRoute,
   TvApproveRoute: TvApproveRoute,
 }

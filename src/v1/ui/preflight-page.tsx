@@ -6,19 +6,19 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import type { HealthState } from "@/v1/core/health";
 import type { WorkoutSessionRow } from "@/v1/core/types";
 import { newId } from "@/v1/data/api";
 import { useApi } from "@/v1/data/client";
 import { useProfile, useTemplate, useZones } from "@/v1/data/queries";
 import { workoutLine } from "@/v1/session/format";
-import { healthFor, useLiveHr } from "@/v1/session/live-hr";
-import { deviceSource, useNow } from "@/v1/session/use-session";
+import { preflightChip } from "@/v1/core/hr-views";
+import { useLiveHeartRate } from "@/v1/session/live-hr";
+import { deviceSource } from "@/v1/session/use-session";
 import { useQueryClient } from "@tanstack/react-query";
 import { qk } from "@/v1/data/queries";
 import { useUser } from "./user-context";
 import { RunningBanner } from "./running-banner";
-import { HealthChip, type ChipTone } from "./zone-pieces";
+import { HealthChip } from "./zone-pieces";
 import { ScreenHeader } from "@/components/dillan/app-shell";
 import { DButton, dButton } from "@/components/dillan/button";
 import { ConfirmDialog } from "@/components/dillan/confirm-dialog";
@@ -46,24 +46,18 @@ export const PREFLIGHT_COPY = {
   goToIt: "Cancel",
   endThenStart: "End and save, then continue",
   startFailed: "Couldn't start the workout. Check your connection and try again.",
+  demoTitle: "Demo workout",
+  demoBody:
+    "Development only. Heart rate comes from the simulated DEMO strap and is stored apart from real data.",
 } as const;
 
-function chipFor(h: HealthState): { label: string; tone: ChipTone } {
-  switch (h.id) {
-    case "H3_live":
-      return { label: "Live · ready", tone: "live" };
-    case "H0_not_set_up":
-      return { label: "Not configured", tone: "off" };
-    case "H5_no_recent":
-    case "H6_relay_offline":
-    case "H7a_strap_lost":
-      return { label: "Unavailable", tone: "warn" };
-    default:
-      return { label: "Preparing", tone: "warn" };
-  }
-}
-
-export function PreflightPage({ templateId }: { templateId: string }) {
+export function PreflightPage({
+  templateId,
+  demo = false,
+}: {
+  templateId: string;
+  demo?: boolean;
+}) {
   const user = useUser();
   const api = useApi();
   const qc = useQueryClient();
@@ -71,17 +65,14 @@ export function PreflightPage({ templateId }: { templateId: string }) {
   const profile = useProfile(user.id);
   const tpl = useTemplate(user.id, templateId);
   const zones = useZones(user.id);
-  const hr = useLiveHr(user.id);
-  const now = useNow();
   const zonesConfirmed = !!zones.data?.confirmed_at;
-  const health = healthFor(
-    hr,
-    now,
-    { status: "none", liveData: true, isDemo: false },
+  const hr = useLiveHeartRate(user.id, {
+    session: { status: "none", liveData: true, isDemo: demo },
     zonesConfirmed,
-  );
+  });
+  const health = hr.health;
   const ready = health.id === "H3_live" && hr.live?.contact !== false;
-  const chip = chipFor(health);
+  const chip = preflightChip(health, hr.live?.contact);
 
   const [busy, setBusy] = useState<"live" | "off" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -125,6 +116,7 @@ export function PreflightPage({ templateId }: { templateId: string }) {
         liveData,
         timezone: tz,
         commandId: attempt.current,
+        ...(demo && liveData ? { isDemo: true } : {}),
       });
       if (!res.ok && res.error === "session_running" && res.session_id) {
         attempt.current = newId();
@@ -231,9 +223,18 @@ export function PreflightPage({ templateId }: { templateId: string }) {
             <Eyebrow>{PREFLIGHT_COPY.strap}</Eyebrow>
             <HealthChip label={chip.label} tone={chip.tone} />
           </div>
-          <p className="mt-2 text-subhead text-text-2">{body}</p>
+          <p className="mt-2 flex flex-wrap items-center gap-2 text-subhead text-text-2">
+            <span>{body}</span>
+            {health.demo && (
+              <span className="rounded-chip border border-text px-2 text-footnote font-bold text-text">
+                DEMO
+              </span>
+            )}
+          </p>
           {health.batteryLow && hr.live?.battery_pct != null && (
-            <p className="mt-1 text-subhead text-hold">Strap battery {hr.live.battery_pct}%.</p>
+            <p className="mt-1 text-subhead font-bold text-hold">
+              Strap battery {hr.live.battery_pct}%.
+            </p>
           )}
           {!ready && (
             <>
@@ -249,6 +250,17 @@ export function PreflightPage({ templateId }: { templateId: string }) {
             </>
           )}
         </Card>
+        {demo && (
+          <Card variant="guess">
+            <div className="flex items-center gap-2">
+              <Eyebrow>{PREFLIGHT_COPY.demoTitle}</Eyebrow>
+              <span className="rounded-chip border border-text px-2 text-footnote font-bold">
+                DEMO
+              </span>
+            </div>
+            <p className="mt-2 text-subhead text-text-2">{PREFLIGHT_COPY.demoBody}</p>
+          </Card>
+        )}
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Eyebrow>{PREFLIGHT_COPY.zones}</Eyebrow>

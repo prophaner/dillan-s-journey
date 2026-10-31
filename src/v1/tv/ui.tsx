@@ -224,7 +224,15 @@ export function TvDialog({
 }
 
 /** QR (dark modules on chalk) with a quiet zone; the typed code is always shown next to it. */
-export function TvQr({ value, label }: { value: string; label: string }) {
+export function TvQr({
+  value,
+  label,
+  className,
+}: {
+  value: string;
+  label: string;
+  className?: string;
+}) {
   const qr = useMemo(() => encodeQr(value), [value]);
   const n = qr.size + 8;
   return (
@@ -232,7 +240,7 @@ export function TvQr({ value, label }: { value: string; label: string }) {
       viewBox={`0 0 ${n} ${n}`}
       role="img"
       aria-label={label}
-      className="size-tv-qr shrink-0 rounded-tv-lg"
+      className={cn("size-tv-qr shrink-0 rounded-tv-lg", className)}
       shapeRendering="crispEdges"
       data-qr-value={value}
     >
