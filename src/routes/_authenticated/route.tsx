@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { getApi } from "@/v1/data/client";
 import { UserProvider } from "@/v1/ui/user-context";
+import { AppStart } from "@/v1/ui/app-start";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -18,6 +19,7 @@ function AuthenticatedLayout() {
   const { user } = Route.useRouteContext();
   return (
     <UserProvider user={user}>
+      <AppStart key={user.id} userId={user.id} />
       <Outlet />
     </UserProvider>
   );

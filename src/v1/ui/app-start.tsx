@@ -1,0 +1,85 @@
+// Signed-in app start (F6 interruption recovery):
+//  - an unfinished active/paused session sends the user back to it once per page load (reload or
+//    a fresh tab never ends a workout; Back from the dashboard is still allowed afterwards)
+//  - queued session commands of this user are replayed (only this user's: command-queue.ts)
+//  - notes kept on this device are retried now and whenever the browser comes back online
+
+import { useEffect } from "react";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import type { DillanApi } from "@/v1/data/api";
+import { useApi } from "@/v1/data/client";
+import { qk, useCurrentSession } from "@/v1/data/queries";
+import { queuedSessionIds } from "@/v1/session/command-queue";
+import { SessionController } from "@/v1/session/controller";
+import { retryPendingNotes } from "@/v1/session/notes";
+import { serverClockFor } from "@/v1/session/server-clock";
+import { deviceSource } from "@/v1/session/use-session";
+
+let recoveredFor: string | null = null;
+
+/** Tests reset the once-per-load recovery flag. */
+export function resetRecoveryForTests() {
+  recoveredFor = null;
+}
+
+/** Replays queued commands for sessions that are not open on screen. */
+export async function replayQueuedCommands(
+  api: DillanApi,
+  userId: string,
+  skip: string | null,
+): Promise<void> {
+  const clock = serverClockFor(api.hr);
+  for (const id of queuedSessionIds(userId)) {
+    if (id === skip) continue;
+    const c = new SessionController({
+      api,
+      userId,
+      sessionId: id,
+      source: deviceSource(),
+      now: () => clock.now(),
+      listenWindow: false,
+    });
+    try {
+      await c.start();
+    } finally {
+      c.dispose();
+    }
+  }
+}
+
+export function AppStart({ userId }: { userId: string }) {
+  const api = useApi();
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const current = useCurrentSession(userId);
+
+  useEffect(() => {
+    const row = current.data;
+    if (!current.isSuccess || recoveredFor === userId) return;
+    recoveredFor = userId;
+    if (!row || (row.state !== "active" && row.state !== "paused")) return;
+    if (path.startsWith("/session/")) return;
+    void navigate({ to: "/session/$id", params: { id: row.id } });
+  }, [current.isSuccess, current.data, userId, path, navigate]);
+
+  useEffect(() => {
+    const open = path.startsWith("/session/") ? path.slice("/session/".length) : null;
+    const run = () => {
+      void retryPendingNotes(api, userId).then((n) => {
+        if (n > 0) void qc.invalidateQueries({ queryKey: ["v1", userId] });
+      });
+      void replayQueuedCommands(api, userId, open).then(() =>
+        qc.invalidateQueries({ queryKey: qk.current(userId) }),
+      );
+    };
+    run();
+    window.addEventListener("online", run);
+    return () => window.removeEventListener("online", run);
+    // Once per user (and when the open session changes), not on every navigation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, userId]);
+
+  return null;
+}
