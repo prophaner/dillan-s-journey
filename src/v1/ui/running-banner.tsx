@@ -26,8 +26,8 @@ export function RunningBanner({ className }: { className?: string }) {
         ? "Not started yet"
         : `${formatDuration(activeMs(s, now))} active`;
   return (
+    // Not a live region: the active time ticks every second and must not be re-announced.
     <div
-      role="status"
       className={cn(
         "flex flex-wrap items-center gap-3 rounded-card border-[1.5px] border-text bg-surface p-4",
         className,
@@ -37,7 +37,9 @@ export function RunningBanner({ className }: { className?: string }) {
         <p className="text-headline font-bold">
           {RUNNING_COPY.title} · <span className="break-words">{row.snapshot.name}</span>
         </p>
-        <p className="mt-0.5 text-subhead tabular text-text-2">{status}</p>
+        <p className="mt-0.5 text-subhead tabular text-text-2" aria-live="off">
+          {status}
+        </p>
       </div>
       <Link
         to="/session/$id"

@@ -4,14 +4,14 @@
 //  - queued session commands of this user are replayed (only this user's: command-queue.ts)
 //  - notes kept on this device are retried now and whenever the browser comes back online
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import type { DillanApi } from "@/v1/data/api";
 import { useApi } from "@/v1/data/client";
 import { qk, useCurrentSession } from "@/v1/data/queries";
 import { queuedSessionIds } from "@/v1/session/command-queue";
-import { SessionController } from "@/v1/session/controller";
+import { SessionController, hasForegroundController } from "@/v1/session/controller";
 import { retryPendingNotes } from "@/v1/session/notes";
 import { serverClockFor } from "@/v1/session/server-clock";
 import { deviceSource } from "@/v1/session/use-session";
@@ -23,7 +23,11 @@ export function resetRecoveryForTests() {
   recoveredFor = null;
 }
 
-/** Replays queued commands for sessions that are not open on screen. */
+/**
+ * Replays queued commands for sessions that are not open on screen. A session whose page
+ * controller is mounted is skipped (it pumps its own queue); if the page mounts while a replay
+ * runs, the page controller takes over and the replay controller stops (controller.ts).
+ */
 export async function replayQueuedCommands(
   api: DillanApi,
   userId: string,
@@ -31,7 +35,7 @@ export async function replayQueuedCommands(
 ): Promise<void> {
   const clock = serverClockFor(api.hr);
   for (const id of queuedSessionIds(userId)) {
-    if (id === skip) continue;
+    if (id === skip || hasForegroundController(userId, id)) continue;
     const c = new SessionController({
       api,
       userId,
@@ -54,6 +58,11 @@ export function AppStart({ userId }: { userId: string }) {
   const navigate = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const current = useCurrentSession(userId);
+  // The live path, read when replay runs (the effect below is not re-run on navigation).
+  const pathRef = useRef(path);
+  useEffect(() => {
+    pathRef.current = path;
+  }, [path]);
 
   useEffect(() => {
     const row = current.data;
@@ -65,8 +74,9 @@ export function AppStart({ userId }: { userId: string }) {
   }, [current.isSuccess, current.data, userId, path, navigate]);
 
   useEffect(() => {
-    const open = path.startsWith("/session/") ? path.slice("/session/".length) : null;
     const run = () => {
+      const at = pathRef.current;
+      const open = at.startsWith("/session/") ? at.slice("/session/".length) : null;
       void retryPendingNotes(api, userId).then((n) => {
         if (n > 0) void qc.invalidateQueries({ queryKey: ["v1", userId] });
       });
@@ -77,9 +87,8 @@ export function AppStart({ userId }: { userId: string }) {
     run();
     window.addEventListener("online", run);
     return () => window.removeEventListener("online", run);
-    // Once per user (and when the open session changes), not on every navigation.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api, userId]);
+    // Once per user, not on every navigation (run() reads the live path).
+  }, [api, userId, qc]);
 
   return null;
 }

@@ -2,15 +2,20 @@
 // notes are never required). Also the shared pieces of S13 (status chip, zones card).
 
 import { Link } from "@tanstack/react-router";
-import type { SessionSummaryRow, WorkoutSessionRow, ZoneCutoffs } from "@/v1/core/types";
-import { formatDuration } from "@/v1/core/timing";
+import {
+  engineStateFromRow,
+  type SessionSummaryRow,
+  type WorkoutSessionRow,
+  type ZoneCutoffs,
+} from "@/v1/core/types";
+import { activeMs, formatDuration } from "@/v1/core/timing";
 import { useProfile, useSummary } from "@/v1/data/queries";
 import { counts } from "@/v1/session/format";
 import { formatClock } from "./timezones";
 import { useUser } from "./user-context";
 import { NotesEditor } from "./notes-editor";
 import { ZONE_COPY, ZoneBreakdown } from "./zone-pieces";
-import { dButton } from "@/components/dillan/button";
+import { DButton, dButton } from "@/components/dillan/button";
 import { Eyebrow } from "@/components/dillan/form-pieces";
 import { Card } from "@/components/dillan/surfaces";
 import { StatusTag } from "@/components/dillan/tags";
@@ -24,6 +29,9 @@ export const SUMMARY_COPY = {
   done: "Done",
   finalizing: "Adding up heart-rate zones…",
   discarded: "This workout was discarded. It doesn't count toward your progress.",
+  zonesNotSet: "Zones weren't set for this session, so all time is Unmeasured.",
+  loadFailed: "Couldn't load the heart-rate summary. Check your connection.",
+  tryAgain: "Try again",
 } as const;
 
 export function OutcomeTag({
@@ -49,16 +57,50 @@ export function ZonesCard({
   row,
   summary,
   loading,
+  error,
+  onRetry,
 }: {
   row: Pick<WorkoutSessionRow, "live_data" | "zone_snapshot" | "is_demo">;
   summary: SessionSummaryRow | null | undefined;
   loading?: boolean;
+  /** the summary query failed: say so and offer a retry instead of "Adding up…" forever */
+  error?: boolean;
+  onRetry?: () => void;
 }) {
   const cutoffs: ZoneCutoffs | null = row.zone_snapshot?.cutoffs ?? null;
   let body: React.ReactNode;
   if (!row.live_data) body = <p className="text-subhead text-text-2">{ZONE_COPY.noLiveData}</p>;
+  else if (error && !summary)
+    body = (
+      <>
+        <p className="text-subhead text-text-2">{SUMMARY_COPY.loadFailed}</p>
+        {onRetry && (
+          <DButton variant="outline" size="md" className="mt-3" onClick={onRetry}>
+            {SUMMARY_COPY.tryAgain}
+          </DButton>
+        )}
+      </>
+    );
   else if (loading || !summary || summary.hr_status === "pending")
     body = <p className="text-subhead text-text-2">{SUMMARY_COPY.finalizing}</p>;
+  else if (!cutoffs)
+    // Samples may well exist; without confirmed zones all time is Unmeasured (never guessed).
+    body = (
+      <>
+        <p className="mb-3 text-subhead text-text-2">{SUMMARY_COPY.zonesNotSet}</p>
+        <ZoneBreakdown
+          zoneMs={summary.zone_ms}
+          unmeasuredMs={summary.unmeasured_ms}
+          cutoffs={null}
+        />
+        <Link
+          to="/profile/zones"
+          className={cn(dButton({ variant: "outline", size: "md" }), "mt-3 w-full")}
+        >
+          {ZONE_COPY.setUp}
+        </Link>
+      </>
+    );
   else if (summary.measured_ms === 0)
     body = (
       <>
@@ -108,6 +150,9 @@ function Metric({ value, label }: { value: string | number; label: string }) {
 export function SummaryView({ row }: { row: WorkoutSessionRow }) {
   const user = useUser();
   const profile = useProfile(user.id);
+  // Session times in the timezone the session started in (as detail, Home and Calendar do);
+  // the profile timezone only for the notes "Saved h:mm" status.
+  const sessionTz = row.start_timezone;
   const tz = profile.data?.timezone ?? row.start_timezone;
   const summary = useSummary(user.id, row.id, row.outcome !== "discarded");
 
@@ -123,7 +168,10 @@ export function SummaryView({ row }: { row: WorkoutSessionRow }) {
 
   const c = counts(row);
   const s = summary.data;
-  const active = s?.active_ms ?? 0;
+  // Until the summary row arrives (or if it fails), active time comes from the row itself.
+  const active =
+    s?.active_ms ??
+    (row.ended_at ? activeMs(engineStateFromRow(row), Date.parse(row.ended_at)) : 0);
   const day = s?.local_date;
 
   return (
@@ -133,7 +181,7 @@ export function SummaryView({ row }: { row: WorkoutSessionRow }) {
           <OutcomeTag outcome={row.outcome} done={c.done} total={c.total} />
           {row.started_at && row.ended_at && (
             <span className="text-subhead text-text-2">
-              {formatClock(row.started_at, tz)}–{formatClock(row.ended_at, tz)}
+              {formatClock(row.started_at, sessionTz)}–{formatClock(row.ended_at, sessionTz)}
             </span>
           )}
         </div>
@@ -151,7 +199,13 @@ export function SummaryView({ row }: { row: WorkoutSessionRow }) {
           </p>
         )}
       </Card>
-      <ZonesCard row={row} summary={s} loading={summary.isLoading} />
+      <ZonesCard
+        row={row}
+        summary={s}
+        loading={summary.isLoading}
+        error={summary.isError}
+        onRetry={() => void summary.refetch()}
+      />
       <Card>
         <NotesEditor sessionId={row.id} userId={user.id} timeZone={tz} />
       </Card>

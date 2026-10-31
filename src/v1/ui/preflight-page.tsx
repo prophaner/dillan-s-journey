@@ -42,8 +42,9 @@ export const PREFLIGHT_COPY = {
   setUpZones: "Set up zones",
   runningTitle: "A workout is running",
   runningBody: "Ending saves everything so far. Cancel to go back to it.",
-  goToIt: "Go to workout",
-  endThenStart: "End and save, then start",
+  // M4 canonical labels; Cancel goes back to the running workout, as the body says.
+  goToIt: "Cancel",
+  endThenStart: "End and save, then continue",
   startFailed: "Couldn't start the workout. Check your connection and try again.",
 } as const;
 

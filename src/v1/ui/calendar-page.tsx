@@ -11,7 +11,7 @@ import type { HistoryItem } from "@/v1/data/api";
 import { useMonth, useProfile } from "@/v1/data/queries";
 import { formatDayKey, minutesText } from "@/v1/session/format";
 import { useNow } from "@/v1/session/use-session";
-import { formatClock } from "./timezones";
+import { browserTimeZone, formatClock } from "./timezones";
 import { useUser } from "./user-context";
 import { RunningBanner } from "./running-banner";
 import { AvatarLink, ScreenHeader } from "@/components/dillan/app-shell";
@@ -67,7 +67,8 @@ export function CalendarPage({
   const { data: profile } = useProfile(user.id);
   const now = useNow(60_000);
   const navigate = useNavigate();
-  const tz = profile?.timezone ?? "UTC";
+  // Until (or unless) the profile loads, this device's timezone, never UTC.
+  const tz = profile?.timezone ?? browserTimeZone();
   const today = localParts(now, tz);
   const todayKey = dateKey(today.y, today.m, today.d);
   const fromDay = day ? day.slice(0, 7) : undefined;

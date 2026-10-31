@@ -178,6 +178,8 @@ export function useSummary(uid: string, id: string, enabled = true) {
   return useQuery({
     queryKey: qk.summary(uid, id),
     enabled,
+    // Still finalizing (or finalize failed): check again instead of "Adding up…" forever.
+    refetchInterval: (q) => (q.state.data?.hr_status === "pending" ? 5_000 : false),
     queryFn: async () => {
       const s = await api.sessions.summary(id);
       if (s && needsFinalize(s)) {

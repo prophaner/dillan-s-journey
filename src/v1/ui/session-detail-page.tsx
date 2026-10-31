@@ -64,7 +64,8 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
 
   const tz = profile?.timezone ?? row.start_timezone;
   const c = counts(row);
-  const deleted = !row.template_id || (!tpl.isLoading && (!tpl.data || !!tpl.data.deleted_at));
+  // Only a successful read can say the template is gone; error/offline is unknown, not deleted.
+  const deleted = !row.template_id || (tpl.isSuccess && (!tpl.data || !!tpl.data.deleted_at));
   const s = summary.data;
 
   return (
@@ -169,7 +170,13 @@ export function SessionDetailPage({ sessionId }: { sessionId: string }) {
           </div>
         </Card>
 
-        <ZonesCard row={row} summary={s} loading={summary.isLoading} />
+        <ZonesCard
+          row={row}
+          summary={s}
+          loading={summary.isLoading}
+          error={summary.isError}
+          onRetry={() => void summary.refetch()}
+        />
 
         <Card>
           <NotesEditor sessionId={row.id} userId={user.id} timeZone={tz} />

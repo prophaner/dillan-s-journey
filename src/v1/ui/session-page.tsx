@@ -45,9 +45,14 @@ export const DASH_COPY = {
   pausedBody: "Time in zone and rest are not counting while paused.",
   endTitle: "End this workout?",
   endBody: "Everything so far is saved. Sets you haven't reached are recorded as not reached.",
+  // h10-design S11 replaces the End dialog text when live heart rate is on.
+  endTitleLive: "End workout?",
+  endBodyLive:
+    "Heart rate after this point won't count toward this session, and the relay will disconnect the strap.",
   keepGoing: "Keep going",
   endAndSave: "End and save",
   offline: "Offline—changes pending",
+  timingPending: "Pause and End take effect when they reach the server.",
   saving: "Saving…",
   pending: "Pending",
   adjust: "Change reps or weight",
@@ -55,6 +60,7 @@ export const DASH_COPY = {
   startNow: "Start workout",
   cancelStart: "Cancel this workout",
   endedPending: "Ended on this device. It will save when you're back online — keep Dillan open.",
+  canceledTitle: "Workout canceled",
 } as const;
 
 export function SessionPage({ sessionId }: { sessionId: string }) {
@@ -83,7 +89,10 @@ export function SessionPage({ sessionId }: { sessionId: string }) {
     );
   if (row.state === "ended")
     return (
-      <Shell title={SUMMARY_COPY.title} hideBack>
+      <Shell
+        title={row.outcome === "discarded" ? DASH_COPY.canceledTitle : SUMMARY_COPY.title}
+        hideBack
+      >
         <SummaryView row={row} />
       </Shell>
     );
@@ -95,15 +104,21 @@ function Shell({
   children,
   trailing,
   hideBack,
+  inertHeader,
 }: {
   title: string;
   children: React.ReactNode;
   trailing?: React.ReactNode;
   hideBack?: boolean;
+  /** a modal overlay is open: the header is not reachable behind it */
+  inertHeader?: boolean;
 }) {
   return (
     <div className="mx-auto min-h-dvh w-full max-w-[600px] px-margin pb-safe-b lg:max-w-[720px]">
-      <header className="flex min-h-[72px] items-center gap-2 pt-4 lg:pt-8">
+      <header
+        className="flex min-h-[72px] items-center gap-2 pt-4 lg:pt-8"
+        inert={inertHeader || undefined}
+      >
         {!hideBack && (
           <Link
             to="/"
@@ -159,6 +174,15 @@ function Dashboard({ view, controller }: { view: SessionView; controller: Sessio
   const afterLast = isAfterLastSet(p);
   const restLeft = restRemainingMs(p, now);
   const doneCount = p.steps.filter((s) => p.results[s.key]).length;
+  const pauseBtn = useRef<HTMLButtonElement>(null);
+  const wasPaused = useRef(paused);
+  useEffect(() => {
+    // Leaving the paused overlay: put focus back on Pause/Resume instead of losing it.
+    const active = typeof document !== "undefined" ? document.activeElement : null;
+    if (wasPaused.current && !paused && (!active || active === document.body))
+      pauseBtn.current?.focus();
+    wasPaused.current = paused;
+  }, [paused]);
 
   const endNow = () => {
     setConfirmEnd(false);
@@ -195,6 +219,7 @@ function Dashboard({ view, controller }: { view: SessionView; controller: Sessio
   return (
     <Shell
       title={row.snapshot.name}
+      inertHeader={paused && !confirmEnd}
       trailing={
         <span className="flex h-11 shrink-0 items-center gap-2 rounded-chip bg-surface-2 pl-1.5 pr-3 text-subhead font-bold">
           <span className="grid size-8 place-items-center rounded-full bg-surface text-footnote">
@@ -204,217 +229,222 @@ function Dashboard({ view, controller }: { view: SessionView; controller: Sessio
         </span>
       }
     >
-      <SyncBanners view={view} onDismiss={() => controller.dismissNotice()} />
+      <div inert={(paused && !confirmEnd) || undefined}>
+        <SyncBanners view={view} onDismiss={() => controller.dismissNotice()} />
 
-      <div className="flex flex-col gap-3">
-        {/* Metrics: BPM + freshness, active time, zone + time in zone */}
-        <Card>
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-3">
-            <p className="flex min-w-0 items-baseline gap-2">
+        <div className="flex flex-col gap-3">
+          {/* Metrics: BPM + freshness, active time, zone + time in zone */}
+          <Card>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-3">
+              <p className="flex min-w-0 items-baseline gap-2">
+                <span
+                  className={cn(
+                    "font-num text-num-m font-extrabold tabular leading-none",
+                    health.deemphasize && "text-text-3",
+                  )}
+                >
+                  {health.showBpm && health.bpm != null ? health.bpm : "––"}
+                </span>
+                {health.demo && (
+                  <span className="rounded-chip border border-text px-2 text-footnote font-bold">
+                    DEMO
+                  </span>
+                )}
+              </p>
+              <p className="text-right font-num text-num-m font-extrabold tabular leading-none">
+                {formatDuration(activeMs(p, now))}
+              </p>
+              <p className="mt-1 text-footnote font-bold uppercase tracking-wider text-text-2">
+                BPM
+              </p>
+              <p className="mt-1 text-right text-footnote font-bold uppercase tracking-wider text-text-2">
+                {DASH_COPY.active}
+              </p>
+            </div>
+            <p className="mt-2 flex items-center gap-1.5 text-subhead" aria-live="polite">
               <span
                 className={cn(
-                  "font-num text-num-m font-extrabold tabular leading-none",
-                  health.deemphasize && "text-text-3",
+                  "size-2 shrink-0 rounded-full",
+                  health.id === "H3_live" && !paused
+                    ? "bg-steady"
+                    : health.id === "H10_off"
+                      ? "border border-text-3"
+                      : "bg-hold",
                 )}
-              >
-                {health.showBpm && health.bpm != null ? health.bpm : "––"}
-              </span>
-              {health.demo && (
-                <span className="rounded-chip border border-text px-2 text-footnote font-bold">
-                  DEMO
-                </span>
-              )}
+                aria-hidden
+              />
+              <span className="font-bold">{health.label}</span>
             </p>
-            <p className="text-right font-num text-num-m font-extrabold tabular leading-none">
-              {formatDuration(activeMs(p, now))}
-            </p>
-            <p className="mt-1 text-footnote font-bold uppercase tracking-wider text-text-2">BPM</p>
-            <p className="mt-1 text-right text-footnote font-bold uppercase tracking-wider text-text-2">
-              {DASH_COPY.active}
-            </p>
-          </div>
-          <p className="mt-2 flex items-center gap-1.5 text-subhead" aria-live="polite">
-            <span
-              className={cn(
-                "size-2 shrink-0 rounded-full",
-                health.id === "H3_live" && !paused
-                  ? "bg-steady"
-                  : health.id === "H10_off"
-                    ? "border border-text-3"
-                    : "bg-hold",
-              )}
-              aria-hidden
-            />
-            <span className="font-bold">{health.label}</span>
-          </p>
-          <p className="mt-1 text-footnote text-text-2">{health.detail}</p>
-          {row.live_data && (
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-              <ZonePill zone={zones.currentZone} cutoffs={cutoffs} />
-              <span className="text-subhead text-text-2">
-                {ZONE_COPY.timeInZone}{" "}
-                <span className="font-num tabular text-text">
-                  {zones.currentZone ? formatDuration(zones.timeInZoneMs) : "––"}
-                </span>
-              </span>
-            </div>
-          )}
-          {row.live_data && (
-            <DButton
-              variant="outline"
-              size="md"
-              className="mt-3 w-full"
-              onClick={() => setAllZones(true)}
-            >
-              {ZONE_COPY.allZones}
-            </DButton>
-          )}
-        </Card>
-
-        {/* Rest */}
-        {restLeft != null && (
-          <Card variant="proposal">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <Eyebrow>{restLeft === 0 ? DASH_COPY.restFinished : DASH_COPY.rest}</Eyebrow>
-              {step && ex && (
+            <p className="mt-1 text-footnote text-text-2">{health.detail}</p>
+            {row.live_data && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <ZonePill zone={zones.currentZone} cutoffs={cutoffs} />
                 <span className="text-subhead text-text-2">
-                  Next: {ex.name} · set {step.set + 1}
+                  {ZONE_COPY.timeInZone}{" "}
+                  <span className="font-num tabular text-text">
+                    {zones.currentZone ? formatDuration(zones.timeInZoneMs) : "––"}
+                  </span>
                 </span>
-              )}
-            </div>
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-              <span
-                className="font-num text-num-l font-extrabold tabular leading-none"
-                role="timer"
-                aria-label={`Rest, ${formatDuration(restLeft)} left`}
+              </div>
+            )}
+            {row.live_data && (
+              <DButton
+                variant="outline"
+                size="md"
+                className="mt-3 w-full"
+                onClick={() => setAllZones(true)}
               >
-                {formatDuration(restLeft)}
-              </span>
-              <div className="flex gap-2">
+                {ZONE_COPY.allZones}
+              </DButton>
+            )}
+          </Card>
+
+          {/* Rest */}
+          {restLeft != null && (
+            <Card variant="proposal">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <Eyebrow>{restLeft === 0 ? DASH_COPY.restFinished : DASH_COPY.rest}</Eyebrow>
+                {step && ex && (
+                  <span className="text-subhead text-text-2">
+                    Next: {ex.name} · set {step.set + 1}
+                  </span>
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                <span
+                  className="font-num text-num-l font-extrabold tabular leading-none"
+                  role="timer"
+                  aria-label={`Rest, ${formatDuration(restLeft)} left`}
+                >
+                  {formatDuration(restLeft)}
+                </span>
+                <div className="flex gap-2">
+                  <DButton
+                    variant="outline"
+                    size="md"
+                    disabled={paused}
+                    onClick={() => controller.send("undo")}
+                  >
+                    {DASH_COPY.undo}
+                  </DButton>
+                  <DButton
+                    variant="secondary"
+                    size="md"
+                    disabled={paused}
+                    onClick={() => controller.send("skip_rest")}
+                  >
+                    {DASH_COPY.skipRest}
+                  </DButton>
+                </div>
+              </div>
+              <RestBar p={p} left={restLeft} />
+            </Card>
+          )}
+
+          {/* Current exercise */}
+          {step && ex ? (
+            <Card>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <Eyebrow>
+                  {step.group
+                    ? `Superset ${step.label} · round ${step.set + 1} of ${step.sets}`
+                    : `Exercise ${exerciseNumber(row.snapshot.blocks, step)} of ${exerciseCount(row.snapshot.blocks)}`}
+                </Eyebrow>
+                <span className="font-num text-subhead tabular text-text-2">
+                  {doneCount}/{p.steps.length} sets
+                </span>
+              </div>
+              <h2 className="mt-2 break-words text-title1 font-bold leading-tight">{ex.name}</h2>
+              <p className="mt-1 text-headline text-text-2">
+                {step.group ? "Round" : "Set"} {step.set + 1} of {step.sets} ·{" "}
+                {repsText(ex.reps, ex.rep_mode)} · {loadText(ex.weight, ex.unit, ex.load_basis)}
+                {ex.rep_mode === "per_side" ? " · complete both sides" : ""}
+              </p>
+              {ex.instructions && (
+                <p className="mt-2 break-words text-subhead text-text-2">{ex.instructions}</p>
+              )}
+              <SetRows p={p} step={step} ex={ex} pendingKeys={pendingKeys} />
+              <div className="mt-4 grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-2">
+                <DButton
+                  variant="primary"
+                  size="lg"
+                  disabled={paused}
+                  onClick={() => controller.send("complete_set")}
+                >
+                  {DASH_COPY.complete}
+                </DButton>
                 <DButton
                   variant="outline"
-                  size="md"
+                  size="lg"
                   disabled={paused}
-                  onClick={() => controller.send("undo")}
+                  onClick={() => controller.send("skip_set")}
                 >
-                  {DASH_COPY.undo}
-                </DButton>
-                <DButton
-                  variant="secondary"
-                  size="md"
-                  disabled={paused}
-                  onClick={() => controller.send("skip_rest")}
-                >
-                  {DASH_COPY.skipRest}
+                  {DASH_COPY.skip}
                 </DButton>
               </div>
-            </div>
-            <RestBar p={p} left={restLeft} />
-          </Card>
-        )}
-
-        {/* Current exercise */}
-        {step && ex ? (
-          <Card>
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <Eyebrow>
-                {step.group
-                  ? `Superset ${step.label} · round ${step.set + 1} of ${step.sets}`
-                  : `Exercise ${exerciseNumber(row.snapshot.blocks, step)} of ${exerciseCount(row.snapshot.blocks)}`}
-              </Eyebrow>
-              <span className="font-num text-subhead tabular text-text-2">
-                {doneCount}/{p.steps.length} sets
-              </span>
-            </div>
-            <h2 className="mt-2 break-words text-title1 font-bold leading-tight">{ex.name}</h2>
-            <p className="mt-1 text-headline text-text-2">
-              {step.group ? "Round" : "Set"} {step.set + 1} of {step.sets} ·{" "}
-              {repsText(ex.reps, ex.rep_mode)} · {loadText(ex.weight, ex.unit, ex.load_basis)}
-              {ex.rep_mode === "per_side" ? " · complete both sides" : ""}
-            </p>
-            {ex.instructions && (
-              <p className="mt-2 break-words text-subhead text-text-2">{ex.instructions}</p>
-            )}
-            <SetRows p={p} step={step} ex={ex} pendingKeys={pendingKeys} />
-            <div className="mt-4 grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-2">
+              <DButton
+                variant="quiet"
+                size="md"
+                className="mt-1 w-full"
+                disabled={paused}
+                onClick={() => setAdjust(true)}
+              >
+                {DASH_COPY.adjust}
+              </DButton>
+            </Card>
+          ) : afterLast ? (
+            <Card>
+              <h2 className="text-title2 font-bold">{DASH_COPY.allDone}</h2>
+              <p className="mt-1 text-subhead text-text-2">{DASH_COPY.allDoneBody}</p>
               <DButton
                 variant="primary"
                 size="lg"
+                className="mt-4"
                 disabled={paused}
-                onClick={() => controller.send("complete_set")}
+                onClick={endNow}
               >
-                {DASH_COPY.complete}
+                {DASH_COPY.endWorkout}
               </DButton>
               <DButton
-                variant="outline"
-                size="lg"
+                variant="quiet"
+                size="md"
+                className="mt-1 w-full"
                 disabled={paused}
-                onClick={() => controller.send("skip_set")}
+                onClick={() => controller.send("undo")}
               >
-                {DASH_COPY.skip}
+                {DASH_COPY.undoLast}
               </DButton>
-            </div>
+            </Card>
+          ) : null}
+
+          <NextUp p={p} blocks={row.snapshot.blocks} />
+
+          <div className="grid grid-cols-2 gap-2 pb-6">
             <DButton
-              variant="quiet"
-              size="md"
-              className="mt-1 w-full"
-              disabled={paused}
-              onClick={() => setAdjust(true)}
-            >
-              {DASH_COPY.adjust}
-            </DButton>
-          </Card>
-        ) : afterLast ? (
-          <Card>
-            <h2 className="text-title2 font-bold">{DASH_COPY.allDone}</h2>
-            <p className="mt-1 text-subhead text-text-2">{DASH_COPY.allDoneBody}</p>
-            <DButton
-              variant="primary"
+              ref={pauseBtn}
+              variant="secondary"
               size="lg"
-              className="mt-4"
-              disabled={paused}
-              onClick={endNow}
+              onClick={() => controller.send(paused ? "resume" : "pause")}
+              icon={
+                paused ? (
+                  <Play className="size-5 fill-current" aria-hidden />
+                ) : (
+                  <Pause className="size-5 fill-current" aria-hidden />
+                )
+              }
             >
-              {DASH_COPY.endWorkout}
+              {paused ? DASH_COPY.resume : DASH_COPY.pause}
             </DButton>
             <DButton
-              variant="quiet"
-              size="md"
-              className="mt-1 w-full"
-              disabled={paused}
-              onClick={() => controller.send("undo")}
+              variant="outline"
+              size="lg"
+              onClick={() => (afterLast ? endNow() : setConfirmEnd(true))}
             >
-              {DASH_COPY.undoLast}
+              {DASH_COPY.end}
             </DButton>
-          </Card>
-        ) : null}
-
-        <NextUp p={p} blocks={row.snapshot.blocks} />
-
-        <div className="grid grid-cols-2 gap-2 pb-6">
-          <DButton
-            variant="secondary"
-            size="lg"
-            onClick={() => controller.send(paused ? "resume" : "pause")}
-            icon={
-              paused ? (
-                <Play className="size-5 fill-current" aria-hidden />
-              ) : (
-                <Pause className="size-5 fill-current" aria-hidden />
-              )
-            }
-          >
-            {paused ? DASH_COPY.resume : DASH_COPY.pause}
-          </DButton>
-          <DButton
-            variant="outline"
-            size="lg"
-            onClick={() => (afterLast ? endNow() : setConfirmEnd(true))}
-          >
-            {DASH_COPY.end}
-          </DButton>
+          </div>
+          {sending && <span className="sr-only">{DASH_COPY.saving}</span>}
         </div>
-        {sending && <span className="sr-only">{DASH_COPY.saving}</span>}
       </div>
 
       {paused && !confirmEnd && (
@@ -431,13 +461,13 @@ function Dashboard({ view, controller }: { view: SessionView; controller: Sessio
 
       <ConfirmDialog
         open={confirmEnd}
-        title={DASH_COPY.endTitle}
+        title={row.live_data ? DASH_COPY.endTitleLive : DASH_COPY.endTitle}
         cancelLabel={DASH_COPY.keepGoing}
         confirmLabel={DASH_COPY.endAndSave}
         onCancel={() => setConfirmEnd(false)}
         onConfirm={endNow}
       >
-        {DASH_COPY.endBody}
+        {row.live_data ? DASH_COPY.endBodyLive : DASH_COPY.endBody}
       </ConfirmDialog>
 
       <Sheet open={allZones} onClose={() => setAllZones(false)} title={ZONE_COPY.timeInEach}>
@@ -583,8 +613,13 @@ function SyncBanners({ view, onDismiss }: { view: SessionView; onDismiss: () => 
       {view.offline && queued && (
         <div className="flex items-center gap-2 rounded-btn bg-hold-tint px-4 py-3 text-subhead font-medium text-text">
           <CloudOff className="size-5 shrink-0 text-hold" aria-hidden />
-          {DASH_COPY.offline}
-          <span className="ml-auto font-num tabular text-text-2">{view.pending.length}</span>
+          <span className="min-w-0 flex-1">
+            {DASH_COPY.offline}
+            {view.timingPending && (
+              <span className="block font-normal text-text-2">{DASH_COPY.timingPending}</span>
+            )}
+          </span>
+          <span className="font-num tabular text-text-2">{view.pending.length}</span>
         </div>
       )}
       {view.notice && (
@@ -622,10 +657,12 @@ function PausedOverlay({
   onEnd: () => void;
 }) {
   const resume = useRef<HTMLButtonElement>(null);
+  const box = useRef<HTMLDivElement>(null);
   useEffect(() => resume.current?.focus(), []);
   return (
     <div className="fixed inset-0 z-50 grid place-items-end bg-text/40 p-3 sm:place-items-center">
       <div
+        ref={box}
         role="dialog"
         aria-modal="true"
         aria-labelledby="paused-title"
@@ -633,6 +670,20 @@ function PausedOverlay({
         onKeyDown={(e) => {
           // Back/Escape on the paused overlay does nothing (handoff §3: stay paused).
           if (e.key === "Escape") e.preventDefault();
+          // Tab stays inside the overlay (the dashboard behind it is inert too).
+          if (e.key === "Tab") {
+            const els = box.current?.querySelectorAll<HTMLElement>("button:not([disabled])");
+            if (!els || els.length === 0) return;
+            const first = els[0] as HTMLElement;
+            const last = els[els.length - 1] as HTMLElement;
+            if (e.shiftKey && document.activeElement === first) {
+              e.preventDefault();
+              last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+              e.preventDefault();
+              first.focus();
+            }
+          }
         }}
       >
         <Eyebrow>Paused · {name}</Eyebrow>

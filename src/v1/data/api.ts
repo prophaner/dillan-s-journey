@@ -105,7 +105,7 @@ export interface CommandInput {
   expectedRevision: number;
   source: CommandSource;
   commandId?: string;
-  /** when the user acted (ISO); queued offline commands keep their original time */
+  /** when the user acted (ISO); recorded only: the server applies every command at its own now() */
   clientAt?: string;
 }
 

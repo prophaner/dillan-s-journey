@@ -4,6 +4,7 @@
 
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { clearLocalUserData } from "@/v1/session/local-data";
 import type { Json } from "@/integrations/supabase/types";
 import type { HrLiveRow, StoredSample } from "@/v1/core/hr";
 import type {
@@ -550,7 +551,11 @@ export function createSupabaseApi(): DillanApi {
           .on(
             "postgres_changes",
             { event: "*", schema: "public", table: "hr_live", filter: `user_id=eq.${userId}` },
-            (p) => cb(p.eventType === "DELETE" ? null : (p.new as unknown as HrLiveRow)),
+            // DELETE events reach every subscriber unfiltered (0006 note on hr_live), so they
+            // are ignored; a row that stops updating goes stale under the freshness rules.
+            (p) => {
+              if (p.eventType !== "DELETE") cb(p.new as unknown as HrLiveRow);
+            },
           )
           .subscribe();
         return () => void supabase.removeChannel(ch);
@@ -588,6 +593,7 @@ export function createSupabaseApi(): DillanApi {
               .select("stream_id, seq, measured_at, bpm, contact, is_demo")
               .eq("session_id", sessionId)
               .order("measured_at", { ascending: true })
+              .order("id", { ascending: true })
               .range(from, from + 999),
           );
           for (const r of rows ?? [])
@@ -612,7 +618,9 @@ export function createSupabaseApi(): DillanApi {
       async deleteAccount() {
         // Server function: V1 data via the caller's own session, then auth.admin.deleteUser.
         const { deleteMyAccount } = await import("./account.functions");
+        const me = await uid();
         await deleteMyAccount();
+        clearLocalUserData(me);
         await supabase.removeAllChannels();
         await supabase.auth.signOut({ scope: "local" });
       },

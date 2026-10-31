@@ -5,9 +5,18 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createMockApi } from "@/v1/data/mock-api";
 import { MOCK_LUIS, MOCK_MAYA, seedMockDb } from "@/v1/data/mock-fixtures";
 import type { DillanApi } from "@/v1/data/api";
-import type { SessionRpcResult, WorkoutSessionRow } from "@/v1/core/types";
+import type { Exercise, SessionRpcResult, SetResult, WorkoutSessionRow } from "@/v1/core/types";
 import { CommandQueue, QUEUE_MAX, queueKey, type QueuedCommand } from "@/v1/session/command-queue";
-import { NOTICES, SessionController, isNetworkError } from "@/v1/session/controller";
+import {
+  NOTICES,
+  SessionController,
+  hasForegroundController,
+  isNetworkError,
+} from "@/v1/session/controller";
+import { clearLocalUserData } from "@/v1/session/local-data";
+import { pendingNotesKey } from "@/v1/session/notes";
+import { doneText } from "@/v1/session/format";
+import { replayQueuedCommands } from "@/v1/ui/app-start";
 
 type Api = ReturnType<typeof createMockApi>;
 let api: Api;
@@ -334,5 +343,203 @@ describe("recovery after reload", () => {
     expect(c.getSnapshot().loadState).toBe("not_found");
     expect(c.getSnapshot().row).toBeNull();
     c.dispose();
+  });
+});
+
+describe("Slice C review fixes", () => {
+  it("projects pending pause/end at now (the server applies them on arrival), not at the tap", async () => {
+    const row = await startedSession();
+    const f = flaky(api);
+    f.state.offline = true;
+    let clock = Date.now();
+    const c = new SessionController({
+      api: f.api,
+      userId: MOCK_LUIS,
+      sessionId: row.id,
+      source: "phone",
+      now: () => clock,
+      listenWindow: false,
+    });
+    await c.start();
+    const tap = clock;
+    expect(c.send("pause")).toBe(true);
+    await settle();
+    expect(c.getSnapshot().timingPending).toBe(true);
+    // 40 minutes later, still offline: the pause has not happened on the server yet.
+    clock = tap + 40 * 60_000;
+    c.dismissNotice();
+    expect(c.getSnapshot().projected?.paused_at).toBe(clock);
+    c.dispose();
+
+    // Replayed after the delay: the server stamps it at arrival and the client agrees.
+    f.state.offline = false;
+    const c2 = controller(f.api, row.id);
+    await c2.start();
+    const v = c2.getSnapshot();
+    expect(v.pending).toHaveLength(0);
+    expect(v.timingPending).toBe(false);
+    expect(v.row?.state).toBe("paused");
+    expect(Date.parse(v.row!.paused_at!)).toBeGreaterThanOrEqual(tap);
+    c2.dispose();
+  });
+
+  it("does not re-apply an in-flight undo when the Realtime echo arrives first", async () => {
+    const row = await startedSession();
+    let clock = Date.now();
+    const c = new SessionController({
+      api,
+      userId: MOCK_LUIS,
+      sessionId: row.id,
+      source: "phone",
+      now: () => clock,
+      listenWindow: false,
+    });
+    await c.start();
+    expect(c.send("complete_set")).toBe(true);
+    await settle();
+    clock += 1_000;
+    expect(c.send("complete_set")).toBe(true);
+    await settle();
+    await settle();
+    expect(c.getSnapshot().row?.cursor).toBe(2);
+    const seen: number[] = [];
+    const off = c.subscribe(() => seen.push(c.getSnapshot().projected?.cursor ?? -1));
+    // The mock emits the Realtime row before it resolves the RPC (echo first).
+    expect(c.send("undo")).toBe(true);
+    await settle();
+    await settle();
+    off();
+    // Never stepped back two sets while the undo was in flight.
+    expect(Math.min(...seen)).toBe(1);
+    expect(c.getSnapshot().projected?.cursor).toBe(1);
+    expect(c.getSnapshot().notice).toBeNull();
+    c.dispose();
+  });
+
+  it("a double tap on Complete set logs one set", async () => {
+    const row = await startedSession();
+    const c = controller(api, row.id);
+    await c.start();
+    expect(c.send("complete_set")).toBe(true);
+    expect(c.send("complete_set")).toBe(false);
+    expect(c.send("skip_set")).toBe(false);
+    await settle();
+    await settle();
+    const v = c.getSnapshot();
+    expect(Object.keys(v.row!.results)).toHaveLength(1);
+    expect(v.row?.cursor).toBe(1);
+    c.dispose();
+  });
+
+  it("asks to sign in again (not 'someone else') when no one is signed in", async () => {
+    const row = await startedSession();
+    const signedOut: DillanApi = {
+      ...api,
+      auth: { ...api.auth, getUser: async () => null },
+    };
+    new CommandQueue(MOCK_LUIS, row.id).push({
+      commandId: "22222222-2222-4222-8222-222222222222",
+      userId: MOCK_LUIS,
+      sessionId: row.id,
+      kind: "pause",
+      expectedRevision: row.revision,
+      source: "phone",
+      clientAt: new Date().toISOString(),
+    });
+    const c = controller(signedOut, row.id);
+    await c.start();
+    const v = c.getSnapshot();
+    expect(v.heldForOtherUser).toBe(true);
+    expect(v.notice).toBe(NOTICES.signedOut);
+    expect(v.pending).toHaveLength(1);
+    c.dispose();
+  });
+
+  it("app-start replay skips a session whose page controller is live, and the page takes over", async () => {
+    const row = await startedSession();
+    const f = flaky(api);
+    // Page controller is live: replay leaves its session alone.
+    const page = new SessionController({
+      api: f.api,
+      userId: MOCK_LUIS,
+      sessionId: row.id,
+      source: "phone",
+      now: () => Date.now(),
+    });
+    await page.start();
+    expect(hasForegroundController(MOCK_LUIS, row.id)).toBe(true);
+    new CommandQueue(MOCK_LUIS, row.id).push({
+      commandId: "33333333-3333-4333-8333-333333333333",
+      userId: MOCK_LUIS,
+      sessionId: row.id,
+      kind: "pause",
+      expectedRevision: row.revision,
+      source: "phone",
+      clientAt: new Date().toISOString(),
+    });
+    await replayQueuedCommands(f.api, MOCK_LUIS, null);
+    expect(f.state.sent).toHaveLength(0);
+    page.dispose();
+    expect(hasForegroundController(MOCK_LUIS, row.id)).toBe(false);
+
+    // A background controller gives way when the page controller starts.
+    const bg = controller(f.api, row.id);
+    f.state.offline = true;
+    await bg.start();
+    f.state.offline = false;
+    const page2 = new SessionController({
+      api: f.api,
+      userId: MOCK_LUIS,
+      sessionId: row.id,
+      source: "phone",
+      now: () => Date.now(),
+    });
+    await page2.start();
+    // A background start while the page is live does nothing.
+    const bg2 = controller(f.api, row.id);
+    await bg2.start();
+    expect(bg2.getSnapshot().row).toBeNull();
+    expect(page2.getSnapshot().row?.state).toBe("paused");
+    expect(f.state.sent).toHaveLength(1);
+    page2.dispose();
+    bg.dispose();
+  });
+});
+
+describe("account deletion clears this device's per-user session data", () => {
+  it("removes queued commands and pending note text", async () => {
+    localStorage.setItem(queueKey(MOCK_LUIS), JSON.stringify({ s1: [] }));
+    localStorage.setItem(pendingNotesKey(MOCK_LUIS), JSON.stringify({ s1: { text: "private" } }));
+    localStorage.setItem(queueKey(MOCK_MAYA), "{}");
+    clearLocalUserData(MOCK_LUIS);
+    expect(localStorage.getItem(queueKey(MOCK_LUIS))).toBeNull();
+    expect(localStorage.getItem(pendingNotesKey(MOCK_LUIS))).toBeNull();
+    expect(localStorage.getItem(queueKey(MOCK_MAYA))).toBe("{}");
+
+    localStorage.setItem(pendingNotesKey(MOCK_LUIS), "{}");
+    await api.account.deleteAccount();
+    expect(localStorage.getItem(pendingNotesKey(MOCK_LUIS))).toBeNull();
+  });
+});
+
+describe("doneText", () => {
+  it("keeps the load basis", () => {
+    const ex = {
+      name: "Press",
+      reps: 10,
+      rep_mode: "standard",
+      weight: 30,
+      unit: "lb",
+      load_basis: "per_implement",
+    } as unknown as Exercise;
+    expect(doneText({ status: "done", reps: 10, weight: 30 } as SetResult, ex)).toBe(
+      "10 reps · 30 lb per dumbbell",
+    );
+    expect(
+      doneText({ status: "done", reps: 0, weight: 30 } as SetResult, {
+        ...ex,
+        load_basis: "total_external",
+      }),
+    ).toBe("0 reps · 30 lb total");
   });
 });

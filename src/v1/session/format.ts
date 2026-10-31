@@ -23,11 +23,16 @@ export function repsText(reps: number, mode: Exercise["rep_mode"]): string {
   return mode === "per_side" ? `${reps} per side` : `${reps} reps`;
 }
 
-/** What was logged: "10 reps · 30 lb" (weight in the exercise's own unit) */
+/** What was logged: "10 reps · 30 lb per dumbbell" | "10 reps · 30 lb total" (handoff §4.7) */
 export function doneText(r: SetResult, ex: Exercise | null): string {
   const reps = r.reps ?? 0;
   const per = ex?.rep_mode === "per_side" ? " per side" : " reps";
-  const w = r.weight == null ? "Bodyweight" : `${r.weight} ${ex?.unit ?? "lb"}`;
+  // Without the exercise the basis is unknown: show the bare weight rather than guess one.
+  const w = ex
+    ? loadText(r.weight, ex.unit, ex.load_basis)
+    : r.weight == null
+      ? "Bodyweight"
+      : `${r.weight} lb`;
   return `${reps}${per} · ${w}`;
 }
 

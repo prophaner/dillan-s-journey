@@ -108,10 +108,13 @@ describe("S02 code step (handoff 4.1, acceptance 2-3)", () => {
     await toCodeStep();
     const btn = screen.getByRole("button", { name: AUTH_COPY.resendIn(30) });
     expect(btn).toBeDisabled();
+    // Let the countdown effect register its interval before time moves (flaky under load).
+    await act(async () => {});
     act(() => {
       vi.advanceTimersByTime(10_000);
     });
-    expect(screen.getByRole("button", { name: AUTH_COPY.resendIn(20) })).toBeDisabled();
+    // shouldAdvanceTime also lets real time pass, so a loaded test run may already show 19.
+    expect(screen.getByRole("button", { name: /^Resend code \((19|20)\)$/ })).toBeDisabled();
     act(() => {
       vi.advanceTimersByTime(20_500);
     });

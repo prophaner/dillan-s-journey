@@ -28,15 +28,18 @@ export function useLiveHr(userId: string): LiveHr {
     const take = (row: HrLiveRow | null) => {
       if (!on) return;
       // Rows with rev <= the cached rev are ignored (h10-design 5.5).
-      if (row && row.rev < lastRev) return;
+      if (row && row.rev <= lastRev) return;
       lastRev = row?.rev ?? lastRev;
       setState((s) => ({ ...s, live: row }));
     };
     void Promise.all([api.hr.live().catch(() => null), api.hr.sensor().catch(() => null)]).then(
       ([live, sensor]) => {
         if (!on) return;
-        lastRev = live?.rev ?? -1;
-        setState({ live, sensor, loaded: true });
+        // A Realtime row may have arrived first: keep it unless the read is newer.
+        if (live && live.rev > lastRev) {
+          lastRev = live.rev;
+          setState({ live, sensor, loaded: true });
+        } else setState((s) => ({ ...s, sensor, loaded: true }));
       },
     );
     const off = api.realtime.onHrLive(userId, take);

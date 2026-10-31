@@ -17,6 +17,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PAGE = 1000;
 /** ~27 h of 1 Hz samples; a session longer than that keeps the rest Unmeasured. */
 const MAX_SAMPLES = 100_000;
+/** compute + save rounds when samples keep arriving during finalize */
+const FINALIZE_ATTEMPTS = 3;
 
 export const finalizeSessionHr = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -40,52 +42,65 @@ export const finalizeSessionHr = createServerFn({ method: "POST" })
     if (!row) return { summary };
 
     const table = row.is_demo ? "hr_demo_samples" : "hr_samples";
-    const samples: StoredSample[] = [];
-    const sources = new Set<string>();
-    for (let from = 0; from < MAX_SAMPLES; from += PAGE) {
-      const page = await sb
-        .from(table)
-        .select("stream_id, seq, measured_at, bpm, contact, is_demo, source_id")
-        .eq("session_id", id)
-        .order("measured_at", { ascending: true })
-        .order("id", { ascending: true })
-        .range(from, from + PAGE - 1);
-      if (page.error) throw new Error("finalize_read_failed");
-      for (const r of page.data ?? []) {
-        samples.push({
-          stream_id: r.stream_id,
-          seq: r.seq,
-          measured_at: Date.parse(r.measured_at),
-          bpm: r.bpm,
-          contact: r.contact,
-          is_demo: r.is_demo,
-        });
-        sources.add(r.source_id);
+    // session_hr_finalize clears hr_finalize_dirty unconditionally, so a late sample stored
+    // between our read and the RPC would be lost (nothing marks it dirty again). After saving,
+    // recount the samples; if more arrived than we read, compute and save again.
+    let latest: SessionSummaryRow = summary;
+    for (let attempt = 0; attempt < FINALIZE_ATTEMPTS; attempt++) {
+      const samples: StoredSample[] = [];
+      const sources = new Set<string>();
+      for (let from = 0; from < MAX_SAMPLES; from += PAGE) {
+        const page = await sb
+          .from(table)
+          .select("stream_id, seq, measured_at, bpm, contact, is_demo, source_id")
+          .eq("session_id", id)
+          .order("measured_at", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (page.error) throw new Error("finalize_read_failed");
+        for (const r of page.data ?? []) {
+          samples.push({
+            stream_id: r.stream_id,
+            seq: r.seq,
+            measured_at: Date.parse(r.measured_at),
+            bpm: r.bpm,
+            contact: r.contact,
+            is_demo: r.is_demo,
+          });
+          sources.add(r.source_id);
+        }
+        if ((page.data?.length ?? 0) < PAGE) break;
       }
-      if ((page.data?.length ?? 0) < PAGE) break;
+
+      const totals = finalizeTotals(row, samples, summary.active_ms);
+      if (!totals) return { summary: latest };
+
+      let names: string[] = [];
+      if (sources.size) {
+        const src = await sb
+          .from("hr_sources")
+          .select("id, display_name")
+          .in("id", [...sources]);
+        names = (src.data ?? []).map((s) => s.display_name);
+      }
+
+      const res = await sb.rpc("session_hr_finalize", {
+        p_session_id: id,
+        p_zone_ms: totals.zone_ms,
+        p_unmeasured_ms: totals.unmeasured_ms,
+        p_algorithm_version: totals.algorithm_version,
+        p_sources_used: names,
+      });
+      if (res.error) throw new Error("finalize_failed");
+      const out = res.data as { ok?: boolean; error?: string; summary?: SessionSummaryRow } | null;
+      if (!out?.ok) throw new Error(out?.error ?? "finalize_failed");
+      latest = out.summary ?? latest;
+      if (samples.length >= MAX_SAMPLES) break;
+      const count = await sb
+        .from(table)
+        .select("id", { count: "exact", head: true })
+        .eq("session_id", id);
+      if (count.error || (count.count ?? 0) <= samples.length) break;
     }
-
-    const totals = finalizeTotals(row, samples, summary.active_ms);
-    if (!totals) return { summary };
-
-    let names: string[] = [];
-    if (sources.size) {
-      const src = await sb
-        .from("hr_sources")
-        .select("id, display_name")
-        .in("id", [...sources]);
-      names = (src.data ?? []).map((s) => s.display_name);
-    }
-
-    const res = await sb.rpc("session_hr_finalize", {
-      p_session_id: id,
-      p_zone_ms: totals.zone_ms,
-      p_unmeasured_ms: totals.unmeasured_ms,
-      p_algorithm_version: totals.algorithm_version,
-      p_sources_used: names,
-    });
-    if (res.error) throw new Error("finalize_failed");
-    const out = res.data as { ok?: boolean; error?: string; summary?: SessionSummaryRow } | null;
-    if (!out?.ok) throw new Error(out?.error ?? "finalize_failed");
-    return { summary: out.summary ?? summary };
+    return { summary: latest };
   });

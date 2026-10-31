@@ -10,6 +10,7 @@ import { useUser } from "@/v1/ui/user-context";
 import { DevicesList } from "@/v1/ui/devices-list";
 import { timeZoneOptions } from "@/v1/ui/timezones";
 import { clearDraft } from "@/v1/ui/editor-model";
+import { clearLocalUserData } from "@/v1/session/local-data";
 import { ScreenHeader } from "@/components/dillan/app-shell";
 import { DButton } from "@/components/dillan/button";
 import { Card, ScreenState } from "@/components/dillan/surfaces";
@@ -386,6 +387,7 @@ function ProfileBody({ profile }: { profile: Profile }) {
             return;
           }
           clearDraft(user.id);
+          clearLocalUserData(user.id);
           await qc.cancelQueries();
           qc.clear();
           void navigate({ to: "/auth", search: { redirect: undefined }, replace: true });

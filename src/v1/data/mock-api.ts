@@ -34,6 +34,7 @@ import { seedMockDb, summaryFor, type MockDb, type MockUser } from "./mock-fixtu
 import { mockHrLive, mockSamples, readMockHrMode, type MockHrMode } from "./mock-hr";
 import { finalizeTotals, needsFinalize } from "@/v1/core/finalize";
 import type { HrLiveRow } from "@/v1/core/hr";
+import { clearLocalUserData } from "@/v1/session/local-data";
 
 export const MOCK_DB_KEY = "dillan.mock.db.v1";
 export const MOCK_SESSION_KEY = "dillan.mock.session";
@@ -704,6 +705,7 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
       async deleteAccount() {
         const u = user();
         await api.account.deleteMyData();
+        clearLocalUserData(u.id);
         db.users = db.users.filter((x) => x.id !== u.id);
         persist();
         writeSession(null);

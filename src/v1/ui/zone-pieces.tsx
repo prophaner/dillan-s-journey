@@ -72,12 +72,15 @@ export function ZoneBreakdown({
       key: `z${z}`,
       label: (
         <>
-          <span className={cn("font-bold", ZONE_TEXT[z - 1])}>Zone {z}</span>{" "}
+          {/* No zone color without confirmed zones (acceptance 26). */}
+          <span className={cn("font-bold", cutoffs ? ZONE_TEXT[z - 1] : "text-text-2")}>
+            Zone {z}
+          </span>{" "}
           <span className="text-text-2">{cutoffs ? zoneRangeLabel(z, cutoffs) : "—"}</span>
         </>
       ),
       ms: zoneMs[z - 1] ?? 0,
-      fill: ZONE_FILL[z - 1] as string,
+      fill: cutoffs ? (ZONE_FILL[z - 1] as string) : "bg-zu",
     }),
   );
   rows.push({

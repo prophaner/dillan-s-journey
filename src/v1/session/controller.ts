@@ -12,6 +12,12 @@
 //    are retried with a fresh command_id when still valid (dropped silently when the session is
 //    already in the wanted state); set actions are dropped with a visible notice
 //  - ended is terminal: anything still queued for an ended session is dropped
+//  - timing: the server applies every command at its own now() when it arrives (0006
+//    session_command), not at the tap time. So pending commands are projected at "now" too, and
+//    the offline banner says pause/end take effect on reconnect; the UI never shows a pause or end
+//    time the server will not save
+//  - one controller per user+session pumps the queue: a background replay controller (app start)
+//    gives way to the page controller, and replay skips a session the page already drives
 
 import { applyCommand } from "@/v1/core/engine";
 import {
@@ -46,6 +52,8 @@ export interface SessionView {
   notice: string | null;
   /** queued commands belong to a different signed-in user: they are held, never sent */
   heldForOtherUser: boolean;
+  /** a pause/resume/end is waiting to sync: it takes effect when it reaches the server */
+  timingPending: boolean;
 }
 
 export const NOTICES = {
@@ -57,7 +65,21 @@ export const NOTICES = {
   full: "Too many changes are waiting to sync. Reconnect to keep logging.",
   otherUser:
     "Changes made while signed in as someone else stay on this device until they sign in again.",
+  signedOut: "You're signed out. Sign in again to save the changes waiting on this device.",
 } as const;
+
+/** Ignore a second Complete/Skip tap within this window (a double tap logs one set, not two). */
+export const SET_TAP_GUARD_MS = 600;
+
+// Controllers currently driving a session's queue, by user+session.
+const live = new Map<string, SessionController>();
+const liveKey = (userId: string, sessionId: string) => `${userId}:${sessionId}`;
+
+/** True when a page (foreground) controller is driving this session's queue. */
+export function hasForegroundController(userId: string, sessionId: string): boolean {
+  const c = live.get(liveKey(userId, sessionId));
+  return !!c && c.foreground;
+}
 
 const LENIENT = new Set<CommandKind>(["pause", "resume", "end"]);
 const SET_ACTIONS = new Set<CommandKind>(["complete_set", "skip_set", "undo", "skip_rest"]);
@@ -121,6 +143,7 @@ export class SessionController {
   private backoff = 2_000;
   private cleanups: Array<() => void> = [];
   private droppedSets = 0;
+  private lastSetTapAt = -Infinity;
 
   constructor(private o: ControllerOptions) {
     this.api = o.api;
@@ -139,6 +162,11 @@ export class SessionController {
   };
   getSnapshot = () => this.view;
 
+  /** Page controllers listen to the window; background replay controllers do not. */
+  get foreground(): boolean {
+    return this.o.listenWindow !== false;
+  }
+
   private emit() {
     this.view = this.compute();
     this.listeners.forEach((l) => l());
@@ -149,8 +177,11 @@ export class SessionController {
     const pendingKeys: string[] = [];
     if (this.row) {
       projected = engineStateFromRow(this.row);
-      for (const c of this.pending) {
-        const at = Date.parse(c.clientAt);
+      // Projected at now, not the tap time: the server applies each command when it arrives.
+      const at = this.o.now();
+      // Commands up to the one the row last applied are already in it (Realtime echo first).
+      const seen = this.pending.findIndex((c) => c.commandId === this.row?.last_command_id);
+      for (const c of this.pending.slice(seen + 1)) {
         const step = projected.steps[projected.cursor];
         const r = applyCommand(
           projected,
@@ -159,7 +190,7 @@ export class SessionController {
             ...(c.payload ? { payload: c.payload } : {}),
             expected_revision: projected.revision,
           },
-          Number.isFinite(at) ? at : this.o.now(),
+          at,
         );
         if (!r.ok) continue;
         if ((c.kind === "complete_set" || c.kind === "skip_set") && step)
@@ -178,12 +209,27 @@ export class SessionController {
       offline: this.offline,
       notice: this.notice,
       heldForOtherUser: this.held,
+      timingPending: this.pending.some((p) => LENIENT.has(p.kind)),
     };
   }
 
   // ---- lifecycle ----
   async start(): Promise<void> {
     this.disposed = false;
+    const key = liveKey(this.o.userId, this.o.sessionId);
+    const other = live.get(key);
+    if (other && other !== this) {
+      if (other.foreground && !this.foreground) {
+        // The page already drives this session: a background replay has nothing to do.
+        this.disposed = true;
+        return;
+      }
+      // The page takes over from a background replay; re-read the shared queue it was pumping.
+      other.dispose();
+      this.pending = this.queue.list().map((c) => ({ ...c, status: "queued" as const }));
+      this.retries.clear();
+    }
+    live.set(key, this);
     if (this.o.listenWindow !== false && typeof window !== "undefined") {
       const online = () => {
         this.offline = false;
@@ -219,6 +265,8 @@ export class SessionController {
 
   dispose() {
     this.disposed = true;
+    const key = liveKey(this.o.userId, this.o.sessionId);
+    if (live.get(key) === this) live.delete(key);
     this.cleanups.forEach((c) => c());
     this.cleanups = [];
     if (this.retryTimer) clearTimeout(this.retryTimer);
@@ -251,6 +299,19 @@ export class SessionController {
     if (!this.row || r.revision >= this.row.revision) {
       this.row = r;
       this.loadState = "ready";
+      // This row already reflects one of our commands (e.g. the Realtime echo beat the RPC
+      // response, or a reload after a lost response): drop it so it is not projected twice.
+      // Queued (not in-flight) ones are removed here; compute() skips an in-flight one.
+      const echoed = this.pending.findIndex(
+        (p) => p.commandId === r.last_command_id && p.status !== "sending",
+      );
+      if (echoed >= 0) {
+        for (const p of this.pending.slice(0, echoed + 1)) {
+          this.queue.remove(p.commandId);
+          this.retries.delete(p.commandId);
+        }
+        this.pending = this.pending.slice(echoed + 1);
+      }
     }
     if (this.row.state === "ended" && this.pending.some((p) => p.status === "queued")) {
       // Ended is terminal: nothing else can apply. Keep only an in-flight request.
@@ -272,9 +333,11 @@ export class SessionController {
     const v = this.view;
     if (!v.projected || !this.row) return false;
     const p = v.projected;
+    const at = this.o.now();
+    const setTap = kind === "complete_set" || kind === "skip_set";
+    if (setTap && at - this.lastSetTapAt < SET_TAP_GUARD_MS) return false;
     const full: CommandPayload =
       kind === "complete_set" || kind === "skip_set" ? { ...payload, step: p.cursor } : payload;
-    const at = this.o.now();
     const check = applyCommand(
       p,
       {
@@ -301,6 +364,7 @@ export class SessionController {
       return false;
     }
     this.pending.push({ ...cmd, status: "queued" });
+    if (setTap) this.lastSetTapAt = at;
     if (SET_ACTIONS.has(kind)) this.notice = null;
     this.emit();
     void this.pump();
@@ -322,7 +386,13 @@ export class SessionController {
         // Never replay under a different signed-in user (brief: queued changes stay tied to
         // their original user).
         const who = await this.api.auth.getUser().catch(() => undefined);
-        if (who !== undefined && who?.id !== this.o.userId) {
+        if (who === null) {
+          // No one is signed in (session expired or revoked): keep the queue, ask to sign in.
+          this.held = true;
+          this.notice = NOTICES.signedOut;
+          return;
+        }
+        if (who !== undefined && who.id !== this.o.userId) {
           this.held = true;
           this.notice = NOTICES.otherUser;
           return;
