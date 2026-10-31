@@ -5,7 +5,7 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
-import type { HrLiveRow } from "@/v1/core/hr";
+import type { HrLiveRow, StoredSample } from "@/v1/core/hr";
 import type {
   DeviceGrantRow,
   SessionNoteRow,
@@ -404,7 +404,7 @@ export function createSupabaseApi(): DillanApi {
             p_source: c.source,
             p_kind: c.kind,
             p_payload: (c.payload ?? {}) as Json,
-            p_client_at: new Date().toISOString(),
+            p_client_at: c.clientAt ?? new Date().toISOString(),
           }),
         );
         return data as unknown as SessionRpcResult;
@@ -453,6 +453,12 @@ export function createSupabaseApi(): DillanApi {
           await supabase.from("session_summaries").select("*").eq("session_id", id).maybeSingle(),
         );
         return (row as unknown as SessionSummaryRow) ?? null;
+      },
+      async finalize(id) {
+        // Server function: reads the samples as the caller (RLS) and runs core/zones.ts.
+        const { finalizeSessionHr } = await import("./finalize.functions");
+        const res = await finalizeSessionHr({ data: { sessionId: id } });
+        return (res.summary as SessionSummaryRow | null) ?? null;
       },
     },
 
@@ -562,6 +568,33 @@ export function createSupabaseApi(): DillanApi {
       async serverTime() {
         const data = check(await supabase.rpc("server_time"));
         return Date.parse(data as unknown as string);
+      },
+      async sensor() {
+        const id = await uid();
+        const row = check(
+          await supabase.from("hr_sensors").select("forgotten_at").eq("user_id", id).maybeSingle(),
+        );
+        return row && !row.forgotten_at ? { paired: true } : null;
+      },
+      async request(minutes) {
+        check(await supabase.rpc("hr_request", { p_minutes: minutes }));
+      },
+      async samples(sessionId, isDemo) {
+        const out: StoredSample[] = [];
+        for (let from = 0; from < 100_000; from += 1000) {
+          const rows = check(
+            await supabase
+              .from(isDemo ? "hr_demo_samples" : "hr_samples")
+              .select("stream_id, seq, measured_at, bpm, contact, is_demo")
+              .eq("session_id", sessionId)
+              .order("measured_at", { ascending: true })
+              .range(from, from + 999),
+          );
+          for (const r of rows ?? [])
+            out.push({ ...r, measured_at: Date.parse(r.measured_at) } as StoredSample);
+          if ((rows?.length ?? 0) < 1000) break;
+        }
+        return out;
       },
     },
 

@@ -3,7 +3,7 @@
 //  - mock-api.ts: in-memory + localStorage, runs src/v1/core; dev builds with ?mock=1 only
 // Screens never import supabase directly; they call useApi() (src/v1/data/client.ts).
 
-import type { HrLiveRow } from "@/v1/core/hr";
+import type { HrLiveRow, StoredSample } from "@/v1/core/hr";
 import type {
   CommandKind,
   CommandPayload,
@@ -105,6 +105,8 @@ export interface CommandInput {
   expectedRevision: number;
   source: CommandSource;
   commandId?: string;
+  /** when the user acted (ISO); queued offline commands keep their original time */
+  clientAt?: string;
 }
 
 export type NoteSaveResult =
@@ -192,6 +194,12 @@ export interface DillanApi {
     /** sessions whose local start date falls in the month (1-12) */
     month(year: number, month: number): Promise<HistoryItem[]>;
     summary(id: string): Promise<SessionSummaryRow | null>;
+    /**
+     * Computes zone totals from the stored heart-rate samples with src/v1/core/zones.ts and saves
+     * them (session_hr_finalize). Runs when the summary is pending or marked dirty; otherwise
+     * returns the summary unchanged. null when there is no summary (not ended / discarded).
+     */
+    finalize(id: string): Promise<SessionSummaryRow | null>;
   };
 
   notes: {
@@ -221,6 +229,12 @@ export interface DillanApi {
   hr: {
     live(): Promise<HrLiveRow | null>;
     serverTime(): Promise<number>;
+    /** the caller's paired strap (hr_sensors); null when none or forgotten */
+    sensor(): Promise<{ paired: boolean } | null>;
+    /** preflight demand window (h10-design 5.4): minutes 0 stops it */
+    request(minutes: number): Promise<void>;
+    /** stored samples of one session (real or demo table), by measured_at */
+    samples(sessionId: string, isDemo: boolean): Promise<StoredSample[]>;
   };
 
   account: {

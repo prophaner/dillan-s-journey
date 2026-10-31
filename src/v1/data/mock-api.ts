@@ -31,6 +31,9 @@ import {
   type Profile,
 } from "./api";
 import { seedMockDb, summaryFor, type MockDb, type MockUser } from "./mock-fixtures";
+import { mockHrLive, mockSamples, readMockHrMode, type MockHrMode } from "./mock-hr";
+import { finalizeTotals, needsFinalize } from "@/v1/core/finalize";
+import type { HrLiveRow } from "@/v1/core/hr";
 
 export const MOCK_DB_KEY = "dillan.mock.db.v1";
 export const MOCK_SESSION_KEY = "dillan.mock.session";
@@ -39,6 +42,8 @@ export interface MockOptions {
   storage?: Storage | null;
   now?: () => number;
   db?: MockDb;
+  /** simulated strap state; default reads localStorage["dillan.mock.hr"] (see mock-hr.ts) */
+  hrMode?: () => MockHrMode;
 }
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
@@ -49,6 +54,7 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
   let db: MockDb = opts.db ?? load() ?? seedMockDb(now());
   let me: string | null = readSession();
 
+  const hrMode = opts.hrMode ?? (() => readMockHrMode(storage));
   const authListeners = new Set<(u: AuthUser | null) => void>();
   const sessionListeners = new Set<{ userId: string; cb: (r: WorkoutSessionRow) => void }>();
 
@@ -500,6 +506,30 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
         const u = user();
         return clone(db.summaries.find((s) => s.session_id === id && s.user_id === u.id) ?? null);
       },
+      async finalize(id) {
+        // Same steps as src/v1/data/finalize.functions.ts, in memory.
+        const u = user();
+        const sum = db.summaries.find((s) => s.session_id === id && s.user_id === u.id);
+        if (!sum) return null;
+        if (!needsFinalize(sum)) return clone(sum);
+        const row = db.sessions.find((s) => s.id === id && s.user_id === u.id);
+        if (!row) return clone(sum);
+        const t = finalizeTotals(row, mockSamples(row, hrMode(), now()), sum.active_ms);
+        if (!t) return clone(sum);
+        Object.assign(sum, {
+          zone_ms: t.zone_ms,
+          measured_ms: t.measured_ms,
+          unmeasured_ms: t.unmeasured_ms,
+          coverage: Math.round(t.coverage * 10_000) / 10_000,
+          algorithm_version: t.algorithm_version,
+          hr_sources_used: t.measured_ms > 0 ? ["Mock relay"] : [],
+          hr_status: "final",
+          hr_finalize_dirty: false,
+          finalized_at: iso(),
+        });
+        persist();
+        return clone(sum);
+      },
     },
 
     notes: {
@@ -616,18 +646,39 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
         sessionListeners.add(l);
         return () => sessionListeners.delete(l);
       },
-      onHrLive() {
-        // The mock has no heart-rate relay (Slice E adds a labelled demo source).
-        return () => {};
+      onHrLive(userId, cb) {
+        // Simulated strap (mock-hr.ts): a new reading every second while someone listens.
+        if (typeof window === "undefined") return () => {};
+        const tick = () => {
+          if (me !== userId) return;
+          const live = db.sessions.find((s) => s.user_id === userId && s.state !== "ended");
+          cb(mockHrLive(userId, hrMode(), now(), live?.id ?? null));
+        };
+        const t = window.setInterval(tick, 1000);
+        return () => window.clearInterval(t);
       },
     },
 
     hr: {
-      async live() {
-        return null;
+      async live(): Promise<HrLiveRow | null> {
+        const u = user();
+        const live = db.sessions.find((s) => s.user_id === u.id && s.state !== "ended");
+        return mockHrLive(u.id, hrMode(), now(), live?.id ?? null);
       },
       async serverTime() {
         return now();
+      },
+      async sensor() {
+        user();
+        return hrMode() === "off" ? null : { paired: true };
+      },
+      async request() {
+        user();
+      },
+      async samples(sessionId) {
+        const u = user();
+        const row = db.sessions.find((s) => s.id === sessionId && s.user_id === u.id);
+        return row ? mockSamples(row, hrMode(), now()) : [];
       },
     },
 

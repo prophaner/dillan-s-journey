@@ -1,10 +1,12 @@
 // React Query hooks over useApi(). Keys start with the user id so one user's cache is never
 // shown to another (sign-out also clears the whole cache).
 
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "./client";
 import type { Profile, ProfilePatch } from "./api";
-import type { TemplateBody, ZoneCutoffs } from "@/v1/core/types";
+import type { TemplateBody, WorkoutSessionRow, ZoneCutoffs } from "@/v1/core/types";
+import { needsFinalize } from "@/v1/core/finalize";
 
 export const qk = {
   profile: (uid: string) => ["v1", uid, "profile"] as const,
@@ -13,6 +15,10 @@ export const qk = {
   template: (uid: string, id: string) => ["v1", uid, "template", id] as const,
   devices: (uid: string) => ["v1", uid, "devices"] as const,
   history: (uid: string) => ["v1", uid, "history"] as const,
+  current: (uid: string) => ["v1", uid, "current"] as const,
+  month: (uid: string, y: number, m: number) => ["v1", uid, "month", y, m] as const,
+  session: (uid: string, id: string) => ["v1", uid, "session", id] as const,
+  summary: (uid: string, id: string) => ["v1", uid, "summary", id] as const,
 };
 
 export function useProfile(uid: string) {
@@ -116,5 +122,72 @@ export function useRevokeDevice(uid: string) {
   return useMutation({
     mutationFn: (id: string) => api.devices.revoke(id),
     onSettled: () => qc.invalidateQueries({ queryKey: qk.devices(uid) }),
+  });
+}
+
+/**
+ * The one unfinished session (preparing/active/paused), kept fresh by Realtime: the running-workout
+ * banner and the recovery redirect read this.
+ */
+export function useCurrentSession(uid: string) {
+  const api = useApi();
+  const qc = useQueryClient();
+  useEffect(
+    () =>
+      api.realtime.onSession(uid, (row) => {
+        const cur = qc.getQueryData<WorkoutSessionRow | null>(qk.current(uid));
+        if (row.state !== "ended") {
+          if (!cur || cur.id !== row.id || row.revision >= cur.revision)
+            qc.setQueryData(qk.current(uid), row);
+        } else if (cur?.id === row.id) {
+          qc.setQueryData(qk.current(uid), null);
+          void qc.invalidateQueries({ queryKey: qk.history(uid) });
+        }
+      }),
+    [api, qc, uid],
+  );
+  return useQuery({
+    queryKey: qk.current(uid),
+    queryFn: () => api.sessions.current(),
+    refetchOnWindowFocus: true,
+  });
+}
+
+/** Ended sessions for Home metrics (newest first; 5 weeks fit easily in 200). */
+export function useHistory(uid: string) {
+  const api = useApi();
+  return useQuery({
+    queryKey: qk.history(uid),
+    queryFn: () => api.sessions.history({ limit: 200 }),
+  });
+}
+
+export function useMonth(uid: string, y: number, m: number) {
+  const api = useApi();
+  return useQuery({ queryKey: qk.month(uid, y, m), queryFn: () => api.sessions.month(y, m) });
+}
+
+export function useSessionRow(uid: string, id: string) {
+  const api = useApi();
+  return useQuery({ queryKey: qk.session(uid, id), queryFn: () => api.sessions.recover(id) });
+}
+
+/** The saved summary; a pending heart-rate summary is finalized on read (any viewer). */
+export function useSummary(uid: string, id: string, enabled = true) {
+  const api = useApi();
+  return useQuery({
+    queryKey: qk.summary(uid, id),
+    enabled,
+    queryFn: async () => {
+      const s = await api.sessions.summary(id);
+      if (s && needsFinalize(s)) {
+        try {
+          return (await api.sessions.finalize(id)) ?? s;
+        } catch {
+          return s;
+        }
+      }
+      return s;
+    },
   });
 }
