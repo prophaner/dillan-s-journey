@@ -2,6 +2,10 @@
 -- Copy kept at docs/v1/v1-schema.sql. Additive only: no parked table is changed except
 -- one nullable/defaulted column on public.profiles (weekly_goal).
 --
+-- Re-runnable: tables/indexes use IF NOT EXISTS, triggers CREATE OR REPLACE, policies are dropped
+-- and recreated, the publication is only extended for tables not yet in it. Nothing is dropped
+-- or rewritten in any table from migrations 0000-0005.
+--
 -- Conventions
 --   * Every V1 table has RLS on. Clients read their own rows; every write that carries
 --     business rules goes through a SECURITY DEFINER function with `set search_path = ''`
@@ -48,6 +52,13 @@ returns boolean language sql immutable set search_path = '' as $$
          and (v #>> '{}')::numeric between lo and hi, false)
 $$;
 
+-- weight: 0..1000 in steps of 0.5 (handoff 4.3); twin: isWeight in src/v1/core/validate.ts
+create or replace function public.v1_is_weight(v jsonb)
+returns boolean language sql immutable set search_path = '' as $$
+  select coalesce(public.v1_is_num(v, 0, 1000)
+         and ((v #>> '{}')::numeric * 2) = trunc((v #>> '{}')::numeric * 2), false)
+$$;
+
 -- trims the same characters as src/v1/core/validate.ts (space, tab, CR, LF)
 create or replace function public.v1_trim(t text)
 returns text language sql immutable set search_path = '' as $$
@@ -81,8 +92,8 @@ begin
   if coalesce(ex->>'unit', '') not in ('lb', 'kg') or jsonb_typeof(ex->'unit') <> 'string' then
     errs := errs || jsonb_build_object('path', p || '.unit', 'code', 'invalid');
   end if;
-  -- weight: null/absent = bodyweight (blank is not 0); else a number 0..1000
-  if ex ? 'weight' and jsonb_typeof(ex->'weight') <> 'null' and not public.v1_is_num(ex->'weight', 0, 1000) then
+  -- weight: null/absent = bodyweight (blank is not 0); else a number 0..1000 in steps of 0.5
+  if ex ? 'weight' and jsonb_typeof(ex->'weight') <> 'null' and not public.v1_is_weight(ex->'weight') then
     errs := errs || jsonb_build_object('path', p || '.weight', 'code', 'range');
   end if;
   if ex ? 'load_basis' and jsonb_typeof(ex->'load_basis') <> 'null'
@@ -259,7 +270,7 @@ begin
     elsif not public.v1_is_int(pl->'step', cur, cur) then err := 'step_mismatch';
     elsif p_kind = 'complete_set' and pl ? 'reps' and not public.v1_is_int(pl->'reps', 0, 200) then err := 'invalid_payload';
     elsif p_kind = 'complete_set' and pl ? 'weight' and jsonb_typeof(pl->'weight') <> 'null'
-          and not public.v1_is_num(pl->'weight', 0, 1000) then err := 'invalid_payload';
+          and not public.v1_is_weight(pl->'weight') then err := 'invalid_payload';
     end if;
   elsif p_kind = 'undo' then
     if st <> 'active' then err := 'invalid_state';
@@ -345,7 +356,7 @@ end $$;
 
 -- ---------------------------------------------------------------------------------------------
 -- Templates
-create table public.workout_templates (
+create table if not exists public.workout_templates (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
   name text not null check (char_length(public.v1_trim(name)) between 1 and 60),
@@ -355,7 +366,7 @@ create table public.workout_templates (
   updated_at timestamptz not null default now(),
   deleted_at timestamptz
 );
-create index workout_templates_user on public.workout_templates (user_id, updated_at desc) where deleted_at is null;
+create index if not exists workout_templates_user on public.workout_templates (user_id, updated_at desc) where deleted_at is null;
 
 create or replace function public.v1_templates_guard()
 returns trigger language plpgsql set search_path = '' as $$
@@ -383,12 +394,12 @@ begin
   end if;
   return new;
 end $$;
-create trigger workout_templates_guard before insert or update on public.workout_templates
+create or replace trigger workout_templates_guard before insert or update on public.workout_templates
   for each row execute function public.v1_templates_guard();
 
 -- ---------------------------------------------------------------------------------------------
 -- Zones: four strictly increasing positive cutoffs per user
-create table public.zone_configs (
+create table if not exists public.zone_configs (
   user_id uuid primary key default auth.uid() references auth.users(id) on delete cascade,
   b1 smallint not null,
   b2 smallint not null,
@@ -400,12 +411,12 @@ create table public.zone_configs (
   updated_at timestamptz not null default now(),
   check (b1 > 0 and b1 < b2 and b2 < b3 and b3 < b4 and b4 <= 250)
 );
-create trigger zone_configs_version before update on public.zone_configs
+create or replace trigger zone_configs_version before update on public.zone_configs
   for each row execute function public.bump_version();
 
 -- ---------------------------------------------------------------------------------------------
 -- Sessions
-create table public.workout_sessions (
+create table if not exists public.workout_sessions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   template_id uuid references public.workout_templates(id) on delete set null,
@@ -435,8 +446,8 @@ create table public.workout_sessions (
   check ((state = 'ended') = (outcome is not null)),
   check ((state = 'ended') = (ended_at is not null))
 );
-create unique index workout_sessions_one_unfinished on public.workout_sessions (user_id) where state <> 'ended';
-create index workout_sessions_user_started on public.workout_sessions (user_id, started_at desc);
+create unique index if not exists workout_sessions_one_unfinished on public.workout_sessions (user_id) where state <> 'ended';
+create index if not exists workout_sessions_user_started on public.workout_sessions (user_id, started_at desc);
 
 create or replace function public.v1_sessions_immutable()
 returns trigger language plpgsql set search_path = '' as $$
@@ -453,7 +464,7 @@ begin
   end if;
   return new;
 end $$;
-create trigger workout_sessions_immutable before update on public.workout_sessions
+create or replace trigger workout_sessions_immutable before update on public.workout_sessions
   for each row execute function public.v1_sessions_immutable();
 
 create or replace function public.v1_engine_state(ws public.workout_sessions)
@@ -466,7 +477,7 @@ returns jsonb language sql stable set search_path = '' as $$
     'rest_started_at', public.v1_ms(ws.rest_started_at), 'rest_ends_at', public.v1_ms(ws.rest_ends_at))
 $$;
 
-create table public.session_commands (
+create table if not exists public.session_commands (
   id bigint generated always as identity primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
   command_id uuid not null,
@@ -481,9 +492,9 @@ create table public.session_commands (
   result jsonb not null,
   unique (user_id, command_id)
 );
-create index session_commands_session on public.session_commands (session_id, id);
+create index if not exists session_commands_session on public.session_commands (session_id, id);
 
-create table public.session_notes (
+create table if not exists public.session_notes (
   session_id uuid primary key references public.workout_sessions(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   text text not null default '' check (char_length(text) <= 4000),
@@ -494,7 +505,7 @@ create table public.session_notes (
 
 -- One history row per ended (non-discarded) session. Written by the end command; zone fields
 -- are finalized from samples by session_hr_finalize (Slice E, same TS zone module as live).
-create table public.session_summaries (
+create table if not exists public.session_summaries (
   session_id uuid primary key references public.workout_sessions(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   outcome text not null check (outcome in ('completed', 'partial')),
@@ -517,11 +528,11 @@ create table public.session_summaries (
   finalized_at timestamptz,
   created_at timestamptz not null default now()
 );
-create index session_summaries_user_date on public.session_summaries (user_id, local_date desc);
+create index if not exists session_summaries_user_date on public.session_summaries (user_id, local_date desc);
 
 -- ---------------------------------------------------------------------------------------------
 -- Heart rate (h10-design section 5)
-create table public.hr_sources (
+create table if not exists public.hr_sources (
   id uuid primary key,                    -- generated by the relay
   user_id uuid not null references auth.users(id) on delete cascade,
   kind text not null check (kind in ('web_ble', 'firetv_native', 'watch_companion', 'demo')),
@@ -534,8 +545,9 @@ create table public.hr_sources (
   revoked_at timestamptz
 );
 
-create table public.hr_sensors (
-  user_id uuid primary key references auth.users(id) on delete cascade,
+create table if not exists public.hr_sensors (
+  id uuid primary key default gen_random_uuid(),   -- surrogate: see the realtime note below
+  user_id uuid not null unique references auth.users(id) on delete cascade,
   sensor_kind text not null default 'polar_h10' check (sensor_kind in ('polar_h10', 'generic_hrs')),
   sensor_name text not null,
   sensor_serial text,
@@ -547,8 +559,9 @@ create table public.hr_sensors (
   battery_read_at timestamptz
 );
 
-create table public.hr_live (
-  user_id uuid primary key references auth.users(id) on delete cascade,
+create table if not exists public.hr_live (
+  id uuid primary key default gen_random_uuid(),   -- surrogate: see the realtime note below
+  user_id uuid not null unique references auth.users(id) on delete cascade,
   rev bigint not null default 0,
   active_session_id uuid references public.workout_sessions(id) on delete set null,
   holder_source_id uuid not null references public.hr_sources(id) on delete cascade,
@@ -568,7 +581,7 @@ create table public.hr_live (
   updated_at timestamptz not null default now()
 );
 
-create table public.hr_samples (
+create table if not exists public.hr_samples (
   id bigint generated always as identity primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
   session_id uuid not null references public.workout_sessions(id) on delete cascade,
@@ -586,10 +599,10 @@ create table public.hr_samples (
   is_demo boolean not null default false check (not is_demo),
   unique (user_id, stream_id, seq)
 );
-create index hr_samples_session on public.hr_samples (session_id, measured_at);
+create index if not exists hr_samples_session on public.hr_samples (session_id, measured_at);
 
 -- Demo samples live in their own table (brief: separate storage) and only attach to demo sessions.
-create table public.hr_demo_samples (
+create table if not exists public.hr_demo_samples (
   id bigint generated always as identity primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
   session_id uuid not null references public.workout_sessions(id) on delete cascade,
@@ -607,11 +620,11 @@ create table public.hr_demo_samples (
   is_demo boolean not null default true check (is_demo),
   unique (user_id, stream_id, seq)
 );
-create index hr_demo_samples_session on public.hr_demo_samples (session_id, measured_at);
+create index if not exists hr_demo_samples_session on public.hr_demo_samples (session_id, measured_at);
 
 -- ---------------------------------------------------------------------------------------------
 -- TV pairing (build-plan D8/D9). Challenges are never readable by clients.
-create table public.pairing_challenges (
+create table if not exists public.pairing_challenges (
   id uuid primary key default gen_random_uuid(),
   code_hash text not null,                -- sha256 hex of 'DLN-XXXX'
   device_id text not null check (char_length(device_id) between 8 and 128),
@@ -628,17 +641,20 @@ create table public.pairing_challenges (
   consumed_at timestamptz,
   grant_id uuid
 );
-create unique index pairing_challenges_live_code on public.pairing_challenges (code_hash) where status = 'awaiting';
-create index pairing_challenges_device on public.pairing_challenges (device_id, created_at desc);
+create unique index if not exists pairing_challenges_live_code on public.pairing_challenges (code_hash) where status = 'awaiting';
+create index if not exists pairing_challenges_device on public.pairing_challenges (device_id, created_at desc);
+create index if not exists pairing_challenges_awaiting on public.pairing_challenges (expires_at) where status = 'awaiting';
+create index if not exists pairing_challenges_created on public.pairing_challenges (created_at);
 
-create table public.pairing_approve_failures (
+create table if not exists public.pairing_approve_failures (
   id bigint generated always as identity primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
   at timestamptz not null default now()
 );
-create index pairing_approve_failures_user on public.pairing_approve_failures (user_id, at desc);
+create index if not exists pairing_approve_failures_user on public.pairing_approve_failures (user_id, at desc);
+create index if not exists pairing_approve_failures_at on public.pairing_approve_failures (at);
 
-create table public.device_grants (
+create table if not exists public.device_grants (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   device_id text not null,
@@ -648,7 +664,23 @@ create table public.device_grants (
   last_seen_at timestamptz not null default now(),
   revoked_at timestamptz
 );
-create index device_grants_user on public.device_grants (user_id) where revoked_at is null;
+create index if not exists device_grants_user on public.device_grants (user_id) where revoked_at is null;
+create index if not exists device_grants_session on public.device_grants (session_id);
+
+-- True when the caller's auth session is a paired TV (a device_grants row holds its session id,
+-- revoked or not: a revoked TV's access token lives up to 1 h). Brief: the device gets a scoped
+-- session, so account-level actions (approve/deny pairing, revoke other devices, delete data,
+-- edit templates and zones) are refused to it server-side.
+create or replace function public.v1_is_device_session()
+returns boolean language plpgsql stable security definer set search_path = '' as $$
+declare sid uuid;
+begin
+  begin
+    sid := (auth.jwt() ->> 'session_id')::uuid;
+  exception when others then sid := null;
+  end;
+  return sid is not null and exists (select 1 from public.device_grants g where g.session_id = sid);
+end $$;
 
 -- ---------------------------------------------------------------------------------------------
 -- Privileges and RLS. Supabase grants ALL on new public tables to anon/authenticated by
@@ -666,43 +698,71 @@ begin
 end $$;
 
 grant select, insert, update on public.workout_templates to authenticated;
+drop policy if exists "workout_templates: owner read" on public.workout_templates;
 create policy "workout_templates: owner read" on public.workout_templates for select to authenticated
   using (user_id = auth.uid());
+drop policy if exists "workout_templates: owner insert" on public.workout_templates;
 create policy "workout_templates: owner insert" on public.workout_templates for insert to authenticated
-  with check (user_id = auth.uid());
+  with check (user_id = auth.uid() and not public.v1_is_device_session());
+drop policy if exists "workout_templates: owner update" on public.workout_templates;
 create policy "workout_templates: owner update" on public.workout_templates for update to authenticated
-  using (user_id = auth.uid()) with check (user_id = auth.uid());
+  using (user_id = auth.uid() and not public.v1_is_device_session()) with check (user_id = auth.uid());
 
 grant select, insert, update on public.zone_configs to authenticated;
+drop policy if exists "zone_configs: owner read" on public.zone_configs;
 create policy "zone_configs: owner read" on public.zone_configs for select to authenticated
   using (user_id = auth.uid());
+drop policy if exists "zone_configs: owner insert" on public.zone_configs;
 create policy "zone_configs: owner insert" on public.zone_configs for insert to authenticated
-  with check (user_id = auth.uid());
+  with check (user_id = auth.uid() and not public.v1_is_device_session());
+drop policy if exists "zone_configs: owner update" on public.zone_configs;
 create policy "zone_configs: owner update" on public.zone_configs for update to authenticated
-  using (user_id = auth.uid()) with check (user_id = auth.uid());
+  using (user_id = auth.uid() and not public.v1_is_device_session()) with check (user_id = auth.uid());
 
 -- read-only to clients; writes only through the RPCs below
 grant select on public.workout_sessions, public.session_commands, public.session_notes,
   public.session_summaries, public.hr_sources, public.hr_sensors, public.hr_live,
   public.hr_samples, public.hr_demo_samples, public.device_grants to authenticated;
+drop policy if exists "workout_sessions: owner read" on public.workout_sessions;
 create policy "workout_sessions: owner read" on public.workout_sessions for select to authenticated using (user_id = auth.uid());
+drop policy if exists "session_commands: owner read" on public.session_commands;
 create policy "session_commands: owner read" on public.session_commands for select to authenticated using (user_id = auth.uid());
+drop policy if exists "session_notes: owner read" on public.session_notes;
 create policy "session_notes: owner read" on public.session_notes for select to authenticated using (user_id = auth.uid());
+drop policy if exists "session_summaries: owner read" on public.session_summaries;
 create policy "session_summaries: owner read" on public.session_summaries for select to authenticated using (user_id = auth.uid());
+drop policy if exists "hr_sources: owner read" on public.hr_sources;
 create policy "hr_sources: owner read" on public.hr_sources for select to authenticated using (user_id = auth.uid());
+drop policy if exists "hr_sensors: owner read" on public.hr_sensors;
 create policy "hr_sensors: owner read" on public.hr_sensors for select to authenticated using (user_id = auth.uid());
+drop policy if exists "hr_live: owner read" on public.hr_live;
 create policy "hr_live: owner read" on public.hr_live for select to authenticated using (user_id = auth.uid());
+drop policy if exists "hr_samples: owner read" on public.hr_samples;
 create policy "hr_samples: owner read" on public.hr_samples for select to authenticated using (user_id = auth.uid());
+drop policy if exists "hr_demo_samples: owner read" on public.hr_demo_samples;
 create policy "hr_demo_samples: owner read" on public.hr_demo_samples for select to authenticated using (user_id = auth.uid());
+drop policy if exists "device_grants: owner read" on public.device_grants;
 create policy "device_grants: owner read" on public.device_grants for select to authenticated using (user_id = auth.uid());
 -- relays: the owner may rename or revoke (S14) and nothing else
 grant update (display_name, revoked_at) on public.hr_sources to authenticated;
+drop policy if exists "hr_sources: owner rename/revoke" on public.hr_sources;
 create policy "hr_sources: owner rename/revoke" on public.hr_sources for update to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 -- pairing_challenges and pairing_approve_failures: RLS on, no policies, no grants => invisible to clients.
 
--- Realtime (D6): per-user rows, RLS-filtered.
-alter publication supabase_realtime add table public.workout_sessions, public.hr_live, public.hr_sensors;
+-- Realtime (D6): per-user rows, RLS-filtered. Postgres Changes does not apply RLS to DELETE
+-- events (every subscriber gets the old row's primary key), so no published table uses user_id
+-- as its primary key: hr_live and hr_sensors have a surrogate id and user_id is UNIQUE.
+do $$
+declare t text;
+begin
+  foreach t in array array['workout_sessions', 'hr_live', 'hr_sensors'] loop
+    if not exists (select 1 from pg_catalog.pg_publication_tables
+                    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;
 
 -- ---------------------------------------------------------------------------------------------
 -- RPC: start a session (preparing). Idempotent on command_id.
@@ -735,6 +795,11 @@ begin
     if not found then
       result := jsonb_build_object('ok', false, 'error', 'template_not_found', 'session', null);
     else
+      -- A preflight row nobody started for 30 min is abandoned: discard it (it never becomes
+      -- history) so it cannot block this Start. A started session still returns session_running.
+      update public.workout_sessions
+         set state = 'ended', outcome = 'discarded', ended_at = now(), revision = revision + 1, updated_at = now()
+       where user_id = uid and state = 'preparing' and created_at < now() - interval '30 minutes';
       select id into running from public.workout_sessions where user_id = uid and state <> 'ended';
       if running is not null then
         result := jsonb_build_object('ok', false, 'error', 'session_running', 'session_id', running, 'session', null);
@@ -904,7 +969,8 @@ begin
   select * into sm from public.session_summaries where session_id = p_session_id and user_id = uid for update;
   if not found then return jsonb_build_object('ok', false, 'error', 'not_found'); end if;
   if sm.hr_status = 'no_live_data' then return jsonb_build_object('ok', false, 'error', 'no_live_data'); end if;
-  if p_zone_ms is null or array_length(p_zone_ms, 1) <> 5 or p_unmeasured_ms is null or p_unmeasured_ms < 0
+  if p_zone_ms is null or coalesce(array_length(p_zone_ms, 1), 0) <> 5 or array_ndims(p_zone_ms) <> 1
+     or p_unmeasured_ms is null or p_unmeasured_ms < 0 or p_algorithm_version is null or p_algorithm_version < 1
      or exists (select 1 from unnest(p_zone_ms) z where z is null or z < 0) then
     return jsonb_build_object('ok', false, 'error', 'invalid_payload');
   end if;
@@ -1090,10 +1156,14 @@ begin
     where user_id = uid returning * into sensor;
   end if;
 
-  -- 7. is HR wanted?
+  -- 7. is HR wanted? Only an attributable session (active/paused, started < 6 h ago, live data,
+  -- same demo kind) or an open hr_request/claim window. A 'preparing' row never wants HR on its
+  -- own: preflight opens its bounded window with hr_request. `wanted` drives stop_requested and
+  -- the hr_live bpm/contact fields only; it does not decide whether a sample is stored.
   select id into active_sess from public.workout_sessions
-   where user_id = uid and state <> 'ended' and live_data and is_demo = is_demo_src
-   order by created_at desc limit 1;
+   where user_id = uid and state in ('active', 'paused') and live_data and is_demo = is_demo_src
+     and started_at is not null and started_at > now() - interval '6 hours'
+   order by started_at desc limit 1;
   wanted := not forgotten and (active_sess is not null or coalesce(sensor.wanted_until > now(), false));
 
   -- 6 + 8. validate, attribute and store samples
@@ -1121,7 +1191,13 @@ begin
     if latest_m is null or v_m > latest_m then
       latest_m := v_m; latest_bpm := v_bpm; latest_contact := v_contact;
     end if;
-    if not wanted then continue; end if;
+    -- Samples measured inside a session are stored even when HR is no longer wanted (an outbox
+    -- flush after End is historical backfill: dev-brief wins over h10-design 5.3 step 7).
+    -- A forgotten strap stores nothing.
+    if forgotten then
+      rejected := rejected || jsonb_build_object('seq', v_seq, 'reason', 'sensor_forgotten');
+      continue;
+    end if;
 
     sess := null;
     select id, ended_at into sess, sess_ended from public.workout_sessions
@@ -1241,12 +1317,24 @@ begin
   if p_device_id is null or char_length(p_device_id) not between 8 and 128 then
     return jsonb_build_object('ok', false, 'error', 'invalid_device');
   end if;
+  -- one creator at a time, so the global cap below cannot be raced past
+  perform pg_advisory_xact_lock(hashtext('v1_pair_create'));
   if (select count(*) from public.pairing_challenges
        where device_id = p_device_id and created_at > now() - interval '10 minutes') >= 10 then
     return jsonb_build_object('ok', false, 'error', 'rate_limited');
   end if;
+  -- retention: challenges and approve failures are kept for one day
+  delete from public.pairing_challenges where created_at < now() - interval '1 day';
+  delete from public.pairing_approve_failures where at < now() - interval '1 day';
   update public.pairing_challenges set status = 'expired'
    where status = 'awaiting' and expires_at <= now();
+  -- global cap on live codes: device_id is chosen by an unauthenticated caller, so the
+  -- per-device limit alone cannot stop a flood that crowds the 31^4 code space (a mistyped
+  -- code would then likely hit an attacker's challenge). 500 live codes = 0.05% of the space.
+  if (select count(*) from public.pairing_challenges
+       where status = 'awaiting' and device_id <> p_device_id) >= 500 then
+    return jsonb_build_object('ok', false, 'error', 'rate_limited');
+  end if;
   update public.pairing_challenges set status = 'cancelled', resolved_at = now()
    where status = 'awaiting' and device_id = p_device_id;
   loop
@@ -1346,6 +1434,12 @@ begin
        where user_id = p_uid and at > now() - interval '10 minutes') >= 10 then
     err := 'rate_limited'; return;
   end if;
+  -- global budget: many accounts x 10 guesses must not add up to a brute force of the 4-letter
+  -- code (D8 fixes DLN-XXXX). Trade-off: a flood of failures pauses phone approvals for everyone
+  -- for up to 10 min; tvPairStart/approve server functions add a per-IP limit on top.
+  if (select count(*) from public.pairing_approve_failures where at > now() - interval '10 minutes') >= 100 then
+    err := 'rate_limited'; return;
+  end if;
   if h is not null then
     select * into c from public.pairing_challenges where code_hash = h
      order by (status = 'awaiting') desc, created_at desc limit 1 for update;
@@ -1371,6 +1465,9 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 declare uid uuid := auth.uid(); ch public.pairing_challenges; cid uuid; err text; fname text;
 begin
   if uid is null then raise exception 'not authenticated' using errcode = '28000'; end if;
+  if public.v1_is_device_session() then
+    return jsonb_build_object('ok', false, 'error', 'device_session_forbidden');
+  end if;
   perform pg_advisory_xact_lock(hashtext('v1_pair:' || uid::text));
   select l.ch_id, l.err into cid, err from public.v1_pairing_lookup(p_code, uid) l;
   if err is not null then return jsonb_build_object('ok', false, 'error', err); end if;
@@ -1378,7 +1475,8 @@ begin
   if ch.for_user_id is not null then
     select display_name into fname from public.profiles where id = ch.for_user_id;
   end if;
-  return jsonb_build_object('ok', true, 'device_label', ch.device_label, 'expires_at', ch.expires_at,
+  return jsonb_build_object('ok', true, 'device_label', ch.device_label, 'created_at', ch.created_at,
+    'expires_at', ch.expires_at,
     'for_other_user', ch.for_user_id is not null and ch.for_user_id <> uid, 'for_name', fname);
 end $$;
 
@@ -1387,6 +1485,9 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 declare uid uuid := auth.uid(); ch public.pairing_challenges; cid uuid; err text; fname text;
 begin
   if uid is null then raise exception 'not authenticated' using errcode = '28000'; end if;
+  if public.v1_is_device_session() then
+    return jsonb_build_object('ok', false, 'error', 'device_session_forbidden');
+  end if;
   perform pg_advisory_xact_lock(hashtext('v1_pair:' || uid::text));
   select l.ch_id, l.err into cid, err from public.v1_pairing_lookup(p_code, uid) l;
   if err is not null then return jsonb_build_object('ok', false, 'error', err); end if;
@@ -1405,6 +1506,9 @@ returns jsonb language plpgsql security definer set search_path = '' as $$
 declare uid uuid := auth.uid(); ch public.pairing_challenges; cid uuid; err text;
 begin
   if uid is null then raise exception 'not authenticated' using errcode = '28000'; end if;
+  if public.v1_is_device_session() then
+    return jsonb_build_object('ok', false, 'error', 'device_session_forbidden');
+  end if;
   perform pg_advisory_xact_lock(hashtext('v1_pair:' || uid::text));
   select l.ch_id, l.err into cid, err from public.v1_pairing_lookup(p_code, uid) l;
   if err is not null then return jsonb_build_object('ok', false, 'error', err); end if;
@@ -1468,6 +1572,11 @@ begin
   if uid is null then raise exception 'not authenticated' using errcode = '28000'; end if;
   select * into g from public.device_grants where id = p_grant_id and user_id = uid for update;
   if not found then return jsonb_build_object('ok', false, 'error', 'not_found'); end if;
+  -- a TV may lock/sign out itself, never another device
+  if public.v1_is_device_session()
+     and g.session_id is distinct from nullif(auth.jwt() ->> 'session_id', '')::uuid then
+    return jsonb_build_object('ok', false, 'error', 'device_session_forbidden');
+  end if;
   update public.device_grants set revoked_at = coalesce(revoked_at, now()) where id = g.id;
   if g.session_id is not null then
     delete from auth.sessions where id = g.session_id and user_id = uid;
@@ -1488,6 +1597,9 @@ declare
   n_templates int;
 begin
   if uid is null then raise exception 'not authenticated' using errcode = '28000'; end if;
+  if public.v1_is_device_session() then
+    return jsonb_build_object('ok', false, 'error', 'device_session_forbidden');
+  end if;
   perform pg_advisory_xact_lock(hashtext('v1_session:' || uid::text));
   perform pg_advisory_xact_lock(hashtext('v1_hr:' || uid::text));
   delete from auth.sessions s using public.device_grants g
@@ -1518,10 +1630,10 @@ do $$
 declare f text;
 begin
   foreach f in array array[
-    'v1_ms(timestamptz)', 'v1_ts(bigint)', 'v1_is_int(jsonb,numeric,numeric)', 'v1_is_num(jsonb,numeric,numeric)',
+    'v1_ms(timestamptz)', 'v1_ts(bigint)', 'v1_is_int(jsonb,numeric,numeric)', 'v1_is_num(jsonb,numeric,numeric)', 'v1_is_weight(jsonb)',
     'v1_trim(text)', 'v1_exercise_errors(jsonb,text)', 'v1_template_errors(text,jsonb)', 'v1_build_steps(jsonb)',
     'v1_engine_apply(jsonb,text,jsonb,integer,bigint)', 'v1_templates_guard()', 'v1_sessions_immutable()',
-    'v1_engine_state(public.workout_sessions)',
+    'v1_engine_state(public.workout_sessions)', 'v1_is_device_session()',
     'session_start(uuid,uuid,boolean,text,timestamptz,boolean)',
     'session_command(uuid,uuid,integer,text,text,jsonb,timestamptz)',
     'session_note_save(uuid,text,integer)', 'session_hr_finalize(uuid,bigint[],bigint,integer,text[])',

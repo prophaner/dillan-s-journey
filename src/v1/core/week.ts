@@ -74,7 +74,10 @@ export function tzOffsetMs(ms: number, tz: string): number {
   return asUtc - (ms - (((ms % 1000) + 1000) % 1000));
 }
 
-/** Instant of a local wall-clock time in `tz`. Gaps (spring forward) resolve forward. */
+/**
+ * Instant of a local wall-clock time in `tz`. A nonexistent time (spring-forward gap) resolves
+ * forward in every zone, east or west of UTC: 02:30 in a 02:00-03:00 gap becomes 03:30.
+ */
 export function zonedToUtc(
   y: number,
   m: number,
@@ -89,6 +92,11 @@ export function zonedToUtc(
   let utc = guess - off1;
   const off2 = tzOffsetMs(utc, tz);
   if (off2 !== off1) utc = guess - off2;
+  const p = localParts(utc, tz);
+  if (p.y !== y || p.m !== m || p.d !== d || p.h !== h || p.mi !== mi || p.s !== s) {
+    // gap: the pre-transition (smaller) offset lands after the transition, i.e. forward
+    utc = guess - Math.min(off1, off2);
+  }
   return utc;
 }
 

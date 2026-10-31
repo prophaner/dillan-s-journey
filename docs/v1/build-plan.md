@@ -41,3 +41,9 @@ F. **Release prep**: docs (setup, runbook, API/data, owner checklist, demo scrip
 
 ## Out of scope for this branch (needs the owner or hardware)
 Real SMS provider; applying the migration to the live database; Fire TV wrapper APK; physical H10 + TV verification; Lovable sync (only after the owner merges).
+
+## Slice A review follow-ups (open items the schema fix could not close)
+- **Applying 0006**: it is deliberately not in `drizzle/migrations/meta/_journal.json` (no snapshot either), so `drizzle-kit migrate` skips it until the owner approves. On approval, either paste it into the Supabase SQL editor (it is re-runnable) or add the journal entry + snapshot in the same change. `docs/product/next-prompts.md` plans a different "Migration 0006" (exercise_preferences) for Lovable; whichever lands second must be renumbered to 0007.
+- **TV grant registration (D8/D9)**: the grant row is written by the TV after `verifyOtp`, so a client that never calls `device_grant_register` keeps an unlisted, unrevocable session. Closing it needs an owner decision to amend D8: the `tvPairStatus` server function runs `verifyOtp` itself, reads `session_id` from the minted access token and registers the grant before returning tokens to the TV. Until then the phone's "sign out everywhere" is the only remedy.
+- **Pairing abuse limits**: 0006 caps live codes globally (500) and wrong guesses globally (100 per 10 min, which can pause approvals for everyone during a flood). `tvPairStart` and the phone approve path must add a per-IP limit on top (Slice D).
+- **Paired TV scope**: `v1_is_device_session()` refuses approve/deny/preview pairing, revoking other devices, `delete_my_v1_data` and template/zone writes to a TV session that has a grant row. The TV UI must not offer those actions.

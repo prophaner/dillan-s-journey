@@ -39,6 +39,7 @@ let db: PGlite;
 const A = "00000000-0000-4000-8000-00000000000a";
 const B = "00000000-0000-4000-8000-00000000000b";
 const C = "00000000-0000-4000-8000-00000000000c";
+const D = "00000000-0000-4000-8000-00000000000d";
 const TZ = "America/New_York";
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 
@@ -92,6 +93,16 @@ async function newTemplate(
   return r[0]!.id;
 }
 
+// test-only: age a row past an immutable column (created_at) by bypassing triggers
+async function rawUpdate(sql: string, params: unknown[] = []) {
+  await db.exec("set session_replication_role = replica");
+  try {
+    await q(sql, params);
+  } finally {
+    await db.exec("set session_replication_role = default");
+  }
+}
+
 const start = (who: string, templateId: string, o: Record<string, unknown> = {}) =>
   asRpc(who, "session_start", {
     p_command_id: randomUUID(),
@@ -122,8 +133,8 @@ beforeAll(async () => {
   expect(files.at(-1)).toBe("0006_v1_core.sql");
   for (const f of files) await db.exec(fs.readFileSync(path.join(MIGRATIONS, f), "utf8"));
   await db.query(
-    "insert into auth.users (id, email) values ($1, 'ana@example.com'), ($2, 'bea@example.com'), ($3, 'cy@example.com')",
-    [A, B, C],
+    "insert into auth.users (id, email) values ($1, 'ana@example.com'), ($2, 'bea@example.com'), ($3, 'cy@example.com'), ($4, 'dee@example.com')",
+    [A, B, C, D],
   );
 }, 120_000);
 
@@ -157,6 +168,35 @@ describe("migration 0006 shape", () => {
       "select tablename from pg_publication_tables where pubname = 'supabase_realtime' order by 1",
     );
     expect(pub.map((p) => p.tablename)).toEqual(["hr_live", "hr_sensors", "workout_sessions"]);
+  });
+
+  it("published tables never use user_id as primary key (Realtime DELETE events skip RLS)", async () => {
+    const pk = await q<{ tbl: string; col: string }>(
+      `select c.relname as tbl, a.attname as col from pg_index i
+         join pg_class c on c.oid = i.indrelid
+         join pg_attribute a on a.attrelid = i.indrelid and a.attnum = any(i.indkey)
+        where i.indisprimary and c.relname in
+          (select tablename from pg_publication_tables where pubname = 'supabase_realtime')
+        order by 1`,
+    );
+    expect(pk).toEqual([
+      { tbl: "hr_live", col: "id" },
+      { tbl: "hr_sensors", col: "id" },
+      { tbl: "workout_sessions", col: "id" },
+    ]);
+  });
+
+  it("is re-runnable: applying 0006 a second time succeeds and changes nothing", async () => {
+    const snap = () =>
+      q<{ n: number }>(
+        `select (select count(*) from pg_policies where schemaname = 'public')
+              + (select count(*) from pg_trigger where not tgisinternal)
+              + (select count(*) from pg_indexes where schemaname = 'public')
+              + (select count(*) from pg_publication_tables where pubname = 'supabase_realtime') as n`,
+      );
+    const before = Number((await snap())[0]!.n);
+    await db.exec(fs.readFileSync(path.join(MIGRATIONS, "0006_v1_core.sql"), "utf8"));
+    expect(Number((await snap())[0]!.n)).toBe(before);
   });
 });
 
@@ -431,6 +471,33 @@ describe("session RPCs", () => {
     expect(sums[0]!.n).toBe(0);
   });
 
+  it("an abandoned preflight (preparing > 30 min) is discarded by the next Start; a fresh one blocks", async () => {
+    const tid = await newTemplate(D, [straight()]);
+    const first = (await start(D, tid)).session;
+    const blocked = await start(D, tid);
+    expect(blocked).toMatchObject({ ok: false, error: "session_running", session_id: first.id });
+    await rawUpdate(
+      "update public.workout_sessions set created_at = now() - interval '31 minutes' where id = $1",
+      [first.id],
+    );
+    const next = await start(D, tid);
+    expect(next.ok).toBe(true);
+    const old = (
+      await as(D, () =>
+        q<Json>("select state, outcome from public.workout_sessions where id = $1", [first.id]),
+      )
+    )[0];
+    expect(old).toEqual({ state: "ended", outcome: "discarded" });
+    // a started session is never auto-discarded
+    const active = (await cmd(D, next.session, "start")).session;
+    await rawUpdate(
+      "update public.workout_sessions set created_at = now() - interval '2 hours' where id = $1",
+      [active.id],
+    );
+    expect((await start(D, tid)).error).toBe("session_running");
+    expect((await cmd(D, active, "discard")).ok).toBe(true);
+  });
+
   it("rejects bad input", async () => {
     const tid = await newTemplate(A, [straight()]);
     expect((await start(A, tid, { p_timezone: "Mars/Olympus" })).error).toBe("invalid_timezone");
@@ -492,6 +559,20 @@ describe("session RPCs", () => {
       p_algorithm_version: 1,
     });
     expect(bad.error).toBe("invariant");
+    for (const args of [
+      { p_zone_ms: "{}", p_algorithm_version: 1 },
+      { p_zone_ms: "{0,0,0,0}", p_algorithm_version: 1 },
+      { p_zone_ms: "{{0,0,0,0,0}}", p_algorithm_version: 1 },
+      { p_zone_ms: "{0,0,0,0,0}", p_algorithm_version: null },
+    ])
+      expect(
+        await asRpc(B, "session_hr_finalize", {
+          p_session_id: s.id,
+          p_unmeasured_ms: active,
+          ...args,
+        }),
+        JSON.stringify(args),
+      ).toEqual({ ok: false, error: "invalid_payload" });
     const ok = await asRpc(B, "session_hr_finalize", {
       p_session_id: s.id,
       p_zone_ms: `{0,0,0,0,0}`,
@@ -637,11 +718,12 @@ describe("hr_ingest", () => {
       const n = await as(B, () => q<{ n: number }>(`select count(*)::int as n from public.${t}`));
       expect(n[0]!.n, t).toBe(0);
     }
-    // after End, HR is not wanted: nothing is stored and hr_live bpm is cleared
+    // after End, HR is not wanted: a reading taken after End is not stored and bpm is cleared
     expect((await cmd(C, s, "end")).ok).toBe(true);
     await new Promise((r) => setTimeout(r, 1100)); // stay under the 3 calls/s/source limit
-    const after = await ingest(C, { source: src, stream, samples: [sample(20)] });
+    const after = await ingest(C, { source: src, stream, samples: [sample(20, 0)] });
     expect(after).toMatchObject({ stop_requested: true, accepted: 0 });
+    expect(after.rejected).toEqual([{ seq: 20, reason: "outside_session" }]);
     expect((await as(C, () => q<Json>("select bpm from public.hr_live")))[0].bpm).toBeNull();
   });
 
@@ -675,6 +757,81 @@ describe("hr_ingest", () => {
     });
     expect(real.rejected).toEqual([{ seq: 1, reason: "demo_mismatch" }]);
     await cmd(B, s, "discard");
+  });
+
+  it("stores samples measured during the session that arrive after End and marks finalize dirty", async () => {
+    const tid = await newTemplate(D, [straight()]);
+    let s = (await start(D, tid)).session;
+    s = (await cmd(D, s, "start")).session;
+    await backdate(s.id);
+    const src = randomUUID();
+    const stream = randomUUID();
+    expect(
+      await ingest(D, { source: src, stream, claim: true, samples: [sample(1, 40_000)] }),
+    ).toMatchObject({ accepted: 1, stop_requested: false });
+    // the relay loses Wi-Fi; End happens; the outbox flushes afterwards
+    s = (await cmd(D, s, "end")).session;
+    const late = await ingest(D, {
+      source: src,
+      stream,
+      samples: [sample(2, 30_000), sample(3, 20_000), sample(4, 0)],
+    });
+    expect(late).toMatchObject({ accepted: 2, duplicates: 0, stop_requested: true });
+    expect(late.rejected).toEqual([{ seq: 4, reason: "outside_session" }]);
+    const sum = (
+      await as(D, () =>
+        q<Json>(
+          "select hr_finalize_dirty, (select count(*)::int from public.hr_samples where session_id = $1) as n from public.session_summaries where session_id = $1",
+          [s.id],
+        ),
+      )
+    )[0];
+    expect(sum).toEqual({ hr_finalize_dirty: true, n: 3 });
+    // HR is not wanted any more: no live BPM
+    expect((await as(D, () => q<Json>("select bpm, contact from public.hr_live")))[0]).toEqual({
+      bpm: null,
+      contact: null,
+    });
+    // a forgotten strap stores nothing, and says why
+    await asRpc(D, "hr_forget_sensor");
+    await new Promise((r) => setTimeout(r, 1100));
+    const forgotten = await ingest(D, { source: src, stream, samples: [sample(5, 10_000)] });
+    expect(forgotten).toMatchObject({ accepted: 0, sensor_forgotten: true });
+    expect(forgotten.rejected).toEqual([{ seq: 5, reason: "sensor_forgotten" }]);
+  });
+
+  it("an abandoned preflight or a session older than 6 h does not keep HR wanted", async () => {
+    const tid = await newTemplate(D, [straight()]);
+    const src = randomUUID();
+    const stream = randomUUID();
+    // re-pair the strap (fresh pick = claim), then let the claim window lapse
+    await ingest(D, { source: src, stream, claim: true });
+    await q("update public.hr_sensors set wanted_until = null where user_id = $1", [D]);
+    const prep = (await start(D, tid)).session; // preflight left open, never started
+    expect(prep.state).toBe("preparing");
+    await new Promise((r) => setTimeout(r, 1100));
+    const r1 = await ingest(D, { source: src, stream, samples: [sample(1)] });
+    expect(r1).toMatchObject({ stop_requested: true, accepted: 0 });
+    let live = (await as(D, () => q<Json>("select bpm, active_session_id from public.hr_live")))[0];
+    expect(live).toEqual({ bpm: null, active_session_id: null });
+    // preflight demand comes from hr_request, bounded
+    await asRpc(D, "hr_request", { p_minutes: 10 });
+    const r2 = await ingest(D, { source: src, stream, samples: [sample(2)] });
+    expect(r2.stop_requested).toBe(false);
+    live = (await as(D, () => q<Json>("select bpm from public.hr_live")))[0];
+    expect(live.bpm).toBe(120);
+    // started, then never ended: HR stops being wanted after 6 h
+    const act = (await cmd(D, prep, "start")).session;
+    await asRpc(D, "hr_request", { p_minutes: 0 });
+    await q(
+      "update public.workout_sessions set started_at = now() - interval '7 hours' where id = $1",
+      [act.id],
+    );
+    await new Promise((r) => setTimeout(r, 1100));
+    const r3 = await ingest(D, { source: src, stream, samples: [sample(3)] });
+    expect(r3).toMatchObject({ stop_requested: true, accepted: 0 });
+    expect((await as(D, () => q<Json>("select bpm from public.hr_live")))[0].bpm).toBeNull();
+    expect((await cmd(D, act, "discard")).ok).toBe(true);
   });
 
   it("rate-limits more than 3 calls per second per source", async () => {
@@ -816,6 +973,119 @@ describe("TV pairing", () => {
       ok: false,
       error: "rate_limited",
     });
+  });
+
+  it("a paired TV session cannot approve devices, revoke others, delete data or edit templates", async () => {
+    const pairTv = async () => {
+      const p = await create();
+      expect(await asRpc(D, "approve_pairing", { p_code: p.code })).toMatchObject({ ok: true });
+      const c = await asRpc("service", "pairing_consume", { p_id: p.id, p_secret: p.secret });
+      const sid = randomUUID();
+      await q("insert into auth.sessions (id, user_id) values ($1, $2)", [sid, D]);
+      const g = await asRpc(D, "device_grant_register", { p_device_id: c.device_id }, sid);
+      expect(g.ok).toBe(true);
+      return { sid, grantId: g.grant.id as string };
+    };
+    const tv1 = await pairTv();
+    const tv2 = await pairTv();
+    const forbidden = { ok: false, error: "device_session_forbidden" };
+    const other = await create();
+    expect(await asRpc(D, "pairing_preview", { p_code: other.code }, tv1.sid)).toEqual(forbidden);
+    expect(await asRpc(D, "approve_pairing", { p_code: other.code }, tv1.sid)).toEqual(forbidden);
+    expect(await asRpc(D, "deny_pairing", { p_code: other.code }, tv1.sid)).toEqual(forbidden);
+    expect(await asRpc(D, "delete_my_v1_data", {}, tv1.sid)).toEqual(forbidden);
+    expect(await asRpc(D, "revoke_device_grant", { p_grant_id: tv2.grantId }, tv1.sid)).toEqual(
+      forbidden,
+    );
+    await expect(
+      as(
+        D,
+        () =>
+          q("insert into public.workout_templates (user_id, name, blocks) values ($1, 'TV', $2)", [
+            D,
+            JSON.stringify([straight()]),
+          ]),
+        tv1.sid,
+      ),
+    ).rejects.toThrow(/row-level security/);
+    // the TV can still read and run workouts, and can sign itself out
+    const tid = await newTemplate(D, [straight()]);
+    const tvTemplates = await as(D, () => q("select id from public.workout_templates"), tv1.sid);
+    expect(tvTemplates.length).toBeGreaterThan(0);
+    const run = await as(
+      D,
+      () =>
+        rpc("session_start", {
+          p_command_id: randomUUID(),
+          p_template_id: tid,
+          p_live_data: false,
+          p_timezone: TZ,
+        }),
+      tv1.sid,
+    );
+    expect(run.ok).toBe(true);
+    expect((await cmd(D, run.session, "discard")).ok).toBe(true);
+    expect(await asRpc(D, "revoke_device_grant", { p_grant_id: tv1.grantId }, tv1.sid)).toEqual({
+      ok: true,
+    });
+    // the phone (a session with no device grant) keeps every account action
+    expect(await asRpc(D, "revoke_device_grant", { p_grant_id: tv2.grantId })).toEqual({
+      ok: true,
+    });
+    expect(await asRpc(D, "approve_pairing", { p_code: other.code })).toMatchObject({ ok: true });
+  });
+
+  it("caps live codes and guesses globally, purges old rows, previews the creation time", async () => {
+    // preview carries the creation time so the phone can match it against the TV
+    const p = await create();
+    const pv = await asRpc(D, "pairing_preview", { p_code: p.code });
+    expect(pv).toMatchObject({ ok: true });
+    expect(Date.parse(pv.created_at)).toBeGreaterThan(Date.now() - 60_000);
+
+    // retention: rows older than one day are removed on the next create
+    await q(
+      `insert into public.pairing_challenges (code_hash, device_id, secret_hash, status, created_at, expires_at)
+       values ('old', 'tv-old-device', $1, 'expired', now() - interval '2 days', now() - interval '2 days')`,
+      [sha("x")],
+    );
+    await q(
+      "insert into public.pairing_approve_failures (user_id, at) values ($1, now() - interval '2 days')",
+      [D],
+    );
+    await create();
+    expect(await q("select 1 from public.pairing_challenges where code_hash = 'old'")).toHaveLength(
+      0,
+    );
+    expect(
+      await q("select 1 from public.pairing_approve_failures where at < now() - interval '1 day'"),
+    ).toHaveLength(0);
+
+    // global cap on live codes, whatever device ids the caller rotates through
+    await q(
+      `insert into public.pairing_challenges (code_hash, device_id, secret_hash)
+       select 'flood' || g, 'tv-flood-' || g, $1 from generate_series(1, 500) g`,
+      [sha("x")],
+    );
+    expect(
+      await asRpc("service", "pairing_create", {
+        p_device_id: `tv-${randomUUID()}`,
+        p_secret_hash: sha("y"),
+      }),
+    ).toEqual({ ok: false, error: "rate_limited" });
+    await q("delete from public.pairing_challenges where code_hash like 'flood%'");
+
+    // global guess budget: many accounts x 10 guesses each cannot brute-force the code space
+    const real = await create();
+    await q(
+      "insert into public.pairing_approve_failures (user_id) select $1 from generate_series(1, 100)",
+      [B],
+    );
+    expect(await asRpc(D, "approve_pairing", { p_code: real.code })).toMatchObject({
+      ok: false,
+      error: "rate_limited",
+    });
+    await q("delete from public.pairing_approve_failures where user_id = $1", [B]);
+    expect(await asRpc(D, "approve_pairing", { p_code: real.code })).toMatchObject({ ok: true });
   });
 
   it("is invisible to clients except through the RPCs", async () => {

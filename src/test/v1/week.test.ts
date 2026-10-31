@@ -62,7 +62,24 @@ describe("weeks (Monday-Sunday, user timezone, DST-safe)", () => {
     expect(weekRange(iso("2026-11-02T04:59:59Z"), NY).startKey).toBe("2026-10-26");
   });
 
-  it("zonedToUtc handles the spring gap and the fall overlap", () => {
+  it("zonedToUtc resolves nonexistent (gap) times forward in zones west and east of UTC", () => {
+    const at = (y: number, m: number, d: number, h: number, mi: number, tz: string) =>
+      new Date(zonedToUtc(y, m, d, h, mi, tz)).toISOString();
+    // New York 02:30 does not exist on 8 March -> 03:30 EDT
+    expect(at(2026, 3, 8, 2, 30, NY)).toBe("2026-03-08T07:30:00.000Z");
+    // London 01:00 and 01:30 do not exist on 29 March -> 02:00 / 02:30 BST
+    expect(at(2026, 3, 29, 1, 0, "Europe/London")).toBe("2026-03-29T01:00:00.000Z");
+    expect(at(2026, 3, 29, 1, 30, "Europe/London")).toBe("2026-03-29T01:30:00.000Z");
+    // Beirut midnight gap: 00:00 -> 01:00 EEST on the same calendar day, never the day before
+    expect(at(2026, 3, 29, 0, 0, "Asia/Beirut")).toBe("2026-03-28T22:00:00.000Z");
+    expect(localDateKey(zonedToUtc(2026, 3, 29, 0, 0, "Asia/Beirut"), "Asia/Beirut")).toBe(
+      "2026-03-29",
+    );
+    // Santiago midnight gap (negative offset) stays forward: 00:00 -> 01:00 -03
+    expect(at(2026, 9, 6, 0, 0, "America/Santiago")).toBe("2026-09-06T04:00:00.000Z");
+  });
+
+  it("zonedToUtc handles valid times next to the spring gap and the fall overlap", () => {
     expect(new Date(zonedToUtc(2026, 3, 8, 3, 0, NY)).toISOString()).toBe(
       "2026-03-08T07:00:00.000Z",
     );

@@ -20,7 +20,7 @@ import type {
   Step,
 } from "./types";
 import { COMMAND_KINDS } from "./types";
-import { isInt, isNum } from "./validate";
+import { isInt, isWeight } from "./validate";
 import { buildSteps } from "./steps";
 import type { Block } from "./types";
 
@@ -65,7 +65,7 @@ function check(s: EngineState, kind: string, pl: CommandPayload): CommandError |
         kind === "complete_set" &&
         pl.weight !== undefined &&
         pl.weight !== null &&
-        !isNum(pl.weight, 0, 1000)
+        !isWeight(pl.weight)
       )
         return "invalid_payload";
       return null;

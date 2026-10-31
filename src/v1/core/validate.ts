@@ -79,6 +79,9 @@ export const isInt = (v: unknown, lo: number, hi: number): v is number =>
   typeof v === "number" && Number.isInteger(v) && v >= lo && v <= hi;
 export const isNum = (v: unknown, lo: number, hi: number): v is number =>
   typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
+/** Weight: 0..1000 in steps of 0.5 (handoff 4.3). */
+export const isWeight = (v: unknown): v is number =>
+  isNum(v, LIMITS.weightMin, LIMITS.weightMax) && Number.isInteger(v * 2);
 const isId = (v: unknown) =>
   typeof v === "string" && charLength(v) >= 1 && charLength(v) <= LIMITS.idMax;
 
@@ -99,7 +102,7 @@ function exerciseErrors(ex: unknown, p: string): Raw[] {
     out.push({ path: `${p}.rep_mode`, code: "invalid" });
   if (ex["unit"] !== "lb" && ex["unit"] !== "kg") out.push({ path: `${p}.unit`, code: "invalid" });
   const w = ex["weight"];
-  if ("weight" in ex && w !== null && !isNum(w, LIMITS.weightMin, LIMITS.weightMax))
+  if ("weight" in ex && w !== null && !isWeight(w))
     out.push({ path: `${p}.weight`, code: "range" });
   const lb = ex["load_basis"];
   if ("load_basis" in ex && lb !== null && lb !== "total_external" && lb !== "per_implement")

@@ -96,7 +96,7 @@ export interface HrIngestRequest {
 }
 
 export type HrRejectReason =
-  "too_old" | "future" | "out_of_range" | "outside_session" | "demo_mismatch";
+  "too_old" | "future" | "out_of_range" | "outside_session" | "demo_mismatch" | "sensor_forgotten";
 
 export interface HrIngestResponse {
   server_now: string;

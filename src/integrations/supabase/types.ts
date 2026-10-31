@@ -127,6 +127,7 @@ export type Database = {
           holder_name: string
           holder_source_id: string
           holder_stream_id: string
+          id: string
           is_demo: boolean
           last_seen_at: string
           measured_at: string | null
@@ -147,6 +148,7 @@ export type Database = {
           holder_name: string
           holder_source_id: string
           holder_stream_id: string
+          id?: string
           is_demo?: boolean
           last_seen_at?: string
           measured_at?: string | null
@@ -167,6 +169,7 @@ export type Database = {
           holder_name?: string
           holder_source_id?: string
           holder_stream_id?: string
+          id?: string
           is_demo?: boolean
           last_seen_at?: string
           measured_at?: string | null
@@ -268,6 +271,7 @@ export type Database = {
         Row: {
           battery_read_at: string | null
           forgotten_at: string | null
+          id: string
           last_battery_pct: number | null
           last_source_id: string | null
           paired_at: string
@@ -280,6 +284,7 @@ export type Database = {
         Insert: {
           battery_read_at?: string | null
           forgotten_at?: string | null
+          id?: string
           last_battery_pct?: number | null
           last_source_id?: string | null
           paired_at?: string
@@ -292,6 +297,7 @@ export type Database = {
         Update: {
           battery_read_at?: string | null
           forgotten_at?: string | null
+          id?: string
           last_battery_pct?: number | null
           last_source_id?: string | null
           paired_at?: string

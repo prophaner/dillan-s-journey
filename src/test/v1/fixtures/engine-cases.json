@@ -205,6 +205,7 @@
         { "at": 0, "kind": "complete_set", "payload": { "step": 0, "reps": 201 }, "expect": "invalid_payload" },
         { "at": 0, "kind": "complete_set", "payload": { "step": 0, "reps": 2.5 }, "expect": "invalid_payload" },
         { "at": 0, "kind": "complete_set", "payload": { "step": 0, "weight": -1 }, "expect": "invalid_payload" },
+        { "at": 0, "kind": "complete_set", "payload": { "step": 0, "weight": 12.37 }, "expect": "invalid_payload" },
         { "at": 0, "kind": "complete_set", "payload": {}, "expect": "step_mismatch" },
         { "at": 0, "kind": "skip_set", "payload": { "step": 1 }, "expect": "step_mismatch" }
       ],

@@ -113,6 +113,21 @@ export const TEMPLATE_CASES: TemplateCase[] = [
     errors: [["blocks.0.exercise.weight", "range"]],
   },
   {
+    name: "weight must be a multiple of 0.5",
+    tname: "A",
+    blocks: [
+      straight({}, { weight: 12.37 }),
+      straight({ id: "b2" }, { weight: 0.1 }),
+      straight({ id: "b3" }, { weight: 1000.5 }),
+      straight({ id: "b4" }, { weight: 999.5 }),
+    ],
+    errors: [
+      ["blocks.0.exercise.weight", "range"],
+      ["blocks.1.exercise.weight", "range"],
+      ["blocks.2.exercise.weight", "range"],
+    ],
+  },
+  {
     name: "rest 601 and -1",
     tname: "A",
     blocks: [straight({ rest_s: 601 }), straight({ id: "b2", rest_s: -1 })],
