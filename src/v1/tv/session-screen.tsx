@@ -19,6 +19,7 @@ import { ZONE_COPY } from "@/v1/ui/zone-pieces";
 import { formatClock } from "@/v1/ui/timezones";
 import { cn } from "@/lib/utils";
 import { useTv } from "./context";
+import { TvNoteText } from "./screens-history";
 import {
   TvAvatar,
   TvButton,
@@ -652,6 +653,7 @@ function TvSummary({ row }: { row: WorkoutSessionRow }) {
           <div className="rounded-tv-lg border border-line bg-surface p-8">
             <TvEyebrow>Session notes</TvEyebrow>
             <p className="mt-2 text-tv-base text-text-2">{TV_SESSION_COPY.notesNone}</p>
+            <TvNoteText sessionId={row.id} hideEmpty />
           </div>
           <div className="mt-auto flex flex-col gap-3">
             <TvButton focusId="summary-done" autoFocus variant="primary" size="xl" onPress={done}>

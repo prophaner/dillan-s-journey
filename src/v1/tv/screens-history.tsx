@@ -4,6 +4,7 @@
 // after the current month, future days inert, a session sits on its local start date.
 
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, NotebookPen } from "lucide-react";
 import { formatDuration } from "@/v1/core/timing";
 import { dateKey, localParts, monthGrid } from "@/v1/core/week";
@@ -55,7 +56,25 @@ export const TV_PROFILE_COPY = {
   runningTitle: "A workout is running",
   runningBody: "Ending saves everything so far. Cancel to go back to it.",
   runningConfirm: "End and save, then continue",
+  editNotes: "Edit on your phone: scan to open this session there.",
+  noNotes: "No notes. Add them from your phone.",
 } as const;
+
+/** The session note, read-only (notes are edited on the phone, handoff F7). */
+export function TvNoteText({ sessionId, hideEmpty }: { sessionId: string; hideEmpty?: boolean }) {
+  const tv = useTv();
+  const q = useQuery({
+    queryKey: ["v1", tv.user.id, "note", sessionId],
+    queryFn: () => tv.api.notes.get(sessionId),
+  });
+  const text = q.data?.text.trim() ?? "";
+  if (hideEmpty && !text) return null;
+  return (
+    <p className="line-clamp-4 whitespace-pre-wrap text-tv-sm text-text-2">
+      {q.isLoading ? "…" : text || TV_PROFILE_COPY.noNotes}
+    </p>
+  );
+}
 
 // ---------------------------------------------------------------------------------------------
 // S12 Calendar
@@ -362,14 +381,13 @@ export function TvDetail({ sessionId, day }: { sessionId: string; day?: string |
               />
             )}
             <TvEyebrow className="mt-2">Notes</TvEyebrow>
+            <TvNoteText sessionId={row.id} />
             <div className="flex items-center gap-6">
               <TvQr
                 value={`${origin}/calendar/${row.id}`}
                 label="QR code to open this session on your phone"
               />
-              <p className="text-tv-sm text-text-2">
-                Notes stay private on the TV. Scan to read or edit them on your phone.
-              </p>
+              <p className="text-tv-sm text-text-2">{TV_PROFILE_COPY.editNotes}</p>
             </div>
           </TvPanel>
         </div>
