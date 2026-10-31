@@ -7,8 +7,10 @@ apply to every agent here.
 ## How this repo is built
 - Lovable builds and hosts the app and syncs two-way with `main`. Lovable is the primary coder.
 - Claude Code reviews, verifies, writes docs, and prepares the next Lovable prompt.
-- Sources of truth: `/docs/brief-v2.md` (behavior, data, permissions), `/design/**` (look,
-  interaction, copy), `/roadmap.md` (what is done and what is next).
+- Sources of truth (V1): `/docs/v1/` — `dev-brief.md` (behavior, data, privacy; wins on
+  conflict), `h10-design.md` (heart rate), `build-plan.md` (decisions D1–D26); `/design/v1/**`
+  (look, interaction, copy); `/roadmap.md` (what is done and what is next). Start at
+  `docs/v1/README.md`. `/docs/brief-v2.md` and `/design/docs/**` describe the parked brief-v2 app.
 
 Your full role, dispatch table and decision rules live in `.claude/agents/orchestrator.md`.
 This file holds the hard rules and the report format; the orchestrator file holds the how.

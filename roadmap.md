@@ -1,8 +1,33 @@
 Vision: Personal Gym, Personal Coach. Data driven: measure, analyze, improve.
 
-Status 2026-10-16: paused after the Profile and Settings slice for owner phone testing; next prompt drafted in docs/product/next-prompts.md
+Status 2026-10-31: V1 (narrow home-gym scope) built on branch `claude/v1-release`, not merged,
+not released. Sources of truth: `docs/v1/` (start at `docs/v1/README.md`). The brief-v2 roadmap
+is parked below.
 
-# Roadmap — Phase 0
+# V1 — home gym (branch `claude/v1-release`)
+- [x] Slice A: migration 0006 draft (not applied), pure core modules, PGlite SQL tests
+- [x] Slice B: shell, email/SMS OTP auth, profile, zones, devices, approve TV, Program editor
+- [x] Slice C: choose, preflight, dashboard, pause, summary, calendar, session detail, Home metrics, offline queue, notes autosave
+- [x] Slice D: `/tv` surface, D-pad focus, TV pairing and shared-device lock
+- [x] Slice E: `/relay` (Polar H10 over Web Bluetooth), live heart rate on phone and TV, summary finalization
+- [x] Slice F: release docs (README, owner setup, API/data, runbook, physical checklist, issue list)
+  - Verified on hardware: no
+- [ ] Owner merges the branch; Lovable sync; Publish (`docs/v1/runbook.md`)
+- [ ] Owner approves and applies migration 0006 (`docs/v1/setup-owner.md` §1)
+- [ ] Owner: email `{{ .Token }}` templates, OTP 600 s, custom SMTP; SMS provider (§2–§4)
+- [ ] Fire TV OS / Silk check (Gate G0) and H10 spike (`spike/CHECKLIST.md`)
+- [ ] Physical test checklist and two-user demo (`docs/v1/physical-test-checklist.md`)
+- [ ] Owner acknowledges the deviations in `docs/v1/issues.md`
+- [ ] V1.1 candidates: Fire OS TV shell, server-side TV grant registration, cookie sessions (`docs/v1/issues.md` O1–O16)
+
+# Parked (brief-v2)
+
+Everything below is the earlier brief-v2 roadmap. Its routes were removed from the route tree
+in V1 (build-plan D2); its tables and lib files are untouched. Status line from that time:
+2026-10-16, paused after the Profile and Settings slice for owner phone testing; next prompt
+drafted in docs/product/next-prompts.md.
+
+## Roadmap — Phase 0
 - [x] Docs copied into /docs and /design
 - [x] Tokens, three self-hosted fonts, Lucide, Night Gym
 - [x] Shell: bottom nav / 1024px sidebar, all routes, magic-link sign-in
@@ -11,7 +36,7 @@ Status 2026-10-16: paused after the Profile and Settings slice for owner phone t
 - [x] Phase 0 tables + RLS applied, isolation test passing
 - [ ] Real-phone validation (owner, iPhone + Android)
 
-# Phase 1
+## Phase 1
 - [x] S12 Onboarding built (6 questions + summary, saves through the outbox)
 - [ ] S12 end-to-end check signed in — blocked: needs the owner to sign in once in the preview
 
@@ -46,7 +71,7 @@ Status 2026-10-16: paused after the Profile and Settings slice for owner phone t
 - [ ] S08 objective detail: estimated 1RM labeled with formula and version, same exercise and unit only (FR-10)
 - [ ] S17 keyboard-open card layout; S18 rest-ended state; pause/resume (FR-07)
 
-# Phase 2
+## Phase 2
 - [ ] ai-reviewer agent added to .claude/agents before the first Phase 2 review
 - [ ] S09 Dillan chat + proposal card lifecycle (FR-12, §7.3)
 - [ ] Ask Dillan from the session screen with the current exercise as context; answers about cues and emphasis, never a plan change without a proposal card (FR-12, §7.3)
@@ -57,7 +82,7 @@ Status 2026-10-16: paused after the Profile and Settings slice for owner phone t
 - [ ] Starting loads and progression as proposals, or bounded adjustments under an approved rule (FR-03, §7.2)
 - [ ] "Build a session for these muscles" as a proposal that schedules an ad-hoc session (FR-07, FR-12)
 
-# Phase 3
+## Phase 3
 - [ ] Release gate: review the S11 escalation placeholder copy before release
 - [ ] S15 Coach workspace, coach invite, privacy & data (FR-14, FR-17)
 - [ ] Coach client overview: goals and levels, adherence, limitations with status, recent sessions, measurements; read-only within granted scopes (FR-14)
@@ -68,10 +93,10 @@ Status 2026-10-16: paused after the Profile and Settings slice for owner phone t
 - [ ] Offline / resume / update behavior tested against AT-29…36
 - [ ] Live session display: a /session/:id/display route for a TV browser or cast tab, synced from the phone (timers, sets, rest vs active); no sensors required
 
-# Phase 4 (optional data integrations)
+## Phase 4 (optional data integrations)
 - [ ] Live heart rate from Web Bluetooth straps (Polar, Garmin, Wahoo) on Android and desktop Chrome; not iOS Safari; shown on the session display with provenance (FR-16)
 - [ ] Apple Watch / Fitbit: after-the-fact import only (export file or approved provider API); no native companion app (brief §15 Phase 4, §17 item 3)
 
-# Phase 5
+## Phase 5
 - [ ] Optional baseline assessments: reviewed protocols, versioned, skippable, no percentile or reminder dot (FR-01, FR-10)
 - [ ] Send a session video to your human coach for feedback; stored with consent and provenance (FR-14, FR-17)

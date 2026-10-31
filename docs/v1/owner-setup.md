@@ -1,5 +1,8 @@
 # Dillan V1 — owner setup (Supabase Auth)
 
+> Superseded by `docs/v1/setup-owner.md` (Slice F), which covers these steps plus the migration,
+> SMS, Realtime, URLs, TV, relay and the demo script. Kept for history.
+
 Steps only the owner can do in the Supabase dashboard (Lovable Cloud → Supabase project
 `dtlxwrrpwslulraolzdc`). The app code assumes them; until they are done the real sign-in cannot be
 completed. Slice F folds this into the full owner checklist.
