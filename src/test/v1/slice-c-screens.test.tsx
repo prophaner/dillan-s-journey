@@ -168,9 +168,11 @@ describe("S09/S10 Dashboard", () => {
     const btn = await screen.findByRole("button", { name: "Complete set" });
     fireEvent.click(btn);
     fireEvent.click(screen.getByRole("button", { name: "Complete set" }));
-    await wait(50);
-    const saved = api.db().sessions.find((s) => s.id === row.id)!;
-    expect(Object.keys(saved.results)).toHaveLength(1);
+    const results = () => Object.keys(api.db().sessions.find((s) => s.id === row.id)!.results);
+    // Wait for the first set to land (slow under load), then make sure no second one follows.
+    await waitFor(() => expect(results()).toHaveLength(1));
+    await wait(100);
+    expect(results()).toHaveLength(1);
   });
 
   it("End after the last set saves without a second confirm (AC23)", async () => {
