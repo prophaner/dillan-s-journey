@@ -1,0 +1,120 @@
+/* Dillan V1 — design tokens
+   Brand carried forward from Dillan Design Package v2.0 (Chalk / Iron / Spot orange).
+   Two themes: light (phone & desktop) and dark (TV, and optional phone dark).
+   Zone colors are never the only signal — every zone also shows its number and BPM bounds. */
+
+:root {
+  /* ---- Brand primitives ---- */
+  --chalk:        #F6F3EC;
+  --paper:        #FFFDF8;
+  --oak:          #EEE7DA;
+  --line-l:       #E3DCCD;
+  --iron:         #1A1A18;
+  --graphite:     #57544D;
+  --smoke:        #6F6B63;
+  --spot:         #FF5A1F;
+  --spot-press:   #E84A12;
+  --spot-ink:     #B93A0B;   /* orange as text on chalk (5.2:1) */
+  --spot-tint:    #FFE7DC;
+  --steady:       #276B4A;   /* saved / done */
+  --steady-tint:  #DDEFE4;
+  --hold:         #855610;   /* needs attention, never "failure" */
+  --hold-tint:    #FBEED3;
+  --unknown:      #8F8A80;
+
+  /* ---- Heart-rate zone ramp (light theme values: text-safe on chalk) ---- */
+  --z1: #3F6E9A;  --z1-tint: #DEE9F3;
+  --z2: #1F7A6E;  --z2-tint: #D7EEEA;
+  --z3: #6B7A1E;  --z3-tint: #E9EEC9;
+  --z4: #B45A12;  --z4-tint: #FBE4D0;
+  --z5: #9A3B2E;  --z5-tint: #F6DDD6;   /* deep clay, not alarm red */
+  --zu: var(--unknown); --zu-tint: #ECE9E2; /* unmeasured */
+
+  /* ---- Type ---- */
+  --font-ui: "Satoshi", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-num: "Satoshi", "Inter", system-ui, sans-serif;
+
+  /* Phone / desktop scale (px) */
+  --t-xs: 12px; --t-sm: 13px; --t-base: 15px; --t-md: 17px; --t-lg: 20px;
+  --t-xl: 24px; --t-2xl: 30px; --t-3xl: 38px; --t-metric: 56px;
+
+  /* Spacing (4px grid) */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px;
+  --s-8: 32px; --s-10: 40px; --s-12: 48px; --s-16: 64px;
+
+  --r-sm: 10px; --r-md: 14px; --r-lg: 20px; --r-pill: 999px;
+  --tap: 44px;                      /* minimum touch target */
+  --focus-w: 3px;
+
+  --shadow-card: 0 1px 2px rgba(26,26,24,.06), 0 6px 20px -8px rgba(26,26,24,.12);
+  --shadow-float: 0 12px 40px -12px rgba(26,26,24,.35);
+
+  --dur-fast: 120ms; --dur: 200ms; --ease: cubic-bezier(.2,.7,.2,1);
+}
+
+/* ---- Light theme (phone / desktop) ---- */
+.theme-light {
+  color-scheme: light;
+  --bg: var(--chalk);
+  --surface: var(--paper);
+  --surface-2: var(--oak);
+  --line: var(--line-l);
+  --text: var(--iron);
+  --text-2: var(--graphite);
+  --text-3: var(--smoke);
+  --accent: var(--spot);
+  --accent-press: var(--spot-press);
+  --on-accent: var(--iron);
+  --accent-text: var(--spot-ink);
+  --accent-tint: var(--spot-tint);
+  --focus: var(--iron);
+  --focus-halo: rgba(26,26,24,.18);
+  --ok: var(--steady); --ok-tint: var(--steady-tint);
+  --warn: var(--hold); --warn-tint: var(--hold-tint);
+}
+
+/* ---- Dark theme (TV default) ---- */
+.theme-dark {
+  color-scheme: dark;
+  --bg:        #121210;
+  --surface:   #1D1C1A;
+  --surface-2: #282724;
+  --line:      #35332E;
+  --text:      #F3EFE6;
+  --text-2:    #B8B3A8;
+  --text-3:    #8E897F;
+  --accent:    #FF6A30;
+  --accent-press: #FF7E4D;
+  --on-accent: #121210;
+  --accent-text: #FF8A5C;
+  --accent-tint: #3A2117;
+  --focus:     #F6F3EC;
+  --focus-halo: rgba(246,243,236,.22);
+  --ok: #62C190;  --ok-tint: #183326;
+  --warn: #E6B04F; --warn-tint: #352915;
+  --unknown: #7D786F;
+  /* zone ramp on dark: lighter, still restrained */
+  --z1: #7FA9D6;  --z1-tint: #1B2836;
+  --z2: #5FC4B4;  --z2-tint: #163029;
+  --z3: #B9C95A;  --z3-tint: #2A2F14;
+  --z4: #F0924A;  --z4-tint: #3A2412;
+  --z5: #E07A66;  --z5-tint: #3A1F1B;
+  --zu: #7D786F;  --zu-tint: #2A2926;
+}
+
+/* ---- TV type scale: readable from ~3 m on a 1920×1080 canvas ---- */
+.tv {
+  --t-xs: 20px; --t-sm: 22px; --t-base: 28px; --t-md: 32px; --t-lg: 40px;
+  --t-xl: 48px; --t-2xl: 64px; --t-3xl: 88px; --t-metric: 168px;
+  --s-1: 6px; --s-2: 12px; --s-3: 16px; --s-4: 24px; --s-5: 28px; --s-6: 32px;
+  --s-8: 44px; --s-10: 56px; --s-12: 64px; --s-16: 96px;
+  --r-sm: 14px; --r-md: 20px; --r-lg: 28px;
+  --tap: 72px;
+  --focus-w: 5px;
+  --safe: 64px;   /* TV overscan safe area */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur: 0ms; }
+}
+.reduce-motion { --dur-fast: 0ms; --dur: 0ms; }

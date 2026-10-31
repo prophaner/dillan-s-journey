@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#121210">
+<title>Dillan H10 Spike</title>
+<style>
+  :root {
+    --bg: #121210; --surface: #1d1c1a; --surface-2: #282724; --line: #35332e;
+    --text: #f3efe6; --text-2: #b8b3a8; --accent: #ff6a30; --steady: #5fc4b4;
+    --hold: #f0b44a; --unknown: #8f8a80; --focus: #f6f3ec;
+    --font: "Satoshi", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); }
+  body { padding: 16px; line-height: 1.45; }
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 700; }
+  h2 { font-size: 16px; margin: 18px 0 8px; color: var(--text-2); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+  p { margin: 6px 0; }
+  .muted { color: var(--text-2); }
+  .tiny { font-size: 12px; }
+  .num { font-variant-numeric: tabular-nums; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .kv b { display: block; font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+  .kv span { font-size: 18px; }
+  button, select, input[type=text], input[type=number] {
+    font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 14px; min-height: 44px;
+  }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #1a1a18; font-weight: 700; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:focus-visible, select:focus-visible, input:focus-visible, .focusable:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--surface-2); }
+  .pill.live { background: #163029; color: var(--steady); }
+  .pill.warn { background: #3a2a12; color: var(--hold); }
+  .pill.off { background: #2a2926; color: var(--unknown); }
+  .pill.demo { background: var(--hold); color: #1a1a18; }
+  .bad { color: var(--hold); }
+  .good { color: var(--steady); }
+  .log { font-family: ui-monospace, Consolas, monospace; font-size: 12px; background: #0c0c0b; border: 1px solid var(--line);
+         border-radius: 10px; padding: 8px; max-height: 320px; overflow: auto; white-space: pre-wrap; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--text-2); font-weight: 600; }
+  .hidden { display: none !important; }
+  .banner { border-radius: 10px; padding: 10px 12px; background: #3a2a12; color: var(--hold); margin: 8px 0; }
+
+  /* Relay */
+  #relay .bpm { font-size: 96px; font-weight: 700; line-height: 1; }
+
+  /* TV: sized with vw so it works whether Silk reports 960 or 1920 CSS px */
+  body.tv { padding: 2.5vw 3vw; overflow: hidden; }
+  #tv { display: grid; grid-template-columns: 1.15fr 1fr; gap: 2.5vw; height: calc(100vh - 5vw); }
+  #tv .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 1.2vw; padding: 1.8vw 2vw; overflow: hidden; }
+  #tv .eyebrow { font-size: 1.15vw; letter-spacing: .08em; text-transform: uppercase; color: var(--text-2); font-weight: 600; }
+  #tv .bpm { font-size: 9vw; font-weight: 700; line-height: 1; }
+  #tv .bpm small { font-size: 2vw; color: var(--text-2); margin-left: .6vw; }
+  #tv .status { font-size: 1.9vw; margin-top: .6vw; }
+  #tv .metric { font-size: 2.6vw; font-weight: 700; }
+  #tv .mlabel { font-size: 1.05vw; color: var(--text-2); text-transform: uppercase; letter-spacing: .06em; }
+  #tv .mgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.2vw 1.5vw; margin-top: 1.6vw; }
+  #tv .small { font-size: 1.15vw; color: var(--text-2); }
+  #tv .keys { font-family: ui-monospace, Consolas, monospace; font-size: 1.1vw; line-height: 1.5; }
+  #tv .verdict { font-size: 1.6vw; font-weight: 700; margin-top: 1vw; }
+
+  /* Home */
+  #home .choices { display: grid; gap: 12px; max-width: 520px; margin-top: 16px; }
+  #home .choices button { text-align: left; padding: 16px 18px; }
+  #home .choices button b { display: block; font-size: 18px; }
+</style>
+</head>
+<body>
+
+<div id="config-missing" class="banner hidden">
+  Supabase is not configured. Edit <b>config.js</b> (URL and anon/publishable key) and reload.
+</div>
+
+<!-- HOME -->
+<section id="home" class="hidden">
+  <h1>Dillan · H10 hardware spike</h1>
+  <p class="muted">Throwaway test page. Not the Dillan app. Pick what this device is doing.</p>
+  <div class="choices">
+    <button data-go="relay" class="focusable"><b>Relay</b><span class="muted">Android phone/tablet or laptop in Chrome/Edge. Reads the Polar H10.</span></button>
+    <button data-go="tv" class="focusable"><b>TV viewer</b><span class="muted">Fire TV (Silk). Shows heart rate, latency, keys.</span></button>
+    <button data-go="results" class="focusable"><b>Results</b><span class="muted">Any computer. Summarises a test run and downloads the data.</span></button>
+  </div>
+  <p class="tiny muted" style="margin-top:16px">Tip for the TV: open this site's address in Silk, then use the arrows and Select to choose <b>TV viewer</b>.</p>
+</section>
+
+<!-- RELAY -->
+<section id="relay" class="hidden">
+  <div class="row" style="justify-content:space-between">
+    <div>
+      <h1>Relay <span id="r-demo-pill" class="pill demo hidden">DEMO</span></h1>
+      <div class="tiny muted">Run <span id="r-run" class="num"></span> · stream <span id="r-stream" class="num"></span></div>
+    </div>
+    <a href="#home" class="tiny muted">Home</a>
+  </div>
+
+  <div id="r-support" class="banner hidden"></div>
+
+  <div class="card" style="margin-top:12px">
+    <div class="row" style="justify-content:space-between; align-items:flex-end">
+      <div>
+        <div class="bpm num" id="r-bpm">--</div>
+        <div><span id="r-state" class="pill off">Not connected</span> <span id="r-contact" class="pill off hidden"></span></div>
+      </div>
+      <div class="tiny muted" style="text-align:right">
+        <div id="r-sensor">No strap</div>
+        <div id="r-fw"></div>
+        <div id="r-battery"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:12px">
+    <button id="r-connect" class="primary">Connect strap</button>
+    <button id="r-connect-all">Connect (show all devices)</button>
+    <button id="r-reconnect" disabled>Reconnect same strap</button>
+    <button id="r-disconnect" disabled>Disconnect</button>
+    <button id="r-demo">Simulate strap (DEMO)</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <label class="row tiny"><input type="checkbox" id="r-auto" checked> Auto-reconnect without a tap (test 3)</label>
+    <label class="row tiny"><input type="checkbox" id="r-wake" checked> Keep screen on (wake lock)</label>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <label class="tiny muted" for="r-label">This device</label>
+    <input type="text" id="r-label" maxlength="40" style="flex:1; min-width:180px">
+  </div>
+
+  <h2>Test markers</h2>
+  <p class="tiny muted">Tap the moment you do each thing, so the timings line up in Results.</p>
+  <div class="row">
+    <button data-mark="strap_dried_or_loosened">Strap loosened / dried</button>
+    <button data-mark="strap_unclipped">Strap unclipped</button>
+    <button data-mark="strap_reclipped">Strap re-clipped</button>
+    <button data-mark="screen_lock_next">About to lock screen</button>
+    <button data-mark="background_next">About to background Chrome</button>
+    <button data-mark="laptop_sleep_next">About to sleep laptop</button>
+  </div>
+
+  <h2>Live numbers</h2>
+  <div class="grid">
+    <div class="card kv"><b>Notifications / s (30 s)</b><span id="r-rate" class="num">-</span></div>
+    <div class="card kv"><b>Since last beat</b><span id="r-since" class="num">-</span></div>
+    <div class="card kv"><b>Longest gap</b><span id="r-gap" class="num">-</span></div>
+    <div class="card kv"><b>Sent / queued / failed</b><span id="r-sent" class="num">0 / 0 / 0</span></div>
+    <div class="card kv"><b>Clock offset</b><span id="r-offset" class="num">-</span></div>
+    <div class="card kv"><b>Wake lock</b><span id="r-wakestate">-</span></div>
+  </div>
+
+  <h2>Connect timing (test 1)</h2>
+  <div id="r-timing" class="card tiny num">No connect attempt yet.</div>
+
+  <h2>Environment</h2>
+  <div id="r-env" class="card tiny"></div>
+
+  <h2>Log</h2>
+  <div class="row" style="margin-bottom:8px">
+    <button id="r-download">Download log (JSON)</button>
+    <button id="r-copy">Copy summary</button>
+  </div>
+  <div id="r-log" class="log"></div>
+</section>
+
+<!-- TV -->
+<section id="tv" class="hidden">
+  <div class="panel">
+    <div class="eyebrow">Heart rate <span id="t-demo" class="pill demo hidden">DEMO</span></div>
+    <div class="bpm num" id="t-bpm">--<small>BPM</small></div>
+    <div class="status"><span id="t-status" class="pill off">Waiting for first reading</span></div>
+    <div class="small" id="t-age" style="margin-top:.5vw">&nbsp;</div>
+    <div class="small" id="t-source"></div>
+
+    <div class="mgrid">
+      <div><div class="mlabel">p50 latency</div><div class="metric num" id="t-p50">-</div></div>
+      <div><div class="mlabel">p95 latency</div><div class="metric num" id="t-p95">-</div></div>
+      <div><div class="mlabel">Max latency</div><div class="metric num" id="t-max">-</div></div>
+      <div><div class="mlabel">Samples (10 min)</div><div class="metric num" id="t-count">0</div></div>
+      <div><div class="mlabel">Gaps &gt; 10 s</div><div class="metric num" id="t-gaps">0</div></div>
+      <div><div class="mlabel">Longest gap</div><div class="metric num" id="t-longest">-</div></div>
+    </div>
+    <div class="verdict" id="t-verdict">Test 4: waiting for data</div>
+    <div class="small" style="margin-top:.6vw">Latency = TV render time minus the relay's measured time (both server-corrected). Target p95 ≤ 5 s, no gap over 10 s.</div>
+  </div>
+
+  <div class="panel">
+    <div class="eyebrow">Silk checks (test 6)</div>
+    <div class="small" id="t-env" style="margin-top:.6vw"></div>
+    <div class="mgrid" style="grid-template-columns: repeat(2, 1fr)">
+      <div><div class="mlabel">Realtime</div><div class="metric" id="t-rt" style="font-size:1.8vw">connecting…</div></div>
+      <div><div class="mlabel">Network</div><div class="metric" id="t-net" style="font-size:1.8vw">-</div></div>
+      <div><div class="mlabel">Back captured</div><div class="metric num" id="t-back" style="font-size:1.8vw">0</div></div>
+      <div><div class="mlabel">Idle (no keys)</div><div class="metric num" id="t-idle" style="font-size:1.8vw">0:00</div></div>
+      <div><div class="mlabel">Wake lock</div><div class="metric" id="t-wake" style="font-size:1.8vw">-</div></div>
+      <div><div class="mlabel">Page suspended</div><div class="metric num" id="t-susp" style="font-size:1.8vw">0×</div></div>
+    </div>
+    <div class="eyebrow" style="margin-top:1.4vw">Last remote keys</div>
+    <div class="keys" id="t-keys">Press every button on the remote: arrows, Select, Play/Pause, Rewind, Fast-forward, Back, Menu.</div>
+  </div>
+</section>
+
+<!-- RESULTS -->
+<section id="results" class="hidden">
+  <div class="row" style="justify-content:space-between">
+    <h1>Spike results</h1>
+    <a href="#home" class="tiny muted">Home</a>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <label class="tiny muted" for="x-since">Look back (minutes)</label>
+    <input type="number" id="x-since" value="180" min="5" max="10080" style="width:110px">
+    <button id="x-load" class="primary">Load</button>
+    <button id="x-csv" disabled>Download samples (CSV)</button>
+    <button id="x-json" disabled>Download everything (JSON)</button>
+  </div>
+  <p id="x-status" class="tiny muted"></p>
+  <h2>Auto-judged</h2>
+  <div id="x-verdicts" class="card tiny">Load a time window first.</div>
+  <h2>Relay streams</h2>
+  <div id="x-streams" class="card" style="overflow:auto"></div>
+  <h2>TV stats</h2>
+  <div id="x-tv" class="card" style="overflow:auto"></div>
+  <h2>Events</h2>
+  <div class="row" style="margin-bottom:8px">
+    <select id="x-kind"><option value="">All kinds</option></select>
+  </div>
+  <div id="x-events" class="card" style="overflow:auto; max-height:520px"></div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="spike.js"></script>
+</body>
+</html>
