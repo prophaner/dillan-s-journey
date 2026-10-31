@@ -139,12 +139,17 @@ export function WorkoutEditor({
   };
 
   const focusFirstError = (errs: Record<string, string>) => {
-    const first = Object.keys(errs)[0];
-    if (!first) return;
     window.setTimeout(() => {
-      const el =
-        document.getElementById(fieldId(first)) ??
-        (first === "blocks" ? document.getElementById("ed-add") : null);
+      // first invalid field in reading order (the validator lists rest before sets)
+      const els = Object.keys(errs)
+        .map(
+          (p) =>
+            document.getElementById(fieldId(p)) ??
+            (p === "blocks" ? document.getElementById("ed-add") : null),
+        )
+        .filter((el): el is HTMLElement => !!el)
+        .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+      const el = els[0];
       el?.focus();
       el?.scrollIntoView?.({ block: "center" });
     }, 0);

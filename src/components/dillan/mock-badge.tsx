@@ -5,10 +5,9 @@ import { getApi } from "@/v1/data/client";
  * Persistent "Mock data" badge (brief: mocks are visibly labelled). Renders only when the
  * resolved backend is the dev-only mock; production builds can never resolve it.
  */
-export function MockBadge() {
+function DevMockBadge() {
   const [on, setOn] = useState(false);
   useEffect(() => {
-    if (!import.meta.env.DEV) return;
     let live = true;
     void getApi().then((a) => live && setOn(a.kind === "mock"));
     return () => {
@@ -25,3 +24,6 @@ export function MockBadge() {
     </div>
   );
 }
+
+/** Production builds replace import.meta.env.DEV with false, so the badge (and its text) is dropped. */
+export const MockBadge = import.meta.env.DEV ? DevMockBadge : () => null;
