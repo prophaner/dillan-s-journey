@@ -8,9 +8,14 @@
 //    cleared, grant revoked, Realtime channels removed, local sign-out, auth storage wiped, blank
 //    for ≥ BLANK_MIN_MS, then the chooser (lock.ts).
 //  - Auto-lock after 15 min without remote/controller activity outside an active/paused workout.
-//  - After a reload with an active workout the TV pauses it and shows Paused (acceptance 21).
+//  - After a reload with an active workout the TV pauses it and shows Paused (acceptance 21); so
+//    does coming back after the page was hidden without a reload (F6).
 //  - Back arrives as a key or as history popstate (Silk); window.dillan.onBack() serves a future
 //    wrapper and returns false when the app wants to exit.
+//  - Held keys: arrows repeat, OK/Back/Play-Pause/Menu act once per press (a held OK must not
+//    complete sets and skip rest in a loop).
+//  - User data on the TV lives in memory only (session command queue: tvMemoryStorage) and every
+//    per-user key is cleared on lock.
 
 import {
   useCallback,
@@ -23,11 +28,14 @@ import {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { AuthUser, DillanApi } from "@/v1/data/api";
-import { useCurrentSession, useProfile } from "@/v1/data/queries";
+import { qk, useCurrentSession, useProfile } from "@/v1/data/queries";
+import { clearLocalUserData } from "@/v1/session/local-data";
+import { serverClockFor } from "@/v1/session/server-clock";
 import { UserProvider } from "@/v1/ui/user-context";
 import { AUTO_LOCK_TOAST, AutoLock } from "./autolock";
 import { TvSignedInProvider, type SessionHandle, type TvSignedIn } from "./context";
 import {
+  firstNameOf,
   forgetProfile,
   isRemembered,
   rememberProfile,
@@ -39,6 +47,7 @@ import {
 import { FocusEngine } from "./focus";
 import { tvKeyOf } from "./keys";
 import { runLock } from "./lock";
+import { clearTvMemory } from "./memory-store";
 import { backFor, EXIT_TOAST, type TvModal, type TvScreen } from "./screens";
 import { TvChoose, TvHome, TvPreflight, TvProgram } from "./screens-main";
 import { TvCalendar, TvDetail, TvProfile, TvRunningDialog } from "./screens-history";
@@ -83,6 +92,23 @@ function writeMarker(v: { userId: string; grantId: string | null } | null) {
   }
 }
 
+// ---- history guard (Back as popstate) ----
+const GUARD = "dillanTvGuard";
+
+function onGuardEntry(): boolean {
+  return !!(window.history.state as Record<string, unknown> | null)?.[GUARD];
+}
+
+/** One guard entry on top of /tv (never stacked). */
+function armBackGuard() {
+  if (onGuardEntry()) return;
+  try {
+    window.history.pushState({ ...(window.history.state ?? {}), [GUARD]: 1 }, "");
+  } catch {
+    /* sandboxed */
+  }
+}
+
 /** Fixed 1920×1080 canvas, scaled to fit and letterboxed (handoff §2). */
 export function TvStage({ children }: { children: ReactNode }) {
   const [box, setBox] = useState({ scale: 1, x: 0, y: 0 });
@@ -123,6 +149,7 @@ interface SignedInApi {
 export function TvApp({ api }: { api: DillanApi }) {
   const qc = useQueryClient();
   const device = useMemo(() => tvDevice(), []);
+  const clock = useMemo(() => serverClockFor(api.hr), [api]);
   const [phase, setPhase] = useState<Phase>({ kind: "boot" });
   const [profiles, setProfiles] = useState<RememberedProfile[]>(() => rememberedProfiles());
   const [out, setOut] = useState<OutScreen>(() =>
@@ -190,7 +217,12 @@ export function TvApp({ api }: { api: DillanApi }) {
       try {
         await runLock({
           blank: () => setPhase({ kind: "blank" }),
-          clearCaches: () => qc.clear(),
+          clearCaches: () => {
+            qc.clear();
+            // queued set results and note drafts never outlive the user on a shared TV
+            clearTvMemory();
+            clearLocalUserData(p.user.id);
+          },
           signOut: () => api.tv.lock(p.grantId),
           forget: () => {
             if (opts.forget) forgetProfile(p.user.id);
@@ -208,10 +240,18 @@ export function TvApp({ api }: { api: DillanApi }) {
     [api, qc, showToast, chooserOrFirstRun],
   );
 
-  const onSignedIn = useCallback((user: AuthUser, grantId: string | null) => {
-    writeMarker({ userId: user.id, grantId });
-    setPhase({ kind: "in", user, grantId, restore: false });
-  }, []);
+  const onSignedIn = useCallback(
+    (user: AuthUser, grantId: string) => {
+      if (!grantId) {
+        // Never trust a TV session without its device grant (it would not be TV-scoped).
+        void api.tv.lock(null).catch(() => undefined);
+        return;
+      }
+      writeMarker({ userId: user.id, grantId });
+      setPhase({ kind: "in", user, grantId, restore: false });
+    },
+    [api],
+  );
 
   // ---- Back (keys, popstate, wrapper) ----
   const doBack = useCallback((): boolean => {
@@ -235,27 +275,29 @@ export function TvApp({ api }: { api: DillanApi }) {
   }, [doBack]);
 
   // History guard: Silk may deliver the remote's Back as popstate instead of a key. One guard
-  // entry sits on top of /tv; every pop is a Back, and the guard is re-armed unless the app wants
-  // to exit (then the next Back leaves the page). Never stacks guards (remounts, StrictMode).
+  // entry sits on top of /tv; every pop is a Back. When the app handles it the guard goes back at
+  // once. When the app wants to exit (exit toast, chooser, first run) the guard stays down so an
+  // immediate second Back leaves the page, and it is re-armed on the next remote key or pointer
+  // press, or when the exit toast times out: a later Back is the app's again. Never stacks guards
+  // (remounts, StrictMode).
   useEffect(() => {
-    const onGuard = () =>
-      !!(window.history.state as { dillanTvGuard?: number } | null)?.dillanTvGuard;
-    const guard = () => {
-      if (onGuard()) return;
-      try {
-        window.history.pushState({ ...(window.history.state ?? {}), dillanTvGuard: 1 }, "");
-      } catch {
-        /* sandboxed */
-      }
-    };
-    guard();
+    armBackGuard();
+    let rearm: ReturnType<typeof setTimeout> | null = null;
     const onPop = () => {
       signedIn.current?.activity();
-      const handled = doBack();
-      if (handled) guard();
+      if (rearm) clearTimeout(rearm);
+      rearm = null;
+      if (doBack()) armBackGuard();
+      else rearm = setTimeout(armBackGuard, TOAST_MS);
     };
+    const onPointer = () => armBackGuard();
     window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
+    window.addEventListener("pointerdown", onPointer, true);
+    return () => {
+      if (rearm) clearTimeout(rearm);
+      window.removeEventListener("popstate", onPop);
+      window.removeEventListener("pointerdown", onPointer, true);
+    };
   }, [doBack]);
 
   // ---- remote keys ----
@@ -266,6 +308,10 @@ export function TvApp({ api }: { api: DillanApi }) {
       e.preventDefault();
       const p = phaseRef.current;
       if (p.kind === "blank" || p.kind === "boot") return;
+      // A held button auto-repeats: only arrows may act more than once per press.
+      if (e.repeat && k !== "up" && k !== "down" && k !== "left" && k !== "right") return;
+      // Any key but Back means the user stayed: Back is the app's again (see the history guard).
+      if (k !== "back") armBackGuard();
       signedIn.current?.activity();
       if (toast === AUTO_LOCK_TOAST) showToast(null);
       const fe = engine.current;
@@ -338,6 +384,7 @@ export function TvApp({ api }: { api: DillanApi }) {
           origin={window.location.origin}
           onSignedIn={onSignedIn}
           onCancel={() => setOut(chooserOrFirstRun())}
+          now={() => clock.now()}
         />
       );
   } else
@@ -416,13 +463,60 @@ function SignedIn({
     const r = current.data;
     if (!r || (r.state !== "active" && r.state !== "paused")) return;
     if (restore && r.state === "active") {
-      setRestoredPause(true);
       void api.sessions
         .command({ sessionId: r.id, kind: "pause", expectedRevision: r.revision, source: "tv" })
+        .then((res) => {
+          if (res.ok || res.session?.state === "paused") setRestoredPause(true);
+        })
         .catch(() => undefined);
     }
     setScreen({ name: "session", sessionId: r.id });
   }, [landed, current.isFetched, current.data, restore, api]);
+
+  // F6 without a reload: Silk sent to the background (Fire TV Home) keeps the page alive. An
+  // active workout is paused when the page is hidden (or, if that request could not go out, on
+  // return), and on return the TV shows S10 Paused with Resume focused and the reason.
+  const qc = useQueryClient();
+  useEffect(() => {
+    let wasHidden = false;
+    let pausedByUs = false;
+    let live = true;
+    const pauseActive = async (): Promise<boolean> => {
+      const r = await api.sessions.current().catch(() => null);
+      if (!r || r.state !== "active") return false;
+      const res = await api.sessions
+        .command({ sessionId: r.id, kind: "pause", expectedRevision: r.revision, source: "tv" })
+        .catch(() => null);
+      return !!res && (res.ok || res.session?.state === "paused");
+    };
+    const onVis = () => {
+      if (document.visibilityState === "hidden") {
+        wasHidden = true;
+        void pauseActive().then((ok) => {
+          if (ok) pausedByUs = true;
+        });
+        return;
+      }
+      if (!wasHidden) return;
+      wasHidden = false;
+      void (async () => {
+        if (await pauseActive()) pausedByUs = true;
+        if (!pausedByUs || !live) return;
+        pausedByUs = false;
+        const r = await api.sessions.current().catch(() => null);
+        if (!live || !r || r.state !== "paused") return;
+        void qc.invalidateQueries({ queryKey: qk.current(user.id) });
+        setRestoredPause(true);
+        setModal(null);
+        setScreen({ name: "session", sessionId: r.id });
+      })();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      live = false;
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [api, qc, user.id]);
 
   // Remembered tile: keep its name and last-active time fresh (never opts in by itself).
   const name = profile.data?.display_name ?? null;
@@ -430,14 +524,20 @@ function SignedIn({
     touchProfile(user.id, name);
   }, [user.id, name]);
 
+  // Opting in needs a first name to show on the tile (D24); until the profile has one the toggle
+  // is disabled and the screen says why.
+  const canRemember = !!firstNameOf(name ?? "");
   const setRemembered = useCallback(
     (on: boolean) => {
-      if (on) rememberProfile(user.id, name ?? "");
-      else forgetProfile(user.id);
+      if (on) {
+        if (!firstNameOf(name ?? "")) return;
+        rememberProfile(user.id, name ?? "");
+      } else forgetProfile(user.id);
       setRememberedState(isRemembered(user.id));
     },
     [user.id, name],
   );
+  const clearRestoredPause = useCallback(() => setRestoredPause(false), []);
 
   // ---- auto-lock ----
   const autolock = useMemo(
@@ -526,7 +626,7 @@ function SignedIn({
     toast: (m) => toast(m),
     liveSessionId,
     restoredPause,
-    clearRestoredPause: () => setRestoredPause(false),
+    clearRestoredPause,
     setSessionHandle,
     requestSwitch,
     requestLock,
@@ -537,6 +637,7 @@ function SignedIn({
       void onLock(o);
     },
     remembered,
+    canRemember,
     setRemembered,
   };
 

@@ -37,6 +37,8 @@ export interface TvSignedIn {
   /** confirmed M5 / M6 */
   lockNow(opts?: { forget?: boolean }): void;
   remembered: boolean;
+  /** false while the profile has no first name to show on the tile */
+  canRemember: boolean;
   setRemembered(on: boolean): void;
 }
 

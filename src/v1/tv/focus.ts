@@ -13,7 +13,8 @@
 //  - Initial focus per screen: [data-autofocus]. After a re-render focus stays on the element with
 //    the same data-focus-id; else the list memory; else data-autofocus; else the first candidate.
 //  - Per-list memory: inside [data-focus-list="<id>"] the last focused data-focus-id is kept, so
-//    returning to Program/Choose restores the row.
+//    returning to Program/Choose restores the row. [data-autofocus="force"] marks an explicit
+//    selection (Calendar opened on a given day) and wins over the list memory.
 
 export type Direction = "up" | "down" | "left" | "right";
 
@@ -212,7 +213,10 @@ export class FocusEngine {
       return;
     }
     const auto = list.find((el) => el.hasAttribute("data-autofocus"));
-    const remembered = this.rememberedIn(list, auto ?? null);
+    const remembered =
+      auto?.getAttribute("data-autofocus") === "force"
+        ? null
+        : this.rememberedIn(list, auto ?? null);
     this.setFocus(remembered ?? auto ?? (list[0] as HTMLElement), { scroll: false });
   }
 

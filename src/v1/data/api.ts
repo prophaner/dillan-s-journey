@@ -110,9 +110,14 @@ export type TvPairStartResult =
   | { ok: false; error: "rate_limited" | "network" | "unavailable" };
 
 export type TvPairPoll =
-  | { status: "awaiting" | "denied" | "expired" | "cancelled" }
+  /** consumed: approved, but an earlier attempt to finish signing in failed (code used up) */
+  | { status: "awaiting" | "denied" | "expired" | "cancelled" | "consumed" }
   /** approved: this TV is now signed in as `user` and its grant is registered */
-  | { status: "signed_in"; user: AuthUser; grantId: string | null }
+  | { status: "signed_in"; user: AuthUser; grantId: string }
+  /**
+   * sign_in_failed / grant_failed are final for this code (it is used up; nothing stays signed
+   * in); any other error is transient and the TV keeps polling.
+   */
   | { status: "error"; error: string };
 
 export interface StartOptions {

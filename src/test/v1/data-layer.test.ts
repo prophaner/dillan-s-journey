@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { MOCK_FLAG_KEY, mockRequested } from "@/v1/data/client";
 import { createMockApi } from "@/v1/data/mock-api";
 import { MOCK_LUIS, MOCK_MAYA, seedMockDb } from "@/v1/data/mock-fixtures";
-import { authErrorCode } from "@/v1/data/supabase-api";
+import { authErrorCode, isAuthRejection } from "@/v1/data/supabase-api";
 import {
   maskContact,
   normalizeEmail,
@@ -169,6 +169,18 @@ async function signedIn(as = "luis@example.com") {
   expect(r.ok).toBe(true);
   return api;
 }
+
+describe("TV grant check: auth rejections lock the TV", () => {
+  it("reads the HTTP status of the response and the PostgREST JWT codes", () => {
+    expect(isAuthRejection(401)).toBe(true);
+    expect(isAuthRejection(403)).toBe(true);
+    expect(isAuthRejection(400, "PGRST301")).toBe(true);
+    expect(isAuthRejection(401, "PGRST303")).toBe(true);
+    // anything else is "can't tell" (offline, 5xx), not a lock
+    expect(isAuthRejection(0)).toBe(false);
+    expect(isAuthRejection(500, "XX000")).toBe(false);
+  });
+});
 
 describe("mock api", () => {
   it("auth: 000000 is a wrong code; a new contact needs the name step", async () => {

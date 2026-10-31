@@ -6,7 +6,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DillanApi, TvChallenge, TvPairPoll } from "@/v1/data/api";
 import { setApiForTests } from "@/v1/data/client";
 import { createMockApi, MOCK_TV_SESSION_KEY } from "@/v1/data/mock-api";
@@ -14,7 +14,8 @@ import { MOCK_LUIS, seedMockDb, type MockDb } from "@/v1/data/mock-fixtures";
 import { rememberProfile } from "@/v1/tv/device";
 import { EXIT_TOAST } from "@/v1/tv/screens";
 import { Pairing, TV_COPY } from "@/v1/tv/signed-out";
-import { TV_SESSION_KEY, TvApp } from "@/v1/tv/tv-app";
+import { GRANT_CHECK_MS, TV_SESSION_KEY, TvApp } from "@/v1/tv/tv-app";
+import { TV_LOAD_COPY } from "@/v1/tv/ui";
 
 type Api = ReturnType<typeof createMockApi>;
 let db: MockDb;
@@ -32,6 +33,8 @@ beforeEach(async () => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
+  delete (document as { visibilityState?: unknown }).visibilityState;
   setApiForTests(null);
   localStorage.clear();
   delete (window as Window & { dillan?: unknown }).dillan;
@@ -49,8 +52,8 @@ function renderTv(api: DillanApi = tv) {
 
 const screenKey = () => document.querySelector("[data-screen]")?.getAttribute("data-screen");
 
-async function pairAsLuis() {
-  renderTv();
+async function pairAsLuis(api: DillanApi = tv) {
+  renderTv(api);
   fireEvent.click(await screen.findByRole("button", { name: TV_COPY.getStarted }));
   await waitFor(() =>
     expect(screen.getByTestId("pair-code").textContent).toMatch(/^DLN-[A-Z2-9]{4}$/),
@@ -119,6 +122,88 @@ describe("S03 pairing states", () => {
     renderPairing(stubApi(() => ({ status: "expired" })));
     expect(await screen.findByText(TV_COPY.expired, undefined, { timeout: 4000 })).toBeVisible();
     expect(screen.getByRole("button", { name: TV_COPY.newCode })).toHaveAttribute("data-autofocus");
+  });
+
+  it("approved but the sign-in could not finish (code used up): says so, never 'expired'", async () => {
+    renderPairing(stubApi(() => ({ status: "consumed" })));
+    expect(
+      await screen.findByText(TV_COPY.signInFailed, undefined, { timeout: 4000 }),
+    ).toBeVisible();
+    expect(screen.queryByText(TV_COPY.expired)).toBeNull();
+    expect(screen.getByRole("button", { name: TV_COPY.newCode })).toHaveAttribute("data-autofocus");
+  });
+
+  it("a failed grant registration is a failed sign-in, not a signed-in TV", async () => {
+    const signedIn = vi.fn();
+    render(
+      <Pairing
+        api={stubApi(() => ({ status: "error", error: "grant_failed" }))}
+        device={{ id: "tv-test-device", label: "Living Room Fire TV" }}
+        forUser={null}
+        origin="https://dillan.example"
+        onSignedIn={signedIn}
+        onCancel={() => undefined}
+      />,
+    );
+    expect(
+      await screen.findByText(TV_COPY.signInFailed, undefined, { timeout: 4000 }),
+    ).toBeVisible();
+    expect(signedIn).not.toHaveBeenCalled();
+  });
+
+  it("expiry is the server's call: a TV clock running 10 minutes fast does not expire the code", async () => {
+    render(
+      <Pairing
+        api={stubApi(() => ({ status: "awaiting" }))}
+        device={{ id: "tv-test-device", label: "Living Room Fire TV" }}
+        forUser={null}
+        origin="https://dillan.example"
+        onSignedIn={() => undefined}
+        onCancel={() => undefined}
+        now={() => Date.now() + 10 * 60_000}
+      />,
+    );
+    await screen.findByText("DLN-7K4M");
+    await new Promise((r) => setTimeout(r, 1_800)); // one poll
+    expect(screen.queryByText(TV_COPY.expired)).toBeNull();
+    expect(screen.getByText(TV_COPY.waiting)).toBeInTheDocument();
+  });
+
+  it("Back while an approval is being exchanged locks that session again at once", async () => {
+    let resolve: (p: TvPairPoll) => void = () => undefined;
+    const api = stubApi(() => ({ status: "awaiting" }));
+    const lock = vi.fn(async () => undefined);
+    const inFlight = new Promise<TvPairPoll>((r) => (resolve = r));
+    const polled = vi.fn();
+    const slow: DillanApi = {
+      ...api,
+      tv: {
+        ...api.tv,
+        pairPoll: () => {
+          polled();
+          return inFlight;
+        },
+        lock,
+      },
+    };
+    const view = render(
+      <Pairing
+        api={slow}
+        device={{ id: "tv-test-device", label: "Living Room Fire TV" }}
+        forUser={null}
+        origin="https://dillan.example"
+        onSignedIn={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
+    await waitFor(() => expect(polled).toHaveBeenCalled(), { timeout: 4000 });
+    view.unmount(); // Back / Cancel
+    resolve({
+      status: "signed_in",
+      user: { id: MOCK_LUIS, email: null, phone: null },
+      grantId: "grant-1",
+    });
+    await waitFor(() => expect(lock).toHaveBeenCalledWith("grant-1"));
   });
 });
 
@@ -284,6 +369,143 @@ describe("TV surface on the mock backend", () => {
     await screen.findByRole("button", { name: TV_COPY.getStarted }, { timeout: 3000 });
     expect(await tv.auth.getUser()).toBeNull();
     expect(localStorage.getItem(TV_SESSION_KEY)).toBeNull();
+  }, 15_000);
+
+  it("a grant revoked while the TV is showing private data locks it on the 60 s check", async () => {
+    const ticks: Array<() => void> = [];
+    const real = globalThis.setInterval;
+    vi.spyOn(globalThis, "setInterval").mockImplementation(((
+      fn: () => void,
+      ms?: number,
+      ...rest: unknown[]
+    ) => {
+      if (ms === GRANT_CHECK_MS) ticks.push(fn);
+      return real(fn, ms, ...rest);
+    }) as typeof setInterval);
+    await pairAsLuis();
+    await screen.findByText(/Upper Body/);
+    expect(ticks.length).toBeGreaterThan(0);
+    const g = (await phone.devices.list()).find((x) => x.device_id.startsWith("tv-"))!;
+    await phone.devices.revoke(g.id);
+    act(() => ticks[ticks.length - 1]!());
+    await screen.findByRole("button", { name: TV_COPY.getStarted }, { timeout: 3000 });
+    expect(document.body.textContent).not.toMatch(/Upper Body|Hi, Luis/);
+    expect(await tv.auth.getUser()).toBeNull();
+    expect(localStorage.getItem(TV_SESSION_KEY)).toBeNull();
+  }, 15_000);
+
+  it("popstate Back: after the exit toast the guard is re-armed once the user stays", async () => {
+    const guarded = () =>
+      !!(window.history.state as { dillanTvGuard?: number } | null)?.dillanTvGuard;
+    // what the browser does on a history Back from the guard entry
+    const popBack = () =>
+      act(() => {
+        window.history.replaceState(null, "");
+        window.dispatchEvent(new PopStateEvent("popstate", { state: null }));
+      });
+    await pairAsLuis();
+    expect(guarded()).toBe(true);
+    popBack();
+    expect(await screen.findByText(EXIT_TOAST)).toBeInTheDocument();
+    expect(guarded()).toBe(false); // an immediate second Back may leave
+    fireEvent.keyDown(window, { key: "ArrowRight", keyCode: 39 }); // the user stays
+    expect(guarded()).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Program" }));
+    await waitFor(() => expect(screenKey()).toBe("program"));
+    popBack();
+    await waitFor(() => expect(screenKey()).toBe("home"));
+    expect(guarded()).toBe(true);
+  }, 15_000);
+
+  async function startActive(api: Api = tv) {
+    const tpl = (await api.templates.list())[0]!;
+    const s = await api.sessions.start({ templateId: tpl.id, liveData: false, timezone: "UTC" });
+    await api.sessions.command({
+      sessionId: s.session!.id,
+      kind: "start",
+      expectedRevision: s.session!.revision,
+      source: "phone",
+    });
+    return s.session!.id;
+  }
+  const setVisibility = (v: "hidden" | "visible") =>
+    act(() => {
+      Object.defineProperty(document, "visibilityState", { configurable: true, get: () => v });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+  it("hidden without a reload (Fire TV Home): paused, and Paused with the reason on return (F6)", async () => {
+    await pairAsLuis();
+    await startActive();
+    await screen.findByRole("button", { name: "Back to workout" });
+    setVisibility("hidden");
+    await waitFor(async () => expect((await phone.sessions.current())?.state).toBe("paused"));
+    setVisibility("visible");
+    expect(
+      await screen.findByText("Paused while Dillan was in the background", undefined, {
+        timeout: 4000,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resume" })).toHaveAttribute("data-autofocus");
+    // the reason belongs to that pause only: resume with Play/Pause, pause again with Back
+    fireEvent.keyDown(window, { key: "MediaPlayPause", keyCode: 179 });
+    await waitFor(async () => expect((await phone.sessions.current())?.state).toBe("active"));
+    await screen.findByRole("button", { name: "Complete set" });
+    fireEvent.keyDown(window, { key: "Escape", keyCode: 27 });
+    await screen.findByRole("button", { name: "Resume" });
+    expect(screen.queryByText("Paused while Dillan was in the background")).toBeNull();
+  }, 15_000);
+
+  it("a held OK (auto-repeat) acts once: no extra sets, no skipped rest", async () => {
+    // jsdom has no layout; give every focusable a box so the focus engine can focus
+    vi.spyOn(Element.prototype, "getClientRects").mockImplementation(
+      () => [{}] as unknown as DOMRectList,
+    );
+    await pairAsLuis();
+    const id = await startActive();
+    fireEvent.click(await screen.findByRole("button", { name: "Back to workout" }));
+    const complete = await screen.findByRole("button", { name: "Complete set" });
+    await waitFor(() => expect(complete).toHaveAttribute("data-focused"));
+    const rev0 = (await phone.sessions.recover(id))!.revision;
+    fireEvent.keyDown(window, { key: "Enter", keyCode: 13 });
+    await waitFor(async () => expect((await phone.sessions.recover(id))!.revision).toBe(rev0 + 1));
+    for (let i = 0; i < 5; i++) {
+      fireEvent.keyDown(window, { key: "Enter", keyCode: 13, repeat: true });
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    await new Promise((r) => setTimeout(r, 100));
+    expect((await phone.sessions.recover(id))!.revision).toBe(rev0 + 1);
+  }, 15_000);
+
+  it("the TV never writes the session command queue to persistent storage", async () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    await pairAsLuis();
+    await startActive();
+    fireEvent.click(await screen.findByRole("button", { name: "Back to workout" }));
+    await screen.findByRole("button", { name: "Complete set" });
+    fireEvent.keyDown(window, { key: "Escape", keyCode: 27 }); // pause, through the queue
+    await waitFor(async () => expect((await phone.sessions.current())?.state).toBe("paused"));
+    expect(setItem.mock.calls.some(([k]) => String(k).startsWith("dillan.v1.cmdq"))).toBe(false);
+  }, 15_000);
+
+  it("a failed load is an error with Try again, never 'No workouts yet'", async () => {
+    const failing: DillanApi = {
+      ...tv,
+      templates: {
+        ...tv.templates,
+        list: async () => {
+          throw new Error("network");
+        },
+      },
+    };
+    setApiForTests(failing);
+    await pairAsLuis(failing);
+    fireEvent.click(screen.getByRole("button", { name: "Program" }));
+    expect(await screen.findByText(TV_LOAD_COPY.failed)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: TV_LOAD_COPY.retry })).toHaveAttribute(
+      "data-autofocus",
+    );
+    expect(screen.queryByText("No workouts yet")).toBeNull();
   }, 15_000);
 
   it("a session this TV did not pair is never shown", async () => {

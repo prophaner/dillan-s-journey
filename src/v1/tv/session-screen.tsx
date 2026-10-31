@@ -3,7 +3,7 @@
 // server row is authoritative and the phone and TV mirror it through Realtime (F08). Back on the
 // dashboard pauses, Back on the paused overlay does nothing, Play/Pause toggles.
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Check, Pause, Play, Slash } from "lucide-react";
 import { isAfterLastSet } from "@/v1/core/engine";
 import { exerciseForStep } from "@/v1/core/steps";
@@ -19,6 +19,7 @@ import { ZONE_COPY } from "@/v1/ui/zone-pieces";
 import { formatClock } from "@/v1/ui/timezones";
 import { cn } from "@/lib/utils";
 import { useTv } from "./context";
+import { tvMemoryStorage } from "./memory-store";
 import { TvNoteText } from "./screens-history";
 import {
   TvAvatar,
@@ -41,18 +42,32 @@ export const TV_SESSION_COPY = {
 
 export function TvSession({ sessionId }: { sessionId: string }) {
   const tv = useTv();
-  const { view, controller } = useSessionController(sessionId, tv.user.id, "tv");
+  // memory-only queue: user data is never persisted on a shared TV (handoff §6)
+  const { view, controller } = useSessionController(sessionId, tv.user.id, "tv", tvMemoryStorage);
   const row = view.row;
   const p = view.projected;
   const state = p?.state ?? null;
+  // Ended here but not yet on the server (offline): an honest "will save" screen, never the
+  // live dashboard, and Back stays put until the end is saved.
+  const endPending = state === "ended" && !!row && row.state !== "ended";
   useWakeLock(state === "active" || state === "paused");
+
+  // "Paused while Dillan was in the background" belongs to that one pause: once the workout
+  // leaves Paused (Resume, Play/Pause, the phone) the reason is gone.
+  const { clearRestoredPause } = tv;
+  const prevState = useRef(state);
+  useEffect(() => {
+    if (prevState.current === "paused" && state !== null && state !== "paused")
+      clearRestoredPause();
+    prevState.current = state;
+  }, [state, clearRestoredPause]);
 
   // Register Back = Pause and Play/Pause with the app (handoff key map).
   const { setSessionHandle } = tv;
   useEffect(() => {
     setSessionHandle({
       sessionId,
-      state,
+      state: endPending ? "ending" : state,
       pause: () => {
         if (state === "active") controller.send("pause");
       },
@@ -61,7 +76,7 @@ export function TvSession({ sessionId }: { sessionId: string }) {
         else if (state === "paused") controller.send("resume");
       },
     });
-  }, [setSessionHandle, sessionId, state, controller]);
+  }, [setSessionHandle, sessionId, state, endPending, controller]);
   useEffect(() => () => setSessionHandle(null), [setSessionHandle]);
 
   if (!row || !p)
@@ -81,6 +96,20 @@ export function TvSession({ sessionId }: { sessionId: string }) {
     );
 
   if (row.state === "ended") return <TvSummary row={row} />;
+  if (endPending)
+    return (
+      <div data-screen={`session:${sessionId}:end-pending`} className="flex h-full flex-col">
+        <div className="m-auto flex max-w-[1200px] flex-col items-center gap-8 text-center">
+          <h1 className="text-tv-2xl font-bold">{row.snapshot.name}</h1>
+          <p className="text-tv-md text-text-2" role="status">
+            {DASH_COPY.endedPending}
+          </p>
+          <TvButton focusId="end-pending-home" autoFocus onPress={() => tv.go({ name: "home" })}>
+            Back to Home
+          </TvButton>
+        </div>
+      </div>
+    );
   if (p.state === "preparing")
     return (
       <div data-screen={`session:${sessionId}:preparing`} className="flex h-full flex-col">
@@ -659,7 +688,7 @@ function TvSummary({ row }: { row: WorkoutSessionRow }) {
             <TvButton focusId="summary-done" autoFocus variant="primary" size="xl" onPress={done}>
               {TV_SESSION_COPY.done}
             </TvButton>
-            <p className="text-tv-sm text-text-2">{TV_SESSION_COPY.saved}</p>
+            {!discarded && <p className="text-tv-sm text-text-2">{TV_SESSION_COPY.saved}</p>}
           </div>
         </div>
         <TvPanel>

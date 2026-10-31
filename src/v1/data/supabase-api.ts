@@ -124,6 +124,20 @@ export function wipeSupabaseAuthStorage(store?: Storage | null) {
   }
 }
 
+/** Ends the local session only (no server call) and wipes the auth storage. */
+async function dropLocalSession() {
+  await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+  wipeSupabaseAuthStorage();
+}
+
+/**
+ * A PostgREST call rejected for auth: HTTP 401/403 (on the response, never on the error body), or
+ * PGRST301 (JWT invalid/expired) / PGRST303 (JWT claims rejected).
+ */
+export function isAuthRejection(status: number, code?: string | null): boolean {
+  return status === 401 || status === 403 || code === "PGRST301" || code === "PGRST303";
+}
+
 function check<T>(res: { data: T; error: AnyError }): T {
   if (res.error)
     throw Object.assign(new Error(res.error.message ?? "request_failed"), { code: res.error.code });
@@ -574,15 +588,33 @@ export function createSupabaseApi(): DillanApi {
         if (!r.ok) return { status: "error", error: r.error };
         if (r.status !== "approved") return { status: r.status };
         // The one-time token goes straight into this TV's own Supabase session.
-        const v = await supabase.auth.verifyOtp({ token_hash: r.tokenHash, type: "magiclink" });
-        const user = toUser(v.data.user);
-        if (v.error || !user) return { status: "error", error: "sign_in_failed" };
-        const g = await supabase.rpc("device_grant_register", {
-          p_device_id: device.id,
-          p_label: device.label,
-        });
-        const grant = (g.data as { ok?: boolean; grant?: { id?: string } } | null)?.grant;
-        return { status: "signed_in", user, grantId: grant?.id ?? null };
+        const v = await supabase.auth
+          .verifyOtp({ token_hash: r.tokenHash, type: "magiclink" })
+          .catch(() => null);
+        const user = toUser(v?.data.user ?? null);
+        if (!v || v.error || !user) {
+          await dropLocalSession();
+          return { status: "error", error: "sign_in_failed" };
+        }
+        // A TV session counts only with its device grant (v1_is_device_session scopes it, and
+        // revocation deletes it). No grant → nothing stays signed in. One retry for a blip.
+        const register = async () => {
+          const g = await supabase
+            .rpc("device_grant_register", { p_device_id: device.id, p_label: device.label })
+            .then(
+              (x) => x,
+              () => null,
+            );
+          const d =
+            g && !g.error ? (g.data as { ok?: boolean; grant?: { id?: string } } | null) : null;
+          return d?.ok && typeof d.grant?.id === "string" ? d.grant.id : null;
+        };
+        const grantId = (await register()) ?? (await register());
+        if (!grantId) {
+          await dropLocalSession();
+          return { status: "error", error: "grant_failed" };
+        }
+        return { status: "signed_in", user, grantId };
       },
       async pairCancel(ch) {
         try {
@@ -597,9 +629,11 @@ export function createSupabaseApi(): DillanApi {
         if (!s.session) return { valid: false, grantId: null };
         const res = await supabase.rpc("device_grant_touch", { p_device_id: deviceId });
         if (res.error) {
-          // Auth errors mean the session is gone (revoked); anything else is "can't tell".
-          const status = (res.error as { status?: number }).status;
-          return status === 401 || status === 403 ? { valid: false, grantId: null } : null;
+          // Auth errors mean the session is gone (revoked); anything else is "can't tell". The
+          // HTTP status lives on the response, not on the PostgREST error body.
+          return isAuthRejection(res.status, res.error.code)
+            ? { valid: false, grantId: null }
+            : null;
         }
         const d = res.data as { valid?: boolean; grant_id?: string } | null;
         return { valid: !!d?.valid, grantId: d?.grant_id ?? null };

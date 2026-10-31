@@ -42,6 +42,7 @@ export const TV_COPY = {
   tryAgain: "Try again",
   failed: "Couldn't get a code. Check the TV's connection, then try again.",
   rateLimited: "Too many codes were requested. Wait a few minutes, then try again.",
+  signInFailed: "Approved, but this TV couldn't finish signing in. Get a new code and try again.",
   switching: "Switching user…",
 } as const;
 
@@ -149,13 +150,20 @@ export type PairPhase =
   | { kind: "approved" }
   | { kind: "denied" }
   | { kind: "expired" }
-  | { kind: "failed"; reason: "rate_limited" | "other" };
+  | { kind: "failed"; reason: "rate_limited" | "sign_in" | "other" };
 
 export const PAIR_POLL_MS = 1_500;
 
+/** Poll errors after which this code can never sign in (it is used up); others are transient. */
+const FINAL_POLL_ERRORS = new Set(["sign_in_failed", "grant_failed"]);
+
 /**
  * S03: requests a challenge, polls it, counts down, and hands the signed-in user up. Leaving the
- * screen cancels a code that is still awaiting.
+ * screen cancels a code that is still awaiting; a sign-in that lands after leaving is locked again
+ * at once, so no session stays on the shared TV.
+ *
+ * `now` is the server-corrected clock and drives only the countdown; expiry is the server's call
+ * (a TV clock that runs fast must not expire codes early).
  */
 export function Pairing({
   api,
@@ -170,7 +178,7 @@ export function Pairing({
   device: TvDeviceInfo;
   forUser: { userId: string; firstName: string } | null;
   origin: string;
-  onSignedIn: (user: AuthUser, grantId: string | null) => void;
+  onSignedIn: (user: AuthUser, grantId: string) => void;
   onCancel: () => void;
   now?: () => number;
 }) {
@@ -180,8 +188,6 @@ export function Pairing({
   const current = useRef<TvChallenge | null>(null);
   const signedIn = useRef(onSignedIn);
   signedIn.current = onSignedIn;
-  const nowRef = useRef(now);
-  nowRef.current = now;
 
   const start = useCallback(async () => {
     setPhase({ kind: "starting" });
@@ -217,13 +223,13 @@ export function Pairing({
     let timer: ReturnType<typeof setTimeout> | null = null;
     const poll = async () => {
       if (stop) return;
-      if (Date.parse(challenge.expiresAt) <= nowRef.current()) {
-        current.current = null;
-        setPhase({ kind: "expired" });
+      const r = await api.tv.pairPoll(device, challenge).catch(() => null);
+      if (stop) {
+        // Back/Cancel while the approval was being exchanged: nobody takes this session up, so
+        // revoke its grant and sign out right away.
+        if (r?.status === "signed_in") void api.tv.lock(r.grantId).catch(() => undefined);
         return;
       }
-      const r = await api.tv.pairPoll(device, challenge).catch(() => null);
-      if (stop) return;
       if (r?.status === "signed_in") {
         current.current = null;
         setPhase({ kind: "approved" });
@@ -238,6 +244,11 @@ export function Pairing({
       if (r?.status === "expired" || r?.status === "cancelled") {
         current.current = null;
         setPhase({ kind: "expired" });
+        return;
+      }
+      if (r?.status === "consumed" || (r?.status === "error" && FINAL_POLL_ERRORS.has(r.error))) {
+        current.current = null;
+        setPhase({ kind: "failed", reason: "sign_in" });
         return;
       }
       timer = setTimeout(() => void poll(), PAIR_POLL_MS);
@@ -299,8 +310,13 @@ export function Pairing({
           ? { title: TV_COPY.expired, body: TV_COPY.codesLast, again: TV_COPY.newCode }
           : {
               title: TV_COPY.tryAgain,
-              body: phase.reason === "rate_limited" ? TV_COPY.rateLimited : TV_COPY.failed,
-              again: TV_COPY.tryAgain,
+              body:
+                phase.reason === "rate_limited"
+                  ? TV_COPY.rateLimited
+                  : phase.reason === "sign_in"
+                    ? TV_COPY.signInFailed
+                    : TV_COPY.failed,
+              again: phase.reason === "sign_in" ? TV_COPY.newCode : TV_COPY.tryAgain,
             };
     status = (
       <>

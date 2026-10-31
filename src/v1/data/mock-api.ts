@@ -674,6 +674,7 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
         }
         if (p.status === "awaiting" || p.status === "denied" || p.status === "expired")
           return { status: p.status };
+        if (p.status === "consumed") return { status: "consumed" };
         if (p.status !== "approved" || !p.approved_user_id) return { status: "cancelled" };
         p.status = "consumed";
         const grant = {

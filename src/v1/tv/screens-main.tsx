@@ -27,7 +27,19 @@ import { SpotMark } from "@/components/dillan/spot-mark";
 import { cn } from "@/lib/utils";
 import { useTv } from "./context";
 import type { TvScreen } from "./screens";
-import { TvButton, TvCard, TvEyebrow, TvHints, TvPanel, TvQr, TvTopBar, type NavKey } from "./ui";
+import {
+  loadView,
+  TV_LOAD_COPY,
+  TvButton,
+  TvCard,
+  TvEyebrow,
+  TvHints,
+  TvLoadError,
+  TvPanel,
+  TvQr,
+  TvTopBar,
+  type NavKey,
+} from "./ui";
 
 export const TV_MAIN_COPY = {
   backToWorkout: "Back to workout",
@@ -145,6 +157,7 @@ export function TvHome() {
   const items = history.data ?? [];
   const sessions = toHistory(items);
   const recent = items[0];
+  const historyView = loadView(history);
   const openLive = () => live && tv.go({ name: "session", sessionId: live.id });
 
   return (
@@ -199,8 +212,13 @@ export function TvHome() {
               <TvChip {...chip} />
             </div>
             <p className="text-tv-base text-text-2">{health.detail}</p>
-            {(health.id === "H0_not_set_up" || !zones.data?.confirmed_at) && (
+            {health.id === "H0_not_set_up" ? (
               <p className="text-tv-sm text-text-3">{TV_MAIN_COPY.liveDataPhone}</p>
+            ) : (
+              zones.data &&
+              !zones.data.confirmed_at && (
+                <p className="text-tv-sm text-text-3">{TV_MAIN_COPY.zonesHelp}</p>
+              )
             )}
           </TvCard>
           {recent && (
@@ -239,8 +257,10 @@ export function TvHome() {
         </div>
         <TvPanel>
           <TvEyebrow>{HOME_COPY.week}</TvEyebrow>
-          {history.isLoading ? (
-            <p className="text-tv-base text-text-2">Loading…</p>
+          {historyView === "loading" ? (
+            <p className="text-tv-base text-text-2">{TV_LOAD_COPY.loading}</p>
+          ) : historyView === "error" ? (
+            <TvLoadError focusId="home-retry" onRetry={() => void history.refetch()} />
           ) : sessions.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
               <SpotMark size={88} className="text-text" />
@@ -344,6 +364,7 @@ export function TvProgram() {
   const tv = useTv();
   const templates = useTemplates(tv.user.id);
   const list = templates.data ?? [];
+  const view = loadView(templates);
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   return (
     <TvNavScreen
@@ -357,8 +378,14 @@ export function TvProgram() {
       <div className="grid h-full grid-cols-[2fr_1fr] gap-12">
         <div className="flex min-h-0 flex-col gap-6">
           <h1 className="text-tv-xl font-bold">{TV_MAIN_COPY.programTitle}</h1>
-          {templates.isLoading ? (
-            <p className="text-tv-base text-text-2">Loading…</p>
+          {view === "loading" ? (
+            <p className="text-tv-base text-text-2">{TV_LOAD_COPY.loading}</p>
+          ) : view === "error" ? (
+            <TvLoadError
+              focusId="program-retry"
+              autoFocus
+              onRetry={() => void templates.refetch()}
+            />
           ) : list.length === 0 ? (
             <div className="flex flex-col gap-3">
               <h2 className="text-tv-lg font-bold">{TV_MAIN_COPY.noWorkouts}</h2>
@@ -397,7 +424,7 @@ export function TvProgram() {
           type="button"
           data-focus=""
           data-focus-id="edit-on-phone"
-          {...(!templates.isLoading && list.length === 0 ? { "data-autofocus": "" } : {})}
+          {...(view === "ready" && list.length === 0 ? { "data-autofocus": "" } : {})}
           className="flex flex-col items-center gap-8 rounded-tv-lg border-2 border-line bg-surface p-12 text-center data-[focused]:border-text"
           onClick={() => tv.toast(TV_MAIN_COPY.editOnPhoneBody)}
         >
@@ -466,7 +493,8 @@ export function TvChoose() {
   const shown: WorkoutTemplate | undefined = list.find((t) => t.id === (sel ?? initial));
   const origin = typeof window !== "undefined" ? window.location.origin : "";
 
-  if (!templates.isLoading && list.length === 0)
+  const view = loadView(templates);
+  if (view === "ready" && list.length === 0)
     return (
       <TvNavScreen screenKey="choose:empty" nav={null} hints={[["Back", "Home"]]}>
         <div className="grid h-full grid-cols-[2fr_1fr] items-center gap-12">
@@ -502,8 +530,14 @@ export function TvChoose() {
         <div className="flex min-h-0 flex-col gap-4">
           <h1 className="text-tv-xl font-bold">{TV_MAIN_COPY.chooseTitle}</h1>
           <p className="text-tv-base text-text-2">{TV_MAIN_COPY.chooseSub}</p>
-          {templates.isLoading ? (
-            <p className="text-tv-base text-text-2">Loading…</p>
+          {view === "loading" ? (
+            <p className="text-tv-base text-text-2">{TV_LOAD_COPY.loading}</p>
+          ) : view === "error" ? (
+            <TvLoadError
+              focusId="choose-retry"
+              autoFocus
+              onRetry={() => void templates.refetch()}
+            />
           ) : (
             <ul
               className="flex min-h-0 flex-col gap-4 overflow-y-auto p-3"
@@ -586,6 +620,7 @@ export function TvPreflight({ templateId }: { templateId: string }) {
   useEffect(() => {
     if (startFocus === null && hr.loaded) setStartFocus(ready);
   }, [startFocus, hr.loaded, ready]);
+  const startOnFocus = startFocus === true && ready;
 
   useEffect(() => {
     void api.hr.request(10).catch(() => undefined);
@@ -595,8 +630,10 @@ export function TvPreflight({ templateId }: { templateId: string }) {
 
   const tz = profile.data?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
 
+  const starting = useRef(false);
   async function begin(liveData: boolean) {
-    if (busy) return;
+    if (starting.current) return;
+    starting.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -632,6 +669,7 @@ export function TvPreflight({ templateId }: { templateId: string }) {
       attempt.current = newId();
       setError(PREFLIGHT_COPY.startFailed);
     } finally {
+      starting.current = false;
       setBusy(false);
     }
   }
@@ -653,10 +691,18 @@ export function TvPreflight({ templateId }: { templateId: string }) {
     >
       {!t ? (
         <div className="flex flex-col gap-6">
-          <h1 className="text-tv-xl font-bold">
-            {templates.isLoading ? "Loading…" : "This workout isn't available"}
-          </h1>
-          <TvButton focusId="pre-back" autoFocus onPress={() => tv.go({ name: "choose" })}>
+          {loadView(templates) === "error" ? (
+            <TvLoadError focusId="pre-retry" autoFocus onRetry={() => void templates.refetch()} />
+          ) : (
+            <h1 className="text-tv-xl font-bold">
+              {templates.isPending ? TV_LOAD_COPY.loading : "This workout isn't available"}
+            </h1>
+          )}
+          <TvButton
+            focusId="pre-back"
+            autoFocus={loadView(templates) !== "error"}
+            onPress={() => tv.go({ name: "choose" })}
+          >
             {TV_MAIN_COPY.back}
           </TvButton>
         </div>
@@ -695,21 +741,25 @@ export function TvPreflight({ templateId }: { templateId: string }) {
             )}
             <p className="text-tv-sm text-text-2">{PREFLIGHT_COPY.withoutLiveHelp}</p>
             <div className="mt-auto flex gap-4 p-2">
+              {/* Start is disabled whenever HR is not live; focus then sits on "Continue without
+                  live data", never on the top bar. Neither is disabled while starting (begin()
+                  ignores repeats), so focus cannot fall back to the avatar mid-start. */}
               <TvButton
                 focusId="pre-start"
-                autoFocus={startFocus === true}
+                autoFocus={startOnFocus}
                 variant="primary"
                 size="md"
-                disabled={!ready || busy}
+                disabled={!ready}
+                aria-busy={busy || undefined}
                 onPress={() => void begin(true)}
               >
                 {TV_MAIN_COPY.startWorkout}
               </TvButton>
               <TvButton
                 focusId="pre-nolive"
-                autoFocus={startFocus === false}
+                autoFocus={!startOnFocus}
                 size="md"
-                disabled={busy}
+                aria-busy={busy || undefined}
                 onPress={() => void begin(false)}
               >
                 {PREFLIGHT_COPY.withoutLive}

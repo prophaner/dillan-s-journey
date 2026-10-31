@@ -193,6 +193,30 @@ describe("FocusEngine", () => {
     engine.detach();
   });
 
+  it('data-autofocus="force" (Calendar opened on a given day) beats the remembered row', async () => {
+    const days = (sel: string, force: boolean) =>
+      `<div data-screen="calendar"><div data-focus-list="calendar-days">
+        ${["d28", "d29", "d31"]
+          .map((d, i) =>
+            btn(
+              d,
+              `${i * 120},0,100,72`,
+              d === sel ? `data-autofocus="${force ? "force" : ""}"` : "",
+            ),
+          )
+          .join("")}
+      </div></div>`;
+    const { root, engine } = mount(days("d31", false));
+    engine.attach();
+    expect(engine.focusedId()).toBe("d31"); // remembered from here on
+    root.innerHTML = `<div data-screen="home">${btn("h", "0,0,100,72", "data-autofocus")}</div>`;
+    await flush();
+    root.innerHTML = days("d28", true); // Back from the Oct 28 session
+    await flush();
+    expect(engine.focusedId()).toBe("d28");
+    engine.detach();
+  });
+
   it("follows a changed data-autofocus (rest started) until the user moves", async () => {
     const { root, engine } = mount(
       `<div data-screen="dash">${btn("skip-rest", "0,0,100,72")}${btn("complete", "0,100,100,72", "data-autofocus")}${btn("pause", "120,100,100,72")}</div>`,

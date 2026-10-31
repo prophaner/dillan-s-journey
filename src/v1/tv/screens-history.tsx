@@ -27,7 +27,19 @@ import { browserTimeZone, formatClock } from "@/v1/ui/timezones";
 import { cn } from "@/lib/utils";
 import { useTv } from "./context";
 import { TvNavScreen } from "./screens-main";
-import { TvAvatar, TvButton, TvDialog, TvEyebrow, TvHints, TvPanel, TvQr, TvZoneBars } from "./ui";
+import {
+  loadView,
+  TV_LOAD_COPY,
+  TvAvatar,
+  TvButton,
+  TvDialog,
+  TvEyebrow,
+  TvHints,
+  TvLoadError,
+  TvPanel,
+  TvQr,
+  TvZoneBars,
+} from "./ui";
 
 const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -40,6 +52,7 @@ export const TV_PROFILE_COPY = {
   remove: "Remove my profile",
   rememberOn: "Name shown on this TV: On",
   rememberOff: "Name shown on this TV: Off",
+  rememberNeedsName: "To keep your name on this TV, first add your name in Profile on your phone.",
   rememberHelp:
     "When on, your first name stays on “Who's training?” (locked) after you leave. Nothing else is kept on the TV.",
   back: "Back",
@@ -197,7 +210,10 @@ export function TvCalendar({
                   type="button"
                   data-focus=""
                   data-focus-id={`day-${c.key}`}
-                  {...(c.key === selected ? { "data-autofocus": "" } : {})}
+                  {...(c.key === selected
+                    ? // a day handed in (Back from a session) beats the remembered day
+                      { "data-autofocus": day && day === selected ? "force" : "" }
+                    : {})}
                   className={cls}
                   aria-label={`${formatDayKey(c.key)}${items.length ? `, ${items.length} session${items.length > 1 ? "s" : ""}` : ""}`}
                   onFocus={() => {
@@ -219,8 +235,10 @@ export function TvCalendar({
         </div>
         <TvPanel>
           <TvEyebrow>{formatDayKey(selected)}</TvEyebrow>
-          {q.isLoading ? (
-            <p className="text-tv-base text-text-2">Loading…</p>
+          {loadView(q) === "loading" ? (
+            <p className="text-tv-base text-text-2">{TV_LOAD_COPY.loading}</p>
+          ) : loadView(q) === "error" ? (
+            <TvLoadError focusId="calendar-retry" onRetry={() => void q.refetch()} />
           ) : list.length ? (
             <ul
               className="flex min-h-0 flex-col gap-4 overflow-y-auto p-3"
@@ -284,8 +302,14 @@ export function TvDetail({ sessionId, day }: { sessionId: string; day?: string |
     <div data-screen={`detail:${sessionId}`} className="flex h-full flex-col">
       {!row || !ended ? (
         <div className="m-auto flex flex-col items-center gap-6">
-          <p className="text-tv-lg text-text-2">{q.isLoading ? "Loading…" : "Session not found"}</p>
-          <TvButton focusId="detail-back" autoFocus onPress={back}>
+          {loadView(q) === "error" ? (
+            <TvLoadError focusId="detail-retry" autoFocus onRetry={() => void q.refetch()} />
+          ) : (
+            <p className="text-tv-lg text-text-2">
+              {q.isPending ? TV_LOAD_COPY.loading : "Session not found"}
+            </p>
+          )}
+          <TvButton focusId="detail-back" autoFocus={loadView(q) !== "error"} onPress={back}>
             Back to Calendar
           </TvButton>
         </div>
@@ -428,6 +452,7 @@ export function TvProfile() {
             <TvButton
               focusId="profile-remember"
               aria-pressed={tv.remembered}
+              disabled={!tv.remembered && !tv.canRemember}
               onPress={() => tv.setRemembered(!tv.remembered)}
             >
               {tv.remembered ? TV_PROFILE_COPY.rememberOn : TV_PROFILE_COPY.rememberOff}
@@ -443,7 +468,13 @@ export function TvProfile() {
               {TV_PROFILE_COPY.back}
             </TvButton>
           </div>
-          <p className="text-tv-sm text-text-2">{TV_PROFILE_COPY.rememberHelp}</p>
+          <p className="text-tv-sm text-text-2">
+            {!tv.remembered && !tv.canRemember
+              ? profile.isPending
+                ? TV_LOAD_COPY.loading
+                : TV_PROFILE_COPY.rememberNeedsName
+              : TV_PROFILE_COPY.rememberHelp}
+          </p>
           <p className="text-tv-sm text-text-2">{TV_PROFILE_COPY.autoLock}</p>
         </div>
         <TvPanel className="items-center justify-center text-center">

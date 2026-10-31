@@ -19,7 +19,7 @@
 //
 // Abuse limits: 0006 limits codes per device (10 per 10 min), live codes globally (500), wrong
 // secrets per challenge (5) and wrong codes per approving user and globally. On top of that, a
-// per-IP sliding window here (per server instance).
+// per-IP sliding window here (per server instance), keyed on a trusted address only (clientKey).
 
 import { createServerFn } from "@tanstack/react-start";
 import { SlidingWindowLimiter } from "./rate-limit";
@@ -35,7 +35,7 @@ const startLimiter = new SlidingWindowLimiter(20, 10 * 60_000);
 const pollLimiter = new SlidingWindowLimiter(600, 10 * 60_000);
 
 export type TvPairStatusResult =
-  | { ok: true; status: "awaiting" | "denied" | "expired" | "cancelled" }
+  | { ok: true; status: "awaiting" | "denied" | "expired" | "cancelled" | "consumed" }
   | { ok: true; status: "approved"; tokenHash: string }
   | { ok: false; error: string };
 
@@ -46,13 +46,28 @@ export type TvPairStartServerResult =
     }
   | { ok: false; error: "rate_limited" | "unavailable" };
 
-async function clientKey(): Promise<string> {
+/**
+ * The caller's address for the per-IP limit, from trusted sources only (D26): Cloudflare's
+ * CF-Connecting-IP (set by the edge, a client cannot forge it through Cloudflare), else the
+ * socket address. Never the leftmost X-Forwarded-For: the client writes it, so rotating it would
+ * give a fresh budget per request. null when no trusted address exists; then the per-IP layer is
+ * skipped (the SQL limits in 0006 still apply) rather than throttling every TV in one bucket.
+ */
+async function clientKey(): Promise<string | null> {
   try {
-    const { getRequestIP } = await import("@tanstack/react-start/server");
-    return getRequestIP({ xForwardedFor: true }) ?? "unknown";
+    const { getRequestHeader, getRequestIP } = await import("@tanstack/react-start/server");
+    const cf = getRequestHeader("cf-connecting-ip")?.trim();
+    if (cf) return `cf:${cf}`;
+    const ip = getRequestIP()?.trim();
+    return ip ? `ip:${ip}` : null;
   } catch {
-    return "unknown";
+    return null;
   }
+}
+
+async function overLimit(limiter: SlidingWindowLimiter): Promise<boolean> {
+  const key = await clientKey();
+  return key !== null && !limiter.take(key);
 }
 
 function hex(bytes: Uint8Array): string {
@@ -75,7 +90,7 @@ export const tvPairStart = createServerFn({ method: "POST" })
     return { deviceId: input.deviceId, label: label || "TV", forUserId };
   })
   .handler(async ({ data }): Promise<TvPairStartServerResult> => {
-    if (!startLimiter.take(await clientKey())) return { ok: false, error: "rate_limited" };
+    if (await overLimit(startLimiter)) return { ok: false, error: "rate_limited" };
     const secret = hex(crypto.getRandomValues(new Uint8Array(32)));
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const res = await supabaseAdmin.rpc("pairing_create", {
@@ -111,7 +126,7 @@ function challengeInput(input: { challengeId: string; secret: string }) {
 export const tvPairStatus = createServerFn({ method: "POST" })
   .validator(challengeInput)
   .handler(async ({ data }): Promise<TvPairStatusResult> => {
-    if (!pollLimiter.take(await clientKey())) return { ok: false, error: "rate_limited" };
+    if (await overLimit(pollLimiter)) return { ok: false, error: "rate_limited" };
     const { supabaseAdmin: admin } = await import("@/integrations/supabase/client.server");
     const st = await admin.rpc("pairing_status", { p_id: data.challengeId, p_secret: data.secret });
     if (st.error) return { ok: false, error: "unavailable" };
@@ -119,6 +134,9 @@ export const tvPairStatus = createServerFn({ method: "POST" })
     if (!s?.ok) return { ok: false, error: s?.error ?? "unavailable" };
     if (s.status === "awaiting" || s.status === "denied" || s.status === "expired")
       return { ok: true, status: s.status };
+    // Approved and already used (an earlier attempt failed after consuming it): the TV shows
+    // "couldn't finish signing in", never "expired".
+    if (s.status === "consumed") return { ok: true, status: "consumed" };
     if (s.status !== "approved") return { ok: true, status: "cancelled" };
 
     // approved → consumed exactly once; the user id never leaves the server
@@ -127,20 +145,23 @@ export const tvPairStatus = createServerFn({ method: "POST" })
     const consumed = c.data as { ok?: boolean; error?: string; user_id?: string } | null;
     if (!consumed?.ok || !consumed.user_id) {
       if (consumed?.error === "expired") return { ok: true, status: "expired" };
+      if (consumed?.error === "already_used") return { ok: true, status: "consumed" };
       return { ok: false, error: consumed?.error ?? "unavailable" };
     }
+    // From here the challenge is used up: any failure is final for this code (sign_in_failed),
+    // and the TV offers a new one.
     const userId = consumed.user_id;
     const u = await admin.auth.admin.getUserById(userId);
-    if (u.error || !u.data.user) return { ok: false, error: "unavailable" };
+    if (u.error || !u.data.user) return { ok: false, error: "sign_in_failed" };
     let email = u.data.user.email ?? "";
     if (!email) {
       email = placeholderEmail(userId);
       const up = await admin.auth.admin.updateUserById(userId, { email, email_confirm: true });
-      if (up.error) return { ok: false, error: "unavailable" };
+      if (up.error) return { ok: false, error: "sign_in_failed" };
     }
     const link = await admin.auth.admin.generateLink({ type: "magiclink", email });
     const tokenHash = link.data?.properties?.hashed_token;
-    if (link.error || !tokenHash) return { ok: false, error: "unavailable" };
+    if (link.error || !tokenHash) return { ok: false, error: "sign_in_failed" };
     return { ok: true, status: "approved", tokenHash };
   });
 

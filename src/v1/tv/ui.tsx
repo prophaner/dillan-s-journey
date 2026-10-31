@@ -332,3 +332,51 @@ export function TvZoneBars({
     </ul>
   );
 }
+
+// ---------------------------------------------------------------------------------------------
+// Honest load states: a failed or offline-paused query is never shown as "no data".
+
+export const TV_LOAD_COPY = {
+  loading: "Loading…",
+  failed: "Couldn't load this. Check the TV's connection, then try again.",
+  retry: "Try again",
+} as const;
+
+export type LoadView = "loading" | "error" | "ready";
+
+/**
+ * loading / error / ready for a react-query result. "error" covers a failed query and one that
+ * is paused offline before its first result (isPending, fetchStatus "paused"): both have no data.
+ */
+export function loadView(q: {
+  isPending: boolean;
+  isError: boolean;
+  fetchStatus: string;
+  data?: unknown;
+}): LoadView {
+  if (q.data !== undefined) return "ready";
+  if (q.isError || (q.isPending && q.fetchStatus === "paused")) return "error";
+  return q.isPending ? "loading" : "ready";
+}
+
+/** Message + focusable Try again (refetch). */
+export function TvLoadError({
+  focusId,
+  autoFocus,
+  onRetry,
+  className,
+}: {
+  focusId: string;
+  autoFocus?: boolean;
+  onRetry: () => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex flex-col items-start gap-4", className)} role="alert">
+      <p className="text-tv-base text-text-2">{TV_LOAD_COPY.failed}</p>
+      <TvButton focusId={focusId} autoFocus={!!autoFocus} size="md" onPress={onRetry}>
+        {TV_LOAD_COPY.retry}
+      </TvButton>
+    </div>
+  );
+}
