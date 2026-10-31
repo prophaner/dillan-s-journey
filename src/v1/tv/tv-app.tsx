@@ -234,9 +234,14 @@ export function TvApp({ api }: { api: DillanApi }) {
     };
   }, [doBack]);
 
-  // History guard: Silk may deliver the remote's Back as popstate instead of a key.
+  // History guard: Silk may deliver the remote's Back as popstate instead of a key. One guard
+  // entry sits on top of /tv; every pop is a Back, and the guard is re-armed unless the app wants
+  // to exit (then the next Back leaves the page). Never stacks guards (remounts, StrictMode).
   useEffect(() => {
+    const onGuard = () =>
+      !!(window.history.state as { dillanTvGuard?: number } | null)?.dillanTvGuard;
     const guard = () => {
+      if (onGuard()) return;
       try {
         window.history.pushState({ ...(window.history.state ?? {}), dillanTvGuard: 1 }, "");
       } catch {
@@ -244,8 +249,7 @@ export function TvApp({ api }: { api: DillanApi }) {
       }
     };
     guard();
-    const onPop = (e: PopStateEvent) => {
-      if ((e.state as { dillanTvGuard?: number } | null)?.dillanTvGuard) return;
+    const onPop = () => {
       signedIn.current?.activity();
       const handled = doBack();
       if (handled) guard();
