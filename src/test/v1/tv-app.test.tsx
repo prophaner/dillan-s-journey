@@ -12,6 +12,7 @@ import { setApiForTests } from "@/v1/data/client";
 import { createMockApi, MOCK_TV_SESSION_KEY } from "@/v1/data/mock-api";
 import { MOCK_LUIS, seedMockDb, type MockDb } from "@/v1/data/mock-fixtures";
 import { rememberProfile } from "@/v1/tv/device";
+import { FocusEngine } from "@/v1/tv/focus";
 import { EXIT_TOAST } from "@/v1/tv/screens";
 import { Pairing, TV_COPY } from "@/v1/tv/signed-out";
 import { GRANT_CHECK_MS, TV_SESSION_KEY, TvApp } from "@/v1/tv/tv-app";
@@ -515,4 +516,129 @@ describe("TV surface on the mock backend", () => {
     await screen.findByRole("button", { name: TV_COPY.getStarted });
     expect(document.body.textContent).not.toContain("Upper Body");
   });
+});
+
+// ------------------------------------------------------------------ Slice E review fixes
+describe("TV heart rate on the real screens (acceptance 43, 45)", () => {
+  const SRC = "00000000-0000-4000-8000-0000000000aa";
+  const STREAM = "00000000-0000-4000-8000-0000000000bb";
+  let seq = 0;
+  /** a real (web_ble) relay tab publishing for Luis through the phone's mock hr_ingest */
+  async function relay(mode: "idle" | "live" | "no_contact", bpm: number | null = null) {
+    const me = (await phone.auth.getUser())!;
+    const at = new Date().toISOString();
+    return phone.hr.ingest({
+      p_source_id: SRC,
+      p_stream_id: STREAM,
+      p_expected_user_id: me.id,
+      p_source_kind: "web_ble",
+      p_mode: mode,
+      p_connected_at: at,
+      p_sensor: { name: "Polar H10 1A2B3C4D", serial: "1A2B3C4D", battery_pct: 80 },
+      p_claim: true,
+      p_samples:
+        mode === "idle"
+          ? []
+          : [{ seq: ++seq, measured_at: at, bpm, contact: mode === "live", rr_ms: null }],
+      p_source_name: "Gym tablet",
+      p_platform: "android",
+    });
+  }
+  /** jsdom has no layout: every focusable gets a box, left to right in DOM order */
+  function layout() {
+    vi.spyOn(Element.prototype, "getClientRects").mockImplementation(
+      () => [{}] as unknown as DOMRectList,
+    );
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: Element,
+    ) {
+      const all = [...document.querySelectorAll("[data-focus]")];
+      const i = Math.max(0, all.indexOf(this));
+      return { left: i * 200, right: i * 200 + 150, top: 0, bottom: 80 } as DOMRect;
+    });
+  }
+  const focused = () => document.querySelector("[data-focused]")?.getAttribute("data-focus-id");
+  const start = () => document.querySelector('[data-focus-id="pre-start"]') as HTMLElement;
+
+  async function openPreflight() {
+    await pairAsLuis();
+    fireEvent.click(await screen.findByRole("button", { name: "Workout Now" }));
+    const tpl = (await tv.templates.list())[0]!;
+    await waitFor(() =>
+      expect(document.querySelector(`[data-focus-id="choose-${tpl.id}"]`)).not.toBeNull(),
+    );
+    fireEvent.click(document.querySelector(`[data-focus-id="choose-${tpl.id}"]`) as HTMLElement);
+    await waitFor(() => expect(screenKey()).toBe(`preflight:${tpl.id}`));
+    // heart rate read (the initial focus decision is made on it)
+    await waitFor(() => expect(screen.queryByText("Checking heart rate…")).toBeNull());
+  }
+
+  it("43: HR turns Live while focus is on Continue: focus stays, Start enabled, announced, toast", async () => {
+    layout();
+    await relay("idle");
+    await openPreflight();
+    await waitFor(() => expect(focused()).toBe("pre-nolive"));
+    expect(start()).toHaveAttribute("aria-disabled", "true");
+    await relay("live", 120);
+    await waitFor(() => expect(start()).not.toHaveAttribute("aria-disabled"), { timeout: 4000 });
+    expect(focused()).toBe("pre-nolive");
+    expect(await screen.findByText("Heart rate ready")).toBeInTheDocument();
+    expect(await screen.findByText("Heart rate: Live")).toBeInTheDocument();
+    expect(focused()).toBe("pre-nolive");
+  }, 15_000);
+
+  it("43: focus on Show relay QR (or its dialog) survives HR turning Live", async () => {
+    layout();
+    await relay("idle");
+    await openPreflight();
+    await waitFor(() => expect(focused()).toBe("pre-nolive"));
+    fireEvent.keyDown(window, { key: "ArrowRight", keyCode: 39 });
+    await waitFor(() => expect(focused()).toBe("pre-relay-qr"));
+    fireEvent.keyDown(window, { key: "Enter", keyCode: 13 });
+    await waitFor(() => expect(focused()).toBe("relay-qr-close"));
+    await relay("live", 120);
+    await screen.findByText("Heart rate ready", undefined, { timeout: 4000 });
+    fireEvent.keyDown(window, { key: "Escape", keyCode: 27 }); // Back closes the QR
+    await waitFor(() => expect(focused()).toBe("pre-relay-qr"));
+  }, 15_000);
+
+  it("opened Live, HR drops and comes back: focus stays on Start the whole time", async () => {
+    layout();
+    await relay("live", 120);
+    await openPreflight();
+    await waitFor(() => expect(focused()).toBe("pre-start"));
+    await relay("no_contact");
+    await waitFor(() => expect(start()).toHaveAttribute("aria-disabled", "true"), {
+      timeout: 4000,
+    });
+    expect(focused()).toBe("pre-start");
+    // OK on a soft-disabled Start does nothing
+    fireEvent.keyDown(window, { key: "Enter", keyCode: 13 });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(await phone.sessions.current()).toBeNull();
+    await relay("live", 121);
+    await waitFor(() => expect(start()).not.toHaveAttribute("aria-disabled"), { timeout: 4000 });
+    expect(focused()).toBe("pre-start");
+  }, 20_000);
+
+  it("45: on the real S09 dashboard, Down from All zones is Heart rate, then Pause", async () => {
+    await pairAsLuis();
+    const tpl = (await tv.templates.list())[0]!;
+    const s = await tv.sessions.start({ templateId: tpl.id, liveData: true, timezone: "UTC" });
+    await tv.sessions.command({
+      sessionId: s.session!.id,
+      kind: "start",
+      expectedRevision: s.session!.revision,
+      source: "phone",
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Back to workout" }));
+    await screen.findByRole("button", { name: "All zones" });
+    const root = document.querySelector(".tv-root") as HTMLElement;
+    const e = new FocusEngine(root, { isVisible: () => true, scroll: false });
+    e.setFocus(root.querySelector('[data-focus-id="all-zones"]'));
+    e.move("down");
+    expect(e.focusedId()).toBe("hr-panel");
+    e.move("down");
+    expect(e.focusedId()).toBe("pause");
+  }, 15_000);
 });

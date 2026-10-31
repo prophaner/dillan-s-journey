@@ -22,7 +22,7 @@ import {
   type SensorInfo,
   type SourceKind,
 } from "@/v1/core/hr";
-import { HrAuthError, newId } from "@/v1/data/api";
+import { HrAuthError, HrSourceOwnedError, newId } from "@/v1/data/api";
 
 export const OUTBOX_MAX = 120;
 export const BATCH_MAX = 30;
@@ -53,6 +53,8 @@ export interface PublishState {
 export interface PublisherEvents {
   onResponse(res: HrIngestResponse, sent: { mode: RelayMode; claim: boolean }): void;
   onAuthError(): void;
+  /** the source id belongs to another user (shared device): the controller mints a new one */
+  onSourceOwned?(): void;
   /** false while calls fail (the relay shows "Offline - holding {k}s of readings") */
   onNetwork(ok: boolean): void;
 }
@@ -306,6 +308,11 @@ export class IngestPublisher {
       if (e instanceof HrAuthError) {
         this.outbox = [];
         this.events.onAuthError();
+        return;
+      }
+      if (e instanceof HrSourceOwnedError && this.events.onSourceOwned) {
+        // Readings stay queued (they are this user's); the next call goes out under a new id.
+        this.events.onSourceOwned();
         return;
       }
       this.failures++;

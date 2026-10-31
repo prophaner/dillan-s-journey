@@ -20,20 +20,29 @@ import { StrictMode, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { deriveHealthState, HEALTH_COPY } from "@/v1/core/health";
 import type { HrIngestRequest, HrLiveRow, HrSensorRow } from "@/v1/core/hr";
-import { homeHrCard, preflightChip, HOME_HR_COPY } from "@/v1/core/hr-views";
+import {
+  homeHrCard,
+  preflightChip,
+  preflightKindMismatch,
+  preflightReady,
+  HOME_HR_COPY,
+  RELAY_COPY,
+} from "@/v1/core/hr-views";
 import { accountZones } from "@/v1/core/zones";
-import type { WorkoutSessionRow } from "@/v1/core/types";
+import type { SessionSummaryRow, WorkoutSessionRow } from "@/v1/core/types";
 import type { DillanApi } from "@/v1/data/api";
 import { setApiForTests } from "@/v1/data/client";
 import { createMockApi } from "@/v1/data/mock-api";
 import { MOCK_LUIS, seedMockDb } from "@/v1/data/mock-fixtures";
 import { emptyHrDb, mockIngest, type MockHrMode } from "@/v1/data/mock-hr";
-import { RelayPage } from "@/v1/relay/relay-page";
+import type { RelayView } from "@/v1/relay/controller";
+import { RelayPage, Status } from "@/v1/relay/relay-page";
 import { useLiveHeartRate } from "@/v1/session/live-hr";
 import { serverClockFor } from "@/v1/session/server-clock";
 import { FocusEngine, type Rect } from "@/v1/tv/focus";
 import { TvZonePill } from "@/v1/tv/ui";
 import { SessionPage } from "@/v1/ui/session-page";
+import { SUMMARY_COPY, ZonesCard } from "@/v1/ui/summary-view";
 import { UserProvider } from "@/v1/ui/user-context";
 import { ZONE_COPY, ZonePill } from "@/v1/ui/zone-pieces";
 import { ToastProvider } from "@/components/dillan/overlays";
@@ -634,5 +643,167 @@ describe("mock hr_ingest (port of 0006 hr_ingest)", () => {
     const r = mockIngest(hr, { sessions: [session({})], summaries: [] }, "u1", req(), now);
     expect(r).toMatchObject({ sensor_forgotten: true, stop_requested: true });
     expect(hr.samples).toHaveLength(0);
+  });
+});
+
+// ------------------------------------------------------------------ review fixes
+describe("review fixes: viewers", () => {
+  it("S04: H5 (relay heartbeating, reading old) is 'No recent reading', never 'Relay offline'", () => {
+    const stale = liveRow({ measured_at: iso(T0 - 60_000), last_seen_at: iso(T0) });
+    const h = deriveHealthState({
+      live: stale,
+      sensor: { paired: true },
+      serverNowMs: T0 + 1_000,
+      session: { status: "none", liveData: true, isDemo: false },
+      zonesConfirmed: true,
+    });
+    expect(h.id).toBe("H5_no_recent");
+    const card = homeHrCard(h, stale, sensorRow);
+    expect(card.chip.label).toBe("No recent reading");
+    expect(card.relayOffline).toBe(false);
+    expect(card.showRelayQr).toBe(false);
+    expect(card.text).not.toBe(HOME_HR_COPY.offline);
+  });
+
+  it("S08: DEMO readings never make a real preflight ready, nor real ones a demo preflight", () => {
+    const h = (live: HrLiveRow) =>
+      deriveHealthState({
+        live,
+        sensor: { paired: true },
+        serverNowMs: T0 + 1_000,
+        session: { status: "none", liveData: true, isDemo: live.is_demo },
+        zonesConfirmed: true,
+      });
+    const demo = liveRow({ is_demo: true, source_kind: "demo" });
+    const real = liveRow();
+    expect(preflightReady(h(demo), demo, true)).toBe(true);
+    expect(preflightReady(h(demo), demo, false)).toBe(false);
+    expect(preflightKindMismatch(h(demo), demo, false)).toBe(true);
+    expect(preflightReady(h(real), real, true)).toBe(false);
+    expect(preflightReady(h(real), real, false)).toBe(true);
+    expect(preflightChip(h(demo), true, true).label).toBe("Unavailable");
+  });
+
+  it("a failed hr read is an error (retried), never 'Not set up'", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(T0);
+    let fail = true;
+    const api = {
+      kind: "supabase",
+      hr: {
+        live: async () => {
+          if (fail) throw new Error("offline");
+          return liveRow();
+        },
+        sensorRow: async () => sensorRow,
+        serverTime: async () => Date.now(),
+      },
+      realtime: { onHrLive: () => () => {}, onHrSensor: () => () => {} },
+    } as unknown as DillanApi;
+    setApiForTests(api);
+    function Probe() {
+      const hr = useLiveHeartRate("u1");
+      return (
+        <span data-testid="s">
+          {`${hr.loaded}/${hr.error}/${hr.loaded ? hr.health.label : "-"}`}
+        </span>
+      );
+    }
+    render(<Probe />);
+    await act(() => vi.advanceTimersByTimeAsync(100));
+    expect(screen.getByTestId("s").textContent).toBe("false/true/-");
+    fail = false;
+    await act(() => vi.advanceTimersByTimeAsync(2_100)); // first retry after 2 s
+    expect(screen.getByTestId("s").textContent).toBe("true/false/Live");
+  });
+
+  it("S11: 'Summary is final' appears while the summary stays open (no refetch needed)", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(T0);
+    setApiForTests({
+      kind: "supabase",
+      hr: { serverTime: async () => Date.now() },
+    } as unknown as DillanApi);
+    const summary: SessionSummaryRow = {
+      session_id: "s1",
+      user_id: "u1",
+      outcome: "completed",
+      started_at: iso(T0 - 1_900_000),
+      ended_at: iso(T0 - 100_000),
+      start_timezone: "UTC",
+      local_date: "2026-10-31",
+      active_ms: 1_800_000,
+      elapsed_ms: 1_800_000,
+      paused_ms: 0,
+      zone_ms: [600_000, 600_000, 600_000, 0, 0],
+      measured_ms: 1_800_000,
+      unmeasured_ms: 0,
+      coverage: 1,
+      algorithm_version: 1,
+      zone_snapshot: null,
+      hr_status: "final",
+      hr_finalize_dirty: false,
+      hr_sources_used: ["Gym tablet"],
+      finalized_at: iso(T0 - 90_000),
+      created_at: iso(T0 - 100_000),
+    };
+    const row = {
+      live_data: true,
+      is_demo: false,
+      zone_snapshot: { cutoffs: [100, 120, 140, 160] as const, version: 1, confirmed_at: iso(T0) },
+    } as never;
+    render(<ZonesCard row={row} summary={summary} showFinal />);
+    expect(screen.queryByText(SUMMARY_COPY.final)).toBeNull();
+    await act(() => vi.advanceTimersByTimeAsync(21_000));
+    expect(screen.getByText(SUMMARY_COPY.final)).toBeInTheDocument();
+  });
+});
+
+describe("review fixes: relay status (S16)", () => {
+  const view = (o: Partial<RelayView> = {}): RelayView => ({
+    mode: "live",
+    linkMode: "live",
+    support: { ok: true },
+    clockReady: true,
+    userId: "u1",
+    signedOut: false,
+    notice: null,
+    sensor: {
+      sensorKind: "polar_h10",
+      name: "Polar H10 1A2B3C4D",
+      serial: "1A2B3C4D",
+      batteryPct: 80,
+    },
+    bpm: 72,
+    contact: true,
+    lastSentLocal: Date.now() - 2_000,
+    offline: false,
+    pending: 0,
+    reconnectAttempt: 0,
+    holderName: null,
+    differentStrap: null,
+    wake: "on",
+    demo: false,
+    resting: false,
+    sourceName: "Android phone",
+    canGetDevices: false,
+    ...o,
+  });
+
+  it("live: BPM and 'Last sent' stay out of the live region; only the mode is announced", () => {
+    render(<Status v={view()} />);
+    const region = screen.getByTestId("relay-announce");
+    expect(region).toHaveAttribute("aria-live", "polite");
+    expect(region.textContent).toBe(RELAY_COPY.live);
+    expect(screen.getByText("72").closest("[aria-live]")).toBeNull();
+    expect(screen.getByText(/Last sent/).closest("[aria-live]")).toBeNull();
+  });
+
+  it("signed out with BLE still up: never 'Sending to Dillan', no BPM, no Last sent", () => {
+    render(<Status v={view({ signedOut: true, notice: "signed_out", userId: null })} />);
+    expect(screen.queryByText(RELAY_COPY.live)).toBeNull();
+    expect(screen.getByTestId("relay-announce").textContent).toBe(RELAY_COPY.signedOut);
+    expect(screen.queryByText("72")).toBeNull();
+    expect(screen.queryByText(/Last sent/)).toBeNull();
   });
 });

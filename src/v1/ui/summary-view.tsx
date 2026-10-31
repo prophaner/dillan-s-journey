@@ -1,6 +1,7 @@
 // S11 Summary: shown as soon as the session is ended (saved automatically by the End command;
 // notes are never required). Also the shared pieces of S13 (status chip, zones card).
 
+import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   engineStateFromRow,
@@ -11,6 +12,7 @@ import {
 import { activeMs, formatDuration } from "@/v1/core/timing";
 import { useProfile, useSummary } from "@/v1/data/queries";
 import { counts } from "@/v1/session/format";
+import { useServerClock } from "@/v1/session/use-session";
 import { formatClock } from "./timezones";
 import { useUser } from "./user-context";
 import { NotesEditor } from "./notes-editor";
@@ -38,6 +40,34 @@ export const SUMMARY_COPY = {
 
 /** Late relay readings can still be added for 2 minutes after End (h10-design 5.4 grace). */
 export const FINALIZE_GRACE_MS = 120_000;
+
+/**
+ * "Summary is final" (h10-design S11): a final, clean summary once the grace window has passed on
+ * the server clock. Re-renders itself when the window closes, so a summary left open gets the note
+ * without a refetch (an unchanged refetch never re-renders).
+ */
+export function useSummaryFinal(
+  liveData: boolean,
+  summary:
+    Pick<SessionSummaryRow, "hr_status" | "hr_finalize_dirty" | "ended_at"> | null | undefined,
+): boolean {
+  const clock = useServerClock();
+  const end = summary ? Date.parse(summary.ended_at) : Number.NaN;
+  const [, bump] = useState(0);
+  const graceOver = Number.isFinite(end) && clock.now() - end >= FINALIZE_GRACE_MS;
+  useEffect(() => {
+    if (!Number.isFinite(end) || graceOver) return;
+    const t = setTimeout(() => bump((n) => n + 1), end + FINALIZE_GRACE_MS - clock.now() + 50);
+    return () => clearTimeout(t);
+  }, [clock, end, graceOver]);
+  return (
+    liveData &&
+    !!summary &&
+    summary.hr_status === "final" &&
+    !summary.hr_finalize_dirty &&
+    graceOver
+  );
+}
 
 export function OutcomeTag({
   outcome,
@@ -76,6 +106,7 @@ export function ZonesCard({
   showFinal?: boolean;
 }) {
   const cutoffs: ZoneCutoffs | null = row.zone_snapshot?.cutoffs ?? null;
+  const isFinal = useSummaryFinal(row.live_data, summary);
   let body: React.ReactNode;
   if (!row.live_data) body = <p className="text-subhead text-text-2">{ZONE_COPY.noLiveData}</p>;
   else if (error && !summary)
@@ -139,13 +170,9 @@ export function ZonesCard({
         {row.is_demo && <StatusTag kind="neutral">Demo data</StatusTag>}
       </div>
       {body}
-      {showFinal &&
-        row.live_data &&
-        summary?.hr_status === "final" &&
-        !summary.hr_finalize_dirty &&
-        Date.now() - Date.parse(summary.ended_at) >= FINALIZE_GRACE_MS && (
-          <p className="mt-2 text-footnote font-bold text-text-2">{SUMMARY_COPY.final}</p>
-        )}
+      {showFinal && isFinal && (
+        <p className="mt-2 text-footnote font-bold text-text-2">{SUMMARY_COPY.final}</p>
+      )}
     </Card>
   );
 }

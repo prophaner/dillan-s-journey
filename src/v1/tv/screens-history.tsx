@@ -39,6 +39,7 @@ import {
   TvPanel,
   TvQr,
   TvZoneBars,
+  TvZonesHeader,
 } from "./ui";
 import { coverageLine } from "@/v1/core/hr-views";
 
@@ -49,6 +50,8 @@ export const TV_PROFILE_COPY = {
     "Units, weekly goal, live heart rate, zones, and contact methods are managed on your phone.",
   autoLock: "This TV locks itself after 15 minutes without activity, except during a workout.",
   switchUser: "Switch user",
+  /** read-only TV S14 (strap status, relay devices, relay QR) */
+  liveData: "Live data",
   lock: "Lock this TV",
   remove: "Remove my profile",
   rememberOn: "Name shown on this TV: On",
@@ -392,18 +395,27 @@ export function TvDetail({ sessionId, day }: { sessionId: string; day?: string |
             </div>
           </div>
           <TvPanel className="gap-5 overflow-hidden">
-            <TvEyebrow>Heart-rate zones</TvEyebrow>
+            <TvZonesHeader isDemo={row.is_demo} />
             {!row.live_data ? (
               <p className="text-tv-base text-text-2">{ZONE_COPY.noLiveData}</p>
             ) : !s || s.hr_status === "pending" ? (
               <p className="text-tv-base text-text-2">{SUMMARY_COPY.finalizing}</p>
             ) : (
-              <TvZoneBars
-                compact
-                zoneMs={s.zone_ms}
-                unmeasuredMs={s.unmeasured_ms}
-                cutoffs={row.zone_snapshot?.cutoffs ?? null}
-              />
+              <>
+                {!row.zone_snapshot?.cutoffs ? (
+                  <p className="text-tv-sm text-text-2">{SUMMARY_COPY.zonesNotSet}</p>
+                ) : (
+                  s.measured_ms === 0 && (
+                    <p className="text-tv-sm text-text-2">{ZONE_COPY.noSamples}</p>
+                  )
+                )}
+                <TvZoneBars
+                  compact
+                  zoneMs={s.zone_ms}
+                  unmeasuredMs={s.unmeasured_ms}
+                  cutoffs={row.zone_snapshot?.cutoffs ?? null}
+                />
+              </>
             )}
             {s && s.hr_status === "final" && s.measured_ms > 0 && (
               <p className="text-tv-sm text-text-2">{coverageLine(s)}</p>
@@ -449,6 +461,9 @@ export function TvProfile() {
           <div className="flex flex-col gap-4 p-2">
             <TvButton focusId="profile-switch" autoFocus onPress={() => tv.requestSwitch()}>
               {TV_PROFILE_COPY.switchUser}
+            </TvButton>
+            <TvButton focusId="profile-live-data" onPress={() => tv.go({ name: "live_data" })}>
+              {TV_PROFILE_COPY.liveData}
             </TvButton>
             <TvButton focusId="profile-lock" onPress={() => tv.requestLock()}>
               {TV_PROFILE_COPY.lock}

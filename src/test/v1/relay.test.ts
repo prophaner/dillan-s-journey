@@ -3,7 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HrIngestRequest, HrIngestResponse, HrSensorRow } from "@/v1/core/hr";
-import { HrAuthError, type AuthUser } from "@/v1/data/api";
+import { HrAuthError, HrSourceOwnedError, type AuthUser } from "@/v1/data/api";
 import { RelayController } from "@/v1/relay/controller";
 import { WebBleHrsDriver, type BtApi } from "@/v1/relay/driver";
 import { IngestPublisher, type PublishState } from "@/v1/relay/publisher";
@@ -47,12 +47,15 @@ class FakeDevice extends EventTarget {
   hr = new FakeChar();
   battery = new FakeChar();
   connectMode: "ok" | "fail" | "hang" = "ok";
+  /** a real H10 takes 1-3 s to finish a GATT connect */
+  connectDelayMs = 0;
   connects = 0;
   gatt = {
     connected: false,
     connect: async () => {
       this.connects++;
       if (this.connectMode === "hang") return new Promise<never>(() => {});
+      if (this.connectDelayMs) await new Promise((r) => setTimeout(r, this.connectDelayMs));
       if (this.connectMode === "fail") throw new Error("NetworkError");
       this.gatt.connected = true;
       return this.gatt;
@@ -103,7 +106,11 @@ const ok = (o: Partial<HrIngestResponse> = {}): HrIngestResponse => ({
   ...o,
 });
 
-function fakeApi(user: AuthUser | null = { id: "u1", email: null, phone: null }) {
+function fakeApi(
+  user: AuthUser | null = { id: "u1", email: null, phone: null },
+  /** hr_sources owners, shared by relays on one device (hr_ingest step 3) */
+  owners = new Map<string, string>(),
+) {
   const calls: HrIngestRequest[] = [];
   const state = {
     user,
@@ -129,6 +136,9 @@ function fakeApi(user: AuthUser | null = { id: "u1", email: null, phone: null })
         calls.push(req);
         if (!state.user) throw new HrAuthError();
         if (state.fail) throw new Error("network");
+        const owner = owners.get(req.p_source_id);
+        if (owner && owner !== state.user.id) throw new HrSourceOwnedError();
+        owners.set(req.p_source_id, state.user.id);
         return ok(state.respond(req));
       }),
       sensorRow: async () => state.sensor,
@@ -152,18 +162,36 @@ const env = (o: Partial<RelayEnv> = {}): RelayEnv => ({
   ...o,
 });
 
+function memoryStorage() {
+  const m = new Map<string, string>();
+  return {
+    getItem: (k: string) => m.get(k) ?? null,
+    setItem: (k: string, v: string) => void m.set(k, v),
+    removeItem: (k: string) => void m.delete(k),
+  };
+}
+
 async function setup(
-  o: { user?: AuthUser | null; device?: FakeDevice; env?: Partial<RelayEnv> } = {},
+  o: {
+    user?: AuthUser | null;
+    device?: FakeDevice;
+    env?: Partial<RelayEnv>;
+    storage?: ReturnType<typeof memoryStorage>;
+    owners?: Map<string, string>;
+  } = {},
 ) {
   const device = o.device ?? new FakeDevice();
   const bt = fakeBt(device);
-  const f = fakeApi(o.user === undefined ? { id: "u1", email: null, phone: null } : o.user);
+  const f = fakeApi(
+    o.user === undefined ? { id: "u1", email: null, phone: null } : o.user,
+    o.owners,
+  );
   const driver = new WebBleHrsDriver(bt as unknown as BtApi);
   const c = new RelayController({
     api: f.api as never,
     driver,
     env: env(o.env),
-    storage: null,
+    storage: o.storage ?? null,
     wakeApi: null,
   });
   await c.start();
@@ -683,5 +711,234 @@ describe("ingest publisher", () => {
     await vi.advanceTimersByTimeAsync(1_200);
     p.stop();
     expect(p.pending).toBe(0);
+  });
+});
+
+// ------------------------------------------------------------------ review fixes
+const U1: AuthUser = { id: "u1", email: null, phone: null };
+const U2: AuthUser = { id: "u2", email: null, phone: null };
+
+/** hr_ingest's demand + forget rules (0006 steps 7/10) for one user's hr_sensors row */
+function demandServer(o: { forgotten?: boolean } = {}) {
+  const srv = { forgotten: !!o.forgotten, wantedUntil: 0, claims: 0 };
+  const respond = (req: HrIngestRequest): Partial<HrIngestResponse> => {
+    if (srv.forgotten && req.p_claim && req.p_sensor != null) srv.forgotten = false;
+    if (req.p_claim) {
+      srv.claims++;
+      if (req.p_sensor) srv.wantedUntil = Date.now() + 600_000;
+    }
+    const wanted = !srv.forgotten && srv.wantedUntil > Date.now();
+    return {
+      accepted: req.p_samples.length,
+      stop_requested: !wanted,
+      sensor_forgotten: srv.forgotten,
+    };
+  };
+  return { srv, respond };
+}
+
+const slowChooser = (bt: ReturnType<typeof fakeBt>, device: FakeDevice, ms: number) =>
+  bt.requestDevice.mockImplementationOnce(
+    () => new Promise((r) => setTimeout(() => r(device), ms)),
+  );
+
+describe("review fixes: connecting outside a demand window", () => {
+  it("a slow GATT connect with no wanted window still claims and goes live (not standby)", async () => {
+    const device = new FakeDevice();
+    device.connectDelayMs = 1_500;
+    const s = await setup({ device });
+    const d = demandServer();
+    s.state.respond = d.respond;
+    s.c.connectTap();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(d.srv.claims).toBe(1);
+    expect(s.c.getSnapshot().mode).toBe("waiting_first");
+    device.hr.emit([0x16, 70]);
+    await vi.advanceTimersByTimeAsync(6_000);
+    device.hr.emit([0x16, 71]);
+    expect(s.c.getSnapshot().mode).toBe("live");
+    expect(device.gatt.connected).toBe(true);
+    expect(s.calls.find((r) => r.p_claim)?.p_sensor).toMatchObject({ serial: "1A2B3C4D" });
+  });
+
+  it("a stale attempt whose GATT connect resolves later is disconnected (strap slot freed)", async () => {
+    const device = new FakeDevice();
+    device.connectDelayMs = 1_500;
+    const s = await setup({ device });
+    s.c.connectTap();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(s.c.getSnapshot().mode).toBe("connecting");
+    s.c.cancel();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(s.c.getSnapshot().mode).toBe("idle");
+    expect(device.gatt.connected).toBe(false);
+  });
+
+  it("standby while a reconnect is pending leaves the strap disconnected", async () => {
+    const device = new FakeDevice();
+    const s = await setup({ device });
+    s.c.connectTap();
+    await vi.advanceTimersByTimeAsync(500);
+    device.hr.emit([0x16, 70]);
+    device.connectDelayMs = 3_000;
+    device.drop();
+    await vi.advanceTimersByTimeAsync(1_100); // a reconnect attempt is now pending
+    s.state.respond = () => ({ stop_requested: true });
+    await vi.advanceTimersByTimeAsync(5_500);
+    expect(s.c.getSnapshot().mode).toBe("standby");
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(device.gatt.connected).toBe(false);
+  });
+});
+
+describe("review fixes: Forget strap, then pair again", () => {
+  it("a slow chooser after a Forget re-pairs: the pick claims and clears forgotten", async () => {
+    const device = new FakeDevice();
+    device.connectDelayMs = 1_000;
+    const s = await setup({ device });
+    const d = demandServer({ forgotten: true });
+    s.state.respond = d.respond;
+    await vi.advanceTimersByTimeAsync(6_000); // idle heartbeats see sensor_forgotten
+    expect(device.forgotten).toBe(false); // nothing held, nothing to forget
+    expect(s.c.getSnapshot().notice).toBeNull();
+    slowChooser(s.bt, device, 3_000);
+    s.c.connectTap();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(d.srv.forgotten).toBe(false);
+    expect(s.c.getSnapshot().mode).toBe("waiting_first");
+    expect(s.c.getSnapshot().notice).toBeNull();
+    expect(device.forgotten).toBe(false);
+  });
+
+  it("a forgotten_at row update during choosing does not cancel the pick", async () => {
+    const device = new FakeDevice();
+    const s = await setup({ device });
+    slowChooser(s.bt, device, 2_000);
+    s.c.connectTap();
+    await vi.advanceTimersByTimeAsync(100);
+    s.state.sensorCb?.({
+      user_id: "u1",
+      sensor_kind: "polar_h10",
+      sensor_name: "Polar H10 1A2B3C4D",
+      sensor_serial: "1A2B3C4D",
+      paired_at: new Date().toISOString(),
+      forgotten_at: new Date().toISOString(),
+      wanted_until: null,
+      last_source_id: null,
+      last_battery_pct: null,
+      battery_read_at: null,
+    });
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(s.c.getSnapshot().mode).toBe("waiting_first");
+  });
+
+  it("forgotten while live: forgets once, idle heartbeats never repeat it", async () => {
+    const { c, device, state } = await connected();
+    device.hr.emit([0x16, 72]);
+    await vi.advanceTimersByTimeAsync(1_100);
+    const forget = vi.spyOn(device, "forget");
+    state.respond = () => ({ sensor_forgotten: true, stop_requested: true });
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(c.getSnapshot().mode).toBe("idle");
+    expect(c.getSnapshot().notice).toBe("sensor_forgotten");
+    expect(forget).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("review fixes: wearer switch on one relay device", () => {
+  it("u1 -> signed out -> u2: strap dropped to idle; nothing of u1's strap is sent as u2", async () => {
+    const { c, device, state, calls } = await connected();
+    device.hr.emit([0x16, 72]);
+    await vi.advanceTimersByTimeAsync(1_100);
+    const u1Source = c.sourceId;
+    state.user = null;
+    state.authCb?.(null);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(device.gatt.connected).toBe(true); // S16: BLE stays up while signed out
+    state.user = U2;
+    state.authCb?.(U2);
+    device.hr.emit([0x16, 99]);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(c.getSnapshot().mode).toBe("idle");
+    expect(c.getSnapshot().sensor).toBeNull();
+    expect(device.gatt.connected).toBe(false);
+    const asU2 = calls.filter((r) => r.p_expected_user_id === "u2");
+    expect(asU2.length).toBeGreaterThan(0);
+    expect(asU2.every((r) => r.p_samples.length === 0 && r.p_sensor === null)).toBe(true);
+    expect(asU2.every((r) => r.p_source_id !== u1Source)).toBe(true);
+  });
+
+  it("u1 -> signed out -> u1 resumes on the same strap", async () => {
+    const { c, device, state, calls } = await connected();
+    device.hr.emit([0x16, 72]);
+    state.user = null;
+    state.authCb?.(null);
+    await vi.advanceTimersByTimeAsync(1_000);
+    state.user = U1;
+    state.authCb?.(U1);
+    device.hr.emit([0x16, 80]);
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(c.getSnapshot().mode).toBe("live");
+    expect(lastCall(calls).p_expected_user_id).toBe("u1");
+  });
+
+  it("a direct switch never sends u1's strap as u2's p_sensor", async () => {
+    const { c, device, state, calls } = await connected();
+    device.hr.emit([0x16, 72]);
+    await vi.advanceTimersByTimeAsync(1_100);
+    state.user = U2;
+    state.authCb?.(U2);
+    device.hr.emit([0x16, 73]);
+    await vi.advanceTimersByTimeAsync(12_000);
+    const asU2 = calls.filter((r) => r.p_expected_user_id === "u2");
+    expect(asU2.length).toBeGreaterThan(0);
+    expect(asU2.every((r) => r.p_sensor === null && r.p_mode === "idle")).toBe(true);
+    expect(c.getSnapshot().mode).toBe("idle");
+  });
+
+  it("a stale relay id owned by another user is re-minted, not shown as signed out", async () => {
+    const storage = memoryStorage();
+    const owners = new Map<string, string>();
+    const a = await setup({ storage, owners });
+    await vi.advanceTimersByTimeAsync(1_000);
+    const aId = a.c.sourceId;
+    a.c.dispose();
+    // Next load on the same device, signed in as the other household member.
+    const b = await setup({ storage, owners, user: U2 });
+    expect(b.c.sourceId).toBe(aId);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(b.c.getSnapshot().signedOut).toBe(false);
+    expect(b.c.getSnapshot().notice).toBeNull();
+    expect(b.c.sourceId).not.toBe(aId);
+    expect(owners.get(b.c.sourceId)).toBe("u2");
+    expect(lastCall(b.calls).p_source_id).toBe(b.c.sourceId);
+    b.c.dispose();
+  });
+
+  it("the DEMO strap stops on a wearer switch; Connect strap works for the new user", async () => {
+    const { c, state, bt } = await setup();
+    c.startDemo();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(c.getSnapshot().demo).toBe(true);
+    state.user = U2;
+    state.authCb?.(U2);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(c.getSnapshot().demo).toBe(false);
+    expect(c.getSnapshot().mode).toBe("idle");
+    c.connectTap();
+    expect(bt.requestDevice).toHaveBeenCalledTimes(1);
+  });
+
+  it("a token refresh never un-pauses a revoked relay", async () => {
+    const { c, state, calls } = await connected();
+    state.respond = () => ({ revoked: true, stop_requested: true });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(c.getSnapshot().notice).toBe("revoked");
+    const n = calls.length;
+    state.authCb?.(U1); // TOKEN_REFRESHED
+    state.authCb?.(U1); // SIGNED_IN on focus
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(calls.length).toBe(n);
+    expect(c.getSnapshot().notice).toBe("revoked");
   });
 });

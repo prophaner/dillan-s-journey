@@ -19,8 +19,14 @@ export interface LiveHr {
   sensor: { paired: boolean } | null;
   /** the hr_sensors row when paired (null when none or forgotten) */
   sensorRow: HrSensorRow | null;
+  /** both rows were read successfully at least once (before that, H0 is not a fact) */
   loaded: boolean;
+  /** the last read failed; previous rows are kept and the read is retried (2, 5, 15 s…) */
+  error: boolean;
 }
+
+/** retry delays after a failed hr_live/hr_sensors read */
+export const HR_READ_RETRY_MS = [2_000, 5_000, 15_000] as const;
 
 /**
  * Paired = an hr_sensors row that is not tombstoned. A demo relay never saves a strap, so a
@@ -37,12 +43,15 @@ export function useLiveHr(userId: string): LiveHr {
     live: HrLiveRow | null;
     row: HrSensorRow | null;
     loaded: boolean;
-  }>({ live: null, row: null, loaded: false });
+    error: boolean;
+  }>({ live: null, row: null, loaded: false, error: false });
   useEffect(() => {
     let on = true;
     let lastRev = -1;
+    let failures = 0;
+    let retry: ReturnType<typeof setTimeout> | undefined;
     // Different user (Switch user): never show the previous user's row, even for a frame.
-    setState({ live: null, row: null, loaded: false });
+    setState({ live: null, row: null, loaded: false, error: false });
     const take = (row: HrLiveRow | null) => {
       if (!on || !row || row.user_id !== userId) return;
       // Rows with rev <= the cached rev are ignored (h10-design 5.5).
@@ -54,7 +63,8 @@ export function useLiveHr(userId: string): LiveHr {
       if (!on || (row && row.user_id !== userId)) return;
       setState((s) => ({ ...s, row }));
     };
-    const reselect = () =>
+    const reselect = () => {
+      clearTimeout(retry);
       void Promise.all([
         api.hr.live().catch(() => undefined),
         api.hr.sensorRow().catch(() => undefined),
@@ -64,13 +74,22 @@ export function useLiveHr(userId: string): LiveHr {
         // A Realtime row may have arrived first: keep it unless the read is newer.
         const newer = !!live && live.user_id === userId && live.rev > lastRev;
         if (newer) lastRev = (live as HrLiveRow).rev;
+        // A failed read is not "no row": keep what we had, say so, and try again.
+        const failed = live === undefined || row === undefined;
+        if (failed) {
+          const i = Math.min(failures, HR_READ_RETRY_MS.length - 1);
+          failures++;
+          retry = setTimeout(reselect, HR_READ_RETRY_MS[i]);
+        } else failures = 0;
         setState((s) => ({
           ...s,
           ...(newer ? { live: live as HrLiveRow } : {}),
           ...(row !== undefined ? { row } : {}),
-          loaded: true,
+          loaded: s.loaded || !failed,
+          error: failed,
         }));
       });
+    };
     reselect();
     const offLive = api.realtime.onHrLive(userId, take);
     const offSensor = api.realtime.onHrSensor(userId, takeSensor);
@@ -81,6 +100,7 @@ export function useLiveHr(userId: string): LiveHr {
     if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVis);
     return () => {
       on = false;
+      clearTimeout(retry);
       offLive();
       offSensor();
       if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVis);
@@ -92,6 +112,7 @@ export function useLiveHr(userId: string): LiveHr {
       sensor: pairedFrom(state.row, state.live),
       sensorRow: sensorActive(state.row) ? state.row : null,
       loaded: state.loaded,
+      error: state.error,
     }),
     [state],
   );

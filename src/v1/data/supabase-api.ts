@@ -28,6 +28,7 @@ import type {
 } from "@/v1/core/types";
 import {
   HrAuthError,
+  HrSourceOwnedError,
   newId,
   RevisionConflictError,
   TemplateInvalidError,
@@ -758,6 +759,12 @@ export function createSupabaseApi(): DillanApi {
       async ingest(req) {
         const res = await supabase.rpc("hr_ingest", ingestArgs(req));
         if (res.error) {
+          // 42501 'source belongs to another user' is a stale relay id, not a signed-out caller.
+          if (
+            res.error.code === "42501" &&
+            /source belongs to another user/.test(res.error.message)
+          )
+            throw new HrSourceOwnedError();
           if (isAuthRejection(res.status, res.error.code) || res.error.code === "28000")
             throw new HrAuthError();
           throw Object.assign(new Error(res.error.message ?? "ingest_failed"), {

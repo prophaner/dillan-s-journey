@@ -11,7 +11,12 @@ import { newId } from "@/v1/data/api";
 import { useApi } from "@/v1/data/client";
 import { useProfile, useTemplate, useZones } from "@/v1/data/queries";
 import { workoutLine } from "@/v1/session/format";
-import { preflightChip } from "@/v1/core/hr-views";
+import {
+  PREFLIGHT_HR_COPY,
+  preflightChip,
+  preflightKindMismatch,
+  preflightReady,
+} from "@/v1/core/hr-views";
 import { useLiveHeartRate } from "@/v1/session/live-hr";
 import { deviceSource } from "@/v1/session/use-session";
 import { useQueryClient } from "@tanstack/react-query";
@@ -71,9 +76,10 @@ export function PreflightPage({
     zonesConfirmed,
   });
   const health = hr.health;
-  // Ready means a live reading right now (H3 with a BPM), never relay_mode alone.
-  const ready = health.id === "H3_live" && hr.live?.contact !== false && health.bpm != null;
-  const chip = preflightChip(health, hr.live?.contact);
+  // Ready means a live reading right now (H3 with a BPM) of this session's kind (demo or real).
+  const ready = preflightReady(health, hr.live, demo);
+  const kindMismatch = preflightKindMismatch(health, hr.live, demo);
+  const chip = preflightChip(health, hr.live?.contact, kindMismatch);
 
   const [busy, setBusy] = useState<"live" | "off" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -196,9 +202,18 @@ export function PreflightPage({
 
   const name = profile.data?.display_name ?? "";
   const z = zones.data;
-  const body = ready
-    ? `Reading ${health.bpm} bpm, ${Math.floor((health.ageMs ?? 0) / 1000)}s ago · Heart rate from ${health.via ?? "the relay"} for ${name || "you"}`
-    : health.detail;
+  // Before the first successful read, H0 is not a fact: say we're checking, never "not set up".
+  const body = !hr.loaded
+    ? hr.error
+      ? PREFLIGHT_HR_COPY.readFailed
+      : PREFLIGHT_HR_COPY.checking
+    : kindMismatch
+      ? demo
+        ? PREFLIGHT_HR_COPY.realOnly
+        : PREFLIGHT_HR_COPY.demoOnly
+      : ready
+        ? `Reading ${health.bpm} bpm, ${Math.floor((health.ageMs ?? 0) / 1000)}s ago · Heart rate from ${health.via ?? "the relay"} for ${name || "you"}`
+        : health.detail;
 
   return (
     <>
@@ -226,7 +241,7 @@ export function PreflightPage({
           </div>
           <p className="mt-2 flex flex-wrap items-center gap-2 text-subhead text-text-2">
             <span>{body}</span>
-            {health.demo && (
+            {hr.loaded && health.demo && (
               <span className="rounded-chip border border-text px-2 text-footnote font-bold text-text">
                 DEMO
               </span>
@@ -237,7 +252,7 @@ export function PreflightPage({
               Strap battery {hr.live.battery_pct}%.
             </p>
           )}
-          {!ready && (
+          {hr.loaded && !ready && !kindMismatch && (
             <>
               <p className="mt-2 text-subhead text-text-2">
                 Open {host}/relay on your Android phone or computer and tap Connect strap.

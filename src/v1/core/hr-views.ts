@@ -31,8 +31,39 @@ export function batteryPctOf(
 
 export const isBatteryLow = (pct: number | null) => pct != null && pct <= BATTERY_LOW_PCT;
 
+/**
+ * S08: "Start with live data" is enabled only by a live reading right now (H3 with a BPM, never
+ * relay_mode alone) of the same kind as the session being started: hr_ingest refuses DEMO
+ * readings in a real session and real ones in a demo session (demo_mismatch).
+ */
+export function preflightReady(h: HealthState, live: HrLiveRow | null, demo: boolean): boolean {
+  return (
+    h.id === "H3_live" &&
+    live?.contact !== false &&
+    h.bpm != null &&
+    (live?.is_demo ?? false) === demo
+  );
+}
+
+/** a live reading of the other kind (DEMO relay vs real strap) is showing in this preflight */
+export function preflightKindMismatch(h: HealthState, live: HrLiveRow | null, demo: boolean) {
+  return h.id === "H3_live" && live != null && live.is_demo !== demo;
+}
+
+export const PREFLIGHT_HR_COPY = {
+  demoOnly: "These are DEMO readings. They only count in a demo workout.",
+  realOnly: "A real strap is relaying. A demo workout only takes DEMO readings.",
+  checking: "Checking heart rate…",
+  readFailed: "Couldn't check heart rate. Trying again…",
+} as const;
+
 /** S08 Preflight chip (phone and TV). */
-export function preflightChip(h: HealthState, contact: boolean | null | undefined): Chip {
+export function preflightChip(
+  h: HealthState,
+  contact: boolean | null | undefined,
+  kindMismatch = false,
+): Chip {
+  if (kindMismatch) return { label: "Unavailable", tone: "warn" };
   if (h.id === "H3_live" && contact !== false && h.bpm != null)
     return { label: "Live · ready", tone: "live" };
   switch (h.id) {
@@ -100,15 +131,16 @@ export function homeHrCard(
   }
   if (h.id === "H1_relay_idle" && h.variant === "standby")
     return { ...base, chip: { label: "Ready", tone: "live" }, text: HOME_HR_COPY.standby(relay) };
-  if (h.id === "H1_relay_idle" || h.id === "H6_relay_offline" || h.id === "H5_no_recent")
+  if (h.id === "H1_relay_idle" || h.id === "H6_relay_offline")
     return {
       ...base,
       chip: { label: "Relay offline", tone: "warn" },
       text: HOME_HR_COPY.offline,
       relayOffline: true,
-      showRelayQr: h.id !== "H5_no_recent",
+      showRelayQr: true,
     };
-  // Connected but not live yet (waiting, delayed, contact, reconnecting): the H-state says why.
+  // Connected but not live (waiting, delayed, no recent reading, contact, reconnecting): the
+  // relay is open and heartbeating, so the H-state says why; never "open the relay".
   return { ...base, chip: { label: h.label, tone: "warn" }, text: h.detail };
 }
 
@@ -151,6 +183,8 @@ export const RELAY_COPY = {
   differentStrap: (old: string, next: string) =>
     `This is a different strap than last time (was ${old}). Check this ID matches the number printed on your strap: ${next}.`,
   offline: (k: number) => `Offline - holding ${k}s of readings`,
+  /** the announced form (the visible count changes every second) */
+  offlineShort: "Offline - holding readings",
   lastSent: (n: number) => `Last sent ${n}s ago`,
   battery: (p: number) => `Battery ${p}%`,
   batteryLow: (p: number) => `Strap battery ${p}%. Replace the CR2025 soon.`,

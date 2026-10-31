@@ -93,6 +93,8 @@ export class WebBleHrsDriver implements RelayDriver {
   private device: BtDevice | null = null;
   private char: BtCharacteristic | null = null;
   private attempt = 0;
+  /** the reconnect() attempt still running, if any */
+  private connecting: number | null = null;
   private selfDisconnecting = false;
   private manual = false;
   private battery: number | null = null;
@@ -204,9 +206,29 @@ export class WebBleHrsDriver implements RelayDriver {
     setTimeout(() => (this.selfDisconnecting = false), 1000);
   }
 
+  /**
+   * A stale attempt whose gatt.connect() resolved anyway (cancel, timeout, standby, pick again
+   * while it was pending) must not leave the strap connected: that holds one of the H10's two BLE
+   * slots while the relay says it is idle or resting. Only skipped when a newer reconnect() on the
+   * same device is running, because it shares this connection.
+   */
+  private dropStale(device: BtDevice, my: number) {
+    const newer = this.connecting != null && this.connecting !== my && this.device === device;
+    if (newer || !device.gatt?.connected) return;
+    if (device === this.device) this.selfDisconnecting = true;
+    try {
+      device.gatt.disconnect();
+    } catch {
+      /* ignore */
+    }
+    if (device === this.device) setTimeout(() => (this.selfDisconnecting = false), 1000);
+  }
+
   private async setupGatt(device: BtDevice, my: number): Promise<SensorInfo> {
     const live = () => {
-      if (my !== this.attempt) throw new StaleAttemptError();
+      if (my === this.attempt) return;
+      this.dropStale(device, my);
+      throw new StaleAttemptError();
     };
     if (!device.gatt) throw new Error("no_gatt");
     const server = await device.gatt.connect();
@@ -244,6 +266,7 @@ export class WebBleHrsDriver implements RelayDriver {
     if (!device) throw new Error("no_device");
     this.manual = false;
     const my = ++this.attempt;
+    this.connecting = my;
     try {
       const info = await withTimeout(
         this.setupGatt(device, my),
@@ -259,6 +282,8 @@ export class WebBleHrsDriver implements RelayDriver {
         this.selfDisconnect();
       }
       throw e;
+    } finally {
+      if (this.connecting === my) this.connecting = null;
     }
   }
 

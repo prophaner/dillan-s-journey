@@ -1,6 +1,7 @@
 // TV heart-rate pieces (h10-design 6): the full-screen relay QR (S04 card, S08 "Show relay QR")
 // and the S09 Heart rate sheet. HR state changes never move focus or open these on their own.
 
+import { useEffect, useRef } from "react";
 import type { HealthState } from "@/v1/core/health";
 import { BATTERY_LOW_PCT, type HrLiveRow, type HrSensorRow } from "@/v1/core/hr";
 import { batteryPctOf, strapName } from "@/v1/core/hr-views";
@@ -15,7 +16,24 @@ export const TV_HR_COPY = {
   showQr: "Show relay QR",
   sheetTitle: "Heart rate",
   close: "Close",
+  stateToast: (label: string) => `Heart rate: ${label}`,
 } as const;
+
+/**
+ * h10-design 6: an HR state change shows the non-focusable toast "Heart rate: {label}" for 4 s and
+ * never moves focus. Not on the first load (that is the screen's initial state, not a change).
+ */
+export function useHrStateToast(health: Pick<HealthState, "id" | "label">, loaded: boolean) {
+  const tv = useTv();
+  const prev = useRef<string | null>(null);
+  const toast = tv.toast;
+  useEffect(() => {
+    if (!loaded) return;
+    if (prev.current != null && prev.current !== health.id)
+      toast(TV_HR_COPY.stateToast(health.label));
+    prev.current = health.id;
+  }, [loaded, health.id, health.label, toast]);
+}
 
 function origin() {
   return typeof window !== "undefined"

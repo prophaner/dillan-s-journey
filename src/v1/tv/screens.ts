@@ -15,7 +15,8 @@ export type TvScreen =
   | { name: "session"; sessionId: string }
   | { name: "calendar"; month?: string; day?: string }
   | { name: "detail"; sessionId: string; day?: string }
-  | { name: "profile" };
+  | { name: "profile" }
+  | { name: "live_data" };
 
 export type TvModal =
   | { kind: "end" } // M3
@@ -66,6 +67,8 @@ export function backFor(screen: TvScreen, ctx: BackContext): BackAction {
     case "calendar":
     case "profile":
       return { kind: "go", screen: { name: "home" } };
+    case "live_data":
+      return { kind: "go", screen: { name: "profile" } };
     case "preflight":
       return { kind: "go", screen: { name: "choose" } };
     case "session":

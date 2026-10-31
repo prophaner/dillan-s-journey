@@ -51,6 +51,7 @@ import { clearTvMemory } from "./memory-store";
 import { backFor, EXIT_TOAST, type TvModal, type TvScreen } from "./screens";
 import { TvChoose, TvHome, TvPreflight, TvProgram } from "./screens-main";
 import { TvCalendar, TvDetail, TvProfile, TvRunningDialog } from "./screens-history";
+import { TvLiveData } from "./screens-live-data";
 import { TvSession } from "./session-screen";
 import { Chooser, FirstRun, Pairing, TV_COPY } from "./signed-out";
 
@@ -676,7 +677,9 @@ function SignedIn({
       // S08: Play/Pause equals Start only while Start is enabled (heart rate Live).
       if (screen.name === "preflight" && !modal)
         document
-          .querySelector<HTMLButtonElement>('[data-focus-id="pre-start"]:not([disabled])')
+          .querySelector<HTMLButtonElement>(
+            '[data-focus-id="pre-start"]:not([disabled]):not([aria-disabled="true"])',
+          )
           ?.click();
     },
     menu: () => go({ name: "profile" }),
@@ -715,6 +718,9 @@ function SignedIn({
         break;
       case "profile":
         body = <TvProfile />;
+        break;
+      case "live_data":
+        body = <TvLiveData />;
         break;
       default:
         body = <TvHome />;

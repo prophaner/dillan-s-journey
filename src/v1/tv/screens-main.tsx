@@ -19,14 +19,21 @@ import {
 } from "@/v1/data/queries";
 import { formatDay, loadText, minutesText, repsText } from "@/v1/session/format";
 import { sourceLine } from "@/v1/core/health";
-import { HOME_HR_COPY, homeHrCard, preflightChip } from "@/v1/core/hr-views";
+import {
+  HOME_HR_COPY,
+  homeHrCard,
+  PREFLIGHT_HR_COPY,
+  preflightChip,
+  preflightKindMismatch,
+  preflightReady,
+} from "@/v1/core/hr-views";
 import { useLiveHeartRate } from "@/v1/session/live-hr";
 import { compareLine, HOME_COPY, toHistory } from "@/v1/ui/home-page";
 import { PREFLIGHT_COPY } from "@/v1/ui/preflight-page";
 import { SpotMark } from "@/components/dillan/spot-mark";
 import { cn } from "@/lib/utils";
 import { useTv } from "./context";
-import { TV_HR_COPY, TvRelayQrDialog } from "./hr-pieces";
+import { TV_HR_COPY, TvRelayQrDialog, useHrStateToast } from "./hr-pieces";
 import type { TvScreen } from "./screens";
 import {
   loadView,
@@ -137,6 +144,8 @@ export function TvHome() {
   const row = current.data;
   const live = row && (row.state === "active" || row.state === "paused") ? row : null;
   const health = hr.health;
+  // Before the first successful read nothing is known: never "Not set up" (H0) by default.
+  const hrLoaded = hr.loaded;
   const hrCard = homeHrCard(health, hr.live, hr.sensorRow);
   const host = typeof window !== "undefined" ? window.location.host : "";
   const items = history.data ?? [];
@@ -203,24 +212,28 @@ export function TvHome() {
               <span className="flex items-center justify-between gap-4">
                 <TvEyebrow>{HOME_HR_COPY.eyebrow}</TvEyebrow>
                 <span className="flex items-center gap-3">
-                  {health.demo && (
+                  {hrLoaded && health.demo && (
                     <span className="rounded-chip border-2 border-text px-3 text-tv-xs font-bold">
                       DEMO
                     </span>
                   )}
-                  <TvChip {...hrCard.chip} />
+                  {hrLoaded && <TvChip {...hrCard.chip} />}
                 </span>
               </span>
               {/* TV: H1/H6 says where to open the relay, next to the QR (h10-design 6 S04). */}
               <span className="line-clamp-2 text-tv-base text-text-2">
-                {hrCard.showRelayQr
-                  ? HOME_HR_COPY.tvOpenRelay(host, hr.live?.holder_name ?? "your relay device")
-                  : hrCard.text}
+                {!hrLoaded
+                  ? hr.error
+                    ? PREFLIGHT_HR_COPY.readFailed
+                    : PREFLIGHT_HR_COPY.checking
+                  : hrCard.showRelayQr
+                    ? HOME_HR_COPY.tvOpenRelay(host, hr.live?.holder_name ?? "your relay device")
+                    : hrCard.text}
               </span>
-              {hrCard.battery && (
+              {hrLoaded && hrCard.battery && (
                 <span className="text-tv-sm font-bold text-hold">{hrCard.battery}</span>
               )}
-              {hrCard.notSetUp ? (
+              {!hrLoaded ? null : hrCard.notSetUp ? (
                 <span className="text-tv-sm text-text-3">{HOME_HR_COPY.tvFallback}</span>
               ) : hrCard.showRelayQr ? null : (
                 zones.data &&
@@ -229,7 +242,7 @@ export function TvHome() {
                 )
               )}
             </span>
-            {hrCard.showRelayQr && (
+            {hrLoaded && hrCard.showRelayQr && (
               <TvQr
                 value={`${typeof window !== "undefined" ? window.location.origin : ""}/relay`}
                 label={`QR code for ${host}/relay`}
@@ -625,7 +638,10 @@ export function TvPreflight({ templateId }: { templateId: string }) {
     zonesConfirmed,
   });
   const health = hr.health;
-  const ready = health.id === "H3_live" && hr.live?.contact !== false && health.bpm != null;
+  // The TV starts real sessions only: DEMO readings never make it ready (demo_mismatch).
+  const ready = preflightReady(health, hr.live, false);
+  const kindMismatch = preflightKindMismatch(health, hr.live, false);
+  useHrStateToast(health, hr.loaded);
   // Acceptance 43: turning Live never moves focus; a polite live region says so.
   const [announce, setAnnounce] = useState("");
   const wasReady = useRef<boolean | null>(null);
@@ -638,11 +654,13 @@ export function TvPreflight({ templateId }: { templateId: string }) {
   const [error, setError] = useState<string | null>(null);
   const attempt = useRef(newId());
   // Acceptance 18: Start is the initial focus only when live; decided once, never moved later.
+  // The data-autofocus target is fixed by that decision (never follows `ready`), and Start is
+  // only soft-disabled, so no HR state change can move focus (h10-design 6, acceptance 43).
   const [startFocus, setStartFocus] = useState<boolean | null>(null);
   useEffect(() => {
     if (startFocus === null && hr.loaded) setStartFocus(ready);
   }, [startFocus, hr.loaded, ready]);
-  const startOnFocus = startFocus === true && ready;
+  const startOnFocus = startFocus === true;
 
   useEffect(() => {
     void api.hr.request(10).catch(() => undefined);
@@ -696,7 +714,7 @@ export function TvPreflight({ templateId }: { templateId: string }) {
     }
   }
 
-  const chip = preflightChip(health, hr.live?.contact);
+  const chip = preflightChip(health, hr.live?.contact, kindMismatch);
   const name = profile.data?.display_name ?? "";
   const host = typeof window !== "undefined" ? window.location.host : "";
 
@@ -734,19 +752,27 @@ export function TvPreflight({ templateId }: { templateId: string }) {
             <TvCard className="flex flex-col gap-2 p-6">
               <div className="flex items-center justify-between gap-4">
                 <TvEyebrow>{PREFLIGHT_COPY.strap}</TvEyebrow>
-                <TvChip {...chip} />
+                {hr.loaded && <TvChip {...chip} />}
               </div>
               <p className="text-tv-base text-text-2">
-                {ready && health.bpm != null
-                  ? `Reading ${health.bpm} bpm, ${Math.floor((health.ageMs ?? 0) / 1000)}s ago · ${sourceLine(health.via ?? "the relay", name || "you")}`
-                  : health.detail}
-                {health.demo && (
+                {!hr.loaded
+                  ? hr.error
+                    ? PREFLIGHT_HR_COPY.readFailed
+                    : PREFLIGHT_HR_COPY.checking
+                  : kindMismatch
+                    ? PREFLIGHT_HR_COPY.demoOnly
+                    : ready && health.bpm != null
+                      ? `Reading ${health.bpm} bpm, ${Math.floor((health.ageMs ?? 0) / 1000)}s ago · ${sourceLine(health.via ?? "the relay", name || "you")}`
+                      : health.detail}
+                {hr.loaded && health.demo && (
                   <span className="ml-3 rounded-chip border-2 border-text px-3 text-tv-xs font-bold text-text">
                     DEMO
                   </span>
                 )}
               </p>
-              {!ready && <p className="text-tv-sm text-text-2">{TV_HR_COPY.fixLine(host)}</p>}
+              {hr.loaded && !ready && !kindMismatch && (
+                <p className="text-tv-sm text-text-2">{TV_HR_COPY.fixLine(host)}</p>
+              )}
               <p className="sr-only" aria-live="polite">
                 {announce}
               </p>
@@ -772,15 +798,16 @@ export function TvPreflight({ templateId }: { templateId: string }) {
             )}
             <p className="text-tv-sm text-text-2">{PREFLIGHT_COPY.withoutLiveHelp}</p>
             <div className="mt-auto flex gap-4 p-2">
-              {/* Start is disabled whenever HR is not live; focus then sits on "Continue without
-                  live data", never on the top bar. Neither is disabled while starting (begin()
-                  ignores repeats), so focus cannot fall back to the avatar mid-start. */}
+              {/* Start is soft-disabled whenever HR is not live: it ignores OK but keeps focus, so
+                  an HR change never moves focus. Nothing is disabled while starting (begin()
+                  ignores repeats), so focus cannot fall back to the avatar mid-start. The relay QR
+                  button stays mounted for the same reason. */}
               <TvButton
                 focusId="pre-start"
                 autoFocus={startOnFocus}
                 variant="primary"
                 size="md"
-                disabled={!ready}
+                softDisabled={!ready}
                 aria-busy={busy || undefined}
                 onPress={() => void begin(true)}
               >
@@ -795,15 +822,13 @@ export function TvPreflight({ templateId }: { templateId: string }) {
               >
                 {PREFLIGHT_COPY.withoutLive}
               </TvButton>
-              {!ready && (
-                <TvButton
-                  focusId="pre-relay-qr"
-                  size="md"
-                  onPress={() => tv.openModal({ kind: "relay_qr" })}
-                >
-                  {TV_HR_COPY.showQr}
-                </TvButton>
-              )}
+              <TvButton
+                focusId="pre-relay-qr"
+                size="md"
+                onPress={() => tv.openModal({ kind: "relay_qr" })}
+              >
+                {TV_HR_COPY.showQr}
+              </TvButton>
               <TvButton
                 focusId="pre-back"
                 variant="ghost"

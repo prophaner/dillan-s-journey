@@ -26,6 +26,7 @@ import {
   type StoredSample,
 } from "@/v1/core/hr";
 import type { SessionSummaryRow, WorkoutSessionRow } from "@/v1/core/types";
+import { HrSourceOwnedError } from "./api";
 
 export const MOCK_HR_KEY = "dillan.mock.hr";
 export const MOCK_HR_SINCE_KEY = "dillan.mock.hr.since";
@@ -224,7 +225,7 @@ export function mockIngest(
 
   // 3. source registry
   let src = hr.sources.find((s) => s.id === req.p_source_id);
-  if (src && src.user_id !== uid) throw new Error("source belongs to another user");
+  if (src && src.user_id !== uid) throw new HrSourceOwnedError();
   if (!src) {
     src = {
       id: req.p_source_id,

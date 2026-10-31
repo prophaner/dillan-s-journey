@@ -83,12 +83,17 @@ export function HomePage() {
       {history.isLoading || !profile ? (
         <ScreenState kind="loading" />
       ) : history.isError ? (
-        <ScreenState
-          kind="failed"
-          title="Couldn't load your progress"
-          body="Check your connection."
-          action={{ label: "Try again", onClick: () => void history.refetch() }}
-        />
+        <>
+          <ScreenState
+            kind="failed"
+            title="Couldn't load your progress"
+            body="Check your connection."
+            action={{ label: "Try again", onClick: () => void history.refetch() }}
+          />
+          <div className="mt-4">
+            <HomeHrCard userId={user.id} />
+          </div>
+        </>
       ) : (
         <Progress
           items={history.data ?? []}
@@ -96,9 +101,10 @@ export function HomePage() {
           tz={tz}
           goal={goal}
           hasTemplates={(templates.data?.length ?? 0) > 0}
+          // S04 mockup: the strap card sits between This week and Most recent.
+          hrCard={<HomeHrCard userId={user.id} />}
         />
       )}
-      <HomeHrCard userId={user.id} />
     </>
   );
 }
@@ -109,32 +115,38 @@ export function Progress({
   tz,
   goal,
   hasTemplates,
+  hrCard = null,
 }: {
   items: HistoryItem[];
   now: number;
   tz: string;
   goal: number;
   hasTemplates: boolean;
+  /** S04 "Heart-rate strap" card, placed under This week */
+  hrCard?: React.ReactNode;
 }) {
   const sessions = toHistory(items);
   if (sessions.length === 0)
     return (
-      <Card className="mt-4">
-        <Eyebrow>{HOME_COPY.week}</Eyebrow>
-        <div className="flex flex-col items-center py-6 text-center">
-          <SpotMark size={40} className="text-text" />
-          <p className="mt-3 text-headline font-bold">{HOME_COPY.emptyTitle}</p>
-          <p className="mt-1 text-subhead text-text-2">{HOME_COPY.emptyBody}</p>
-          {!hasTemplates && (
-            <Link
-              to="/program/new"
-              className={cn(dButton({ variant: "secondary", size: "md" }), "mt-5")}
-            >
-              {HOME_COPY.createFirst}
-            </Link>
-          )}
-        </div>
-      </Card>
+      <div className="mt-4 flex flex-col gap-3">
+        <Card>
+          <Eyebrow>{HOME_COPY.week}</Eyebrow>
+          <div className="flex flex-col items-center py-6 text-center">
+            <SpotMark size={40} className="text-text" />
+            <p className="mt-3 text-headline font-bold">{HOME_COPY.emptyTitle}</p>
+            <p className="mt-1 text-subhead text-text-2">{HOME_COPY.emptyBody}</p>
+            {!hasTemplates && (
+              <Link
+                to="/program/new"
+                className={cn(dButton({ variant: "secondary", size: "md" }), "mt-5")}
+              >
+                {HOME_COPY.createFirst}
+              </Link>
+            )}
+          </div>
+        </Card>
+        {hrCard}
+      </div>
     );
 
   const m = weekMetrics(sessions, now, tz, goal);
@@ -198,6 +210,7 @@ export function Progress({
           Current week is in progress ({localDow}). Earlier weeks are complete.
         </p>
       </Card>
+      {hrCard}
       {recent && (
         <Link
           to="/calendar/$sessionId"

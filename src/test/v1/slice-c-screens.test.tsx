@@ -24,6 +24,7 @@ import type { SessionSummaryRow, WorkoutSessionRow } from "@/v1/core/types";
 import { UserProvider } from "@/v1/ui/user-context";
 import { ToastProvider } from "@/components/dillan/overlays";
 import { PreflightPage, PREFLIGHT_COPY } from "@/v1/ui/preflight-page";
+import { PREFLIGHT_HR_COPY } from "@/v1/core/hr-views";
 import { SessionPage } from "@/v1/ui/session-page";
 import { SessionDetailPage } from "@/v1/ui/session-detail-page";
 import { SUMMARY_COPY, ZonesCard } from "@/v1/ui/summary-view";
@@ -126,11 +127,20 @@ describe("S08 Preflight initial focus (AC18)", () => {
   });
 
   it("focuses Start only when heart rate is Live", async () => {
+    hrMode = "live"; // the mock relay is the DEMO relay: Live for a demo preflight
+    const tpl = (await api.templates.list())[0]!;
+    harness({ "/p": () => <PreflightPage templateId={tpl.id} demo /> }, "/p");
+    const start = await screen.findByRole("button", { name: PREFLIGHT_COPY.start });
+    await waitFor(() => expect(start).toHaveFocus());
+  });
+
+  it("DEMO readings never make a real preflight ready (they would be demo_mismatch)", async () => {
     hrMode = "live";
     const tpl = (await api.templates.list())[0]!;
     harness({ "/p": () => <PreflightPage templateId={tpl.id} /> }, "/p");
-    const start = await screen.findByRole("button", { name: PREFLIGHT_COPY.start });
-    await waitFor(() => expect(start).toHaveFocus());
+    await screen.findByText(PREFLIGHT_HR_COPY.demoOnly);
+    expect(screen.getByRole("button", { name: PREFLIGHT_COPY.start })).toBeDisabled();
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
   });
 
   it("the running-workout dialog uses the canonical M4 buttons", () => {

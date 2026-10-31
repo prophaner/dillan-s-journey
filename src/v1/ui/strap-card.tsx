@@ -9,7 +9,13 @@ import { Link } from "@tanstack/react-router";
 import { formatDistanceToNowStrict } from "date-fns";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { HrSourceRow } from "@/v1/core/hr";
-import { batteryPctOf, isBatteryLow, S14_COPY, strapName } from "@/v1/core/hr-views";
+import {
+  batteryPctOf,
+  isBatteryLow,
+  PREFLIGHT_HR_COPY,
+  S14_COPY,
+  strapName,
+} from "@/v1/core/hr-views";
 import { useApi } from "@/v1/data/client";
 import { useLiveHeartRate } from "@/v1/session/live-hr";
 import { detectEnv, isInAppUa, quickSupport } from "@/v1/relay/support";
@@ -72,7 +78,12 @@ export function StrapCard({ userId, userName }: { userId: string; userName: stri
       </div>
       <p className="mt-2 text-subhead text-text-2">{S14_COPY.body}</p>
 
-      {!paired ? (
+      {!hr.loaded ? (
+        // Before the first successful read nothing is known: never the unpaired setup steps.
+        <p className="mt-3 text-subhead" role="status">
+          {hr.error ? PREFLIGHT_HR_COPY.readFailed : PREFLIGHT_HR_COPY.checking}
+        </p>
+      ) : !paired ? (
         browser === "no_api" ? (
           <div className="mt-3 flex flex-col gap-3">
             <p className="text-subhead">{S14_COPY.noApi}</p>

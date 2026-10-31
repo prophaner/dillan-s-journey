@@ -172,6 +172,17 @@ export class HrAuthError extends Error {
   }
 }
 
+/**
+ * hr_ingest refused the source id because it belongs to another user (a relay device shared by a
+ * household keeps one localStorage id): the relay mints a new id; this is not a sign-out.
+ */
+export class HrSourceOwnedError extends Error {
+  constructor() {
+    super("source_owned_by_another_user");
+    this.name = "HrSourceOwnedError";
+  }
+}
+
 /** Server rejected a template (same codes as core/validate). */
 export class TemplateInvalidError extends Error {
   constructor(public details: Array<{ path: string; code: string }>) {

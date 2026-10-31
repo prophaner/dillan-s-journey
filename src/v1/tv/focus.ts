@@ -162,7 +162,8 @@ export class FocusEngine {
     return [...this.scope().querySelectorAll<HTMLElement>(SEL)].filter(
       (el) =>
         !el.hasAttribute("disabled") &&
-        el.getAttribute("aria-disabled") !== "true" &&
+        // data-focus-keep: aria-disabled but still focusable (TvButton softDisabled)
+        (el.getAttribute("aria-disabled") !== "true" || el.hasAttribute("data-focus-keep")) &&
         this.isVisible(el),
     );
   }

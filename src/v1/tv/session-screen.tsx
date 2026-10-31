@@ -16,12 +16,12 @@ import { coverageLine } from "@/v1/core/hr-views";
 import { healthFor, useLiveHr, useLiveZones } from "@/v1/session/live-hr";
 import { useNow, useSessionController, useWakeLock } from "@/v1/session/use-session";
 import { DASH_COPY } from "@/v1/ui/session-page";
-import { SUMMARY_COPY } from "@/v1/ui/summary-view";
+import { SUMMARY_COPY, useSummaryFinal } from "@/v1/ui/summary-view";
 import { ZONE_COPY } from "@/v1/ui/zone-pieces";
 import { formatClock } from "@/v1/ui/timezones";
 import { cn } from "@/lib/utils";
 import { useTv } from "./context";
-import { TV_HR_COPY, TvHrSheet } from "./hr-pieces";
+import { TV_HR_COPY, TvHrSheet, useHrStateToast } from "./hr-pieces";
 import { tvMemoryStorage } from "./memory-store";
 import { TvNoteText } from "./screens-history";
 import {
@@ -32,6 +32,7 @@ import {
   TvHints,
   TvPanel,
   TvZoneBars,
+  TvZonesHeader,
   TvZonePill,
 } from "./ui";
 
@@ -190,6 +191,7 @@ function TvDashboard({
     { status: paused ? "paused" : "active", liveData: row.live_data, isDemo: row.is_demo },
     !!cutoffs,
   );
+  useHrStateToast(health, hr.loaded && row.live_data);
   const zones = useLiveZones(
     row.id,
     row.is_demo,
@@ -672,6 +674,7 @@ function TvSummary({ row }: { row: WorkoutSessionRow }) {
   const s = summary.data;
   const cutoffs = row.zone_snapshot?.cutoffs ?? null;
   const discarded = row.outcome === "discarded";
+  const isFinal = useSummaryFinal(row.live_data, s);
   const done = () => tv.go({ name: "calendar" });
   return (
     <div data-screen={`summary:${row.id}`} className="flex h-full flex-col">
@@ -723,17 +726,24 @@ function TvSummary({ row }: { row: WorkoutSessionRow }) {
           </div>
         </div>
         <TvPanel>
-          <TvEyebrow>Heart-rate zones</TvEyebrow>
+          <TvZonesHeader isDemo={row.is_demo} />
           {!row.live_data ? (
             <p className="text-tv-base text-text-2">{ZONE_COPY.noLiveData}</p>
           ) : !s || s.hr_status === "pending" ? (
             <p className="text-tv-base text-text-2">{SUMMARY_COPY.finalizing}</p>
           ) : (
             <>
-              {!cutoffs && <p className="text-tv-base text-text-2">{SUMMARY_COPY.zonesNotSet}</p>}
+              {!cutoffs ? (
+                <p className="text-tv-base text-text-2">{SUMMARY_COPY.zonesNotSet}</p>
+              ) : (
+                s.measured_ms === 0 && (
+                  <p className="text-tv-base text-text-2">{ZONE_COPY.noSamples}</p>
+                )
+              )}
               <TvZoneBars zoneMs={s.zone_ms} unmeasuredMs={s.unmeasured_ms} cutoffs={cutoffs} />
               {s.measured_ms > 0 && <p className="text-tv-sm text-text-2">{coverageLine(s)}</p>}
               <p className="text-tv-sm text-text-2">{ZONE_COPY.caption}</p>
+              {isFinal && <p className="text-tv-sm font-bold text-text-2">{SUMMARY_COPY.final}</p>}
             </>
           )}
         </TvPanel>

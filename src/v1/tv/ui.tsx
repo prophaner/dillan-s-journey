@@ -20,11 +20,16 @@ export interface TvButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEleme
   size?: "md" | "lg" | "xl";
   onPress?: () => void;
   icon?: ReactNode;
+  /**
+   * Looks and announces as disabled (aria-disabled) and ignores OK, but keeps focus: for a button
+   * whose availability follows live data (S08 Start), so a state change never moves TV focus.
+   */
+  softDisabled?: boolean;
 }
 
 const VARIANT: Record<Variant, string> = {
   primary:
-    "bg-spot text-on-accent data-[focused]:bg-spot-press disabled:bg-surface-2 disabled:text-text-3",
+    "bg-spot text-on-accent data-[focused]:bg-spot-press disabled:bg-surface-2 disabled:text-text-3 aria-disabled:bg-surface-2 aria-disabled:text-text-3",
   secondary:
     "border-2 border-line bg-surface text-text data-[focused]:border-text data-[focused]:bg-text data-[focused]:text-bg",
   ghost: "bg-transparent text-text-2 data-[focused]:bg-surface-2 data-[focused]:text-text",
@@ -46,6 +51,7 @@ export const TvButton = forwardRef<HTMLButtonElement, TvButtonProps>(function Tv
     size = "lg",
     onPress,
     icon,
+    softDisabled,
     className,
     children,
     ...rest
@@ -59,7 +65,8 @@ export const TvButton = forwardRef<HTMLButtonElement, TvButtonProps>(function Tv
       data-focus=""
       data-focus-id={focusId}
       {...(autoFocus ? { "data-autofocus": "" } : {})}
-      onClick={onPress}
+      {...(softDisabled ? { "aria-disabled": true, "data-focus-keep": "" } : {})}
+      onClick={softDisabled ? undefined : onPress}
       className={cn(
         "inline-flex min-w-tv-tap select-none items-center whitespace-nowrap justify-center gap-4 rounded-tv-md font-ui font-bold",
         VARIANT[variant],
@@ -79,6 +86,20 @@ export function TvEyebrow({ children, className }: { children: ReactNode; classN
     <p className={cn("text-tv-xs font-bold uppercase tracking-[0.12em] text-text-2", className)}>
       {children}
     </p>
+  );
+}
+
+/** "Heart-rate zones" with the Demo data chip on demo sessions (S11/S13). */
+export function TvZonesHeader({ isDemo }: { isDemo: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <TvEyebrow>Heart-rate zones</TvEyebrow>
+      {isDemo && (
+        <span className="rounded-chip border-2 border-text px-3 text-tv-xs font-bold">
+          Demo data
+        </span>
+      )}
+    </div>
   );
 }
 

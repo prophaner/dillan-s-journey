@@ -103,16 +103,23 @@ function Relay({
   const [name, setName] = useState<string>("");
   useEffect(() => {
     let on = true;
-    if (!v.userId) {
-      setName("");
-      return;
-    }
-    void api.profile
-      .get()
-      .then((p) => on && setName(p.display_name))
-      .catch(() => undefined);
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    // Every user change starts from the placeholder: "Relaying for {name}" is the only guard
+    // against the wrong wearer, so it never shows the previous user's name (h10-design risk 17).
+    setName("");
+    if (!v.userId) return;
+    const load = (delay: number) => {
+      void api.profile
+        .get()
+        .then((p) => on && setName(p.display_name))
+        .catch(() => {
+          if (on) retry = setTimeout(() => load(Math.min(delay * 2, 30_000)), delay);
+        });
+    };
+    load(2_000);
     return () => {
       on = false;
+      clearTimeout(retry);
     };
   }, [api, v.userId]);
 
@@ -232,13 +239,17 @@ function Header({ v, name, ctl }: { v: RelayView; name: string; ctl: RelayContro
 
 const ACTIVE: RelayMode[] = ["live", "demo", "no_contact", "waiting_first", "hidden"];
 
-function Status({ v }: { v: RelayView }) {
-  const label = relayModeLabel(v.linkMode, {
-    serial: v.sensor?.serial ?? null,
-    attempt: v.reconnectAttempt,
-    holder: v.holderName,
-  });
-  const showBpm = ACTIVE.includes(v.linkMode) && v.bpm != null && v.contact !== false;
+export function Status({ v }: { v: RelayView }) {
+  // Signed out: BLE may still be up, but nothing reaches Dillan, so nothing here says it does.
+  const label = v.signedOut
+    ? RELAY_COPY.signedOut
+    : relayModeLabel(v.linkMode, {
+        serial: v.sensor?.serial ?? null,
+        attempt: v.reconnectAttempt,
+        holder: v.holderName,
+      });
+  const sending = !v.signedOut && ACTIVE.includes(v.linkMode);
+  const showBpm = sending && v.bpm != null && v.contact !== false;
   const sentAgo =
     v.lastSentLocal != null ? Math.max(0, Math.floor((Date.now() - v.lastSentLocal) / 1000)) : null;
   const sub: string[] = [];
@@ -246,10 +257,23 @@ function Status({ v }: { v: RelayView }) {
     sub.push(v.sensor.serial ? `Polar H10 ${v.sensor.serial}` : v.sensor.name);
     if (v.sensor.batteryPct != null) sub.push(RELAY_COPY.battery(v.sensor.batteryPct));
   }
-  if (sentAgo != null && ACTIVE.includes(v.linkMode)) sub.push(RELAY_COPY.lastSent(sentAgo));
-  const live = v.linkMode === "live" || v.linkMode === "demo";
+  if (sentAgo != null && sending) sub.push(RELAY_COPY.lastSent(sentAgo));
+  const live = !v.signedOut && (v.linkMode === "live" || v.linkMode === "demo");
+  // Announced: the mode and the offline / battery / signed-out lines only, never the BPM or the
+  // "Last sent" counter that change every second (04-design-system: state changes, not BPM).
+  const offlineLine = v.offline && v.pending > 0 ? RELAY_COPY.offline(v.pending) : null;
+  const batteryLine =
+    v.sensor?.batteryPct != null && v.sensor.batteryPct <= BATTERY_LOW_PCT && !v.demo
+      ? RELAY_COPY.batteryLow(v.sensor.batteryPct)
+      : null;
+  const announce = [label, offlineLine ? RELAY_COPY.offlineShort : null, batteryLine]
+    .filter(Boolean)
+    .join(". ");
   return (
-    <section className="mt-8 flex flex-col items-center gap-4 text-center" aria-live="polite">
+    <section className="mt-8 flex flex-col items-center gap-4 text-center">
+      <p className="sr-only" role="status" aria-live="polite" data-testid="relay-announce">
+        {announce}
+      </p>
       <div
         className={cn(
           "grid size-64 max-w-full place-items-center rounded-full border-8",
@@ -270,19 +294,15 @@ function Status({ v }: { v: RelayView }) {
           </span>
         </div>
       </div>
-      <p className="text-title3 font-bold">{label}</p>
+      <p className="text-title3 font-bold" aria-hidden>
+        {label}
+      </p>
       {v.linkMode === "superseded" && (
         <p className="text-subhead text-text-2">{RELAY_COPY.supersededRelease}</p>
       )}
       {sub.length > 0 && <p className="text-subhead text-text-2">{sub.join(" · ")}</p>}
-      {v.offline && v.pending > 0 && (
-        <p className="text-subhead font-bold text-hold">{RELAY_COPY.offline(v.pending)}</p>
-      )}
-      {v.sensor?.batteryPct != null && v.sensor.batteryPct <= BATTERY_LOW_PCT && !v.demo && (
-        <p className="text-subhead font-bold text-hold">
-          {RELAY_COPY.batteryLow(v.sensor.batteryPct)}
-        </p>
-      )}
+      {offlineLine && <p className="text-subhead font-bold text-hold">{offlineLine}</p>}
+      {batteryLine && <p className="text-subhead font-bold text-hold">{batteryLine}</p>}
     </section>
   );
 }
@@ -296,7 +316,7 @@ function Notice({ v }: { v: RelayView }) {
         : v.notice === "connect_failed"
           ? RELAY_COPY.connectFailed
           : v.notice === "signed_out"
-            ? RELAY_COPY.signedOut
+            ? null // shown as the status line
             : v.notice === "sensor_forgotten"
               ? RELAY_COPY.forgotten
               : v.notice === "revoked"

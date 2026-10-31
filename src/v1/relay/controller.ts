@@ -105,6 +105,17 @@ const LINK_ACTIVE = new Set<RelayMode>([
   "demo",
 ]);
 
+/** modes in which the relay holds (or is restoring) a strap picked before a Forget */
+const FORGETTABLE = new Set<RelayMode>([
+  "waiting_first",
+  "live",
+  "no_contact",
+  "reconnecting",
+  "hidden",
+  "standby",
+  "sensor_lost",
+]);
+
 export class RelayController {
   private listeners = new Set<() => void>();
   private snapshot: RelayView;
@@ -113,7 +124,12 @@ export class RelayController {
   private support: SupportResult | null = null;
   private clockReady = false;
   private userId: string | null = null;
+  /** the last signed-in user, kept across a sign-out (in memory only): a different next user is a
+   *  wearer change, never a resume */
+  private lastUserId: string | null = null;
   private signedOut = false;
+  /** hr_ingest said this source was Removed: stays paused until Add it again */
+  private revoked = false;
   private notice: RelayNotice | null = null;
   private sensor: SensorInfo | null = null;
   private bpm: number | null = null;
@@ -166,6 +182,7 @@ export class RelayController {
       {
         onResponse: (r, sent) => this.onResponse(r, sent),
         onAuthError: () => this.onSignedOut(),
+        onSourceOwned: () => this.remintSource(),
         onNetwork: (ok) => {
           if (ok !== !this.offline) return;
           this.offline = !ok;
@@ -327,30 +344,63 @@ export class RelayController {
   }
 
   private async handleUser(u: AuthUser | null) {
-    const prev = this.userId;
     const next = u?.id ?? null;
     if (!next) {
       // Signed out: BLE stays connected, queued readings are discarded, nothing is sent.
-      if (prev || !this.signedOut) this.onSignedOut();
+      if (this.userId || !this.signedOut) this.onSignedOut();
       return;
+    }
+    if (next === this.userId) {
+      // Same user (token refresh, SIGNED_IN on focus): nothing changes. A revoked relay stays
+      // paused until Add it again.
+      this.emit();
+      return;
+    }
+    // A different wearer than the last signed-in user, directly or after a sign-out (h10-design
+    // 4.2): drop the strap to idle BEFORE the publisher is bound to the new user, so nothing read
+    // for the previous wearer (samples, the connected strap) is ever sent as them.
+    const wearerChange = this.lastUserId != null && next !== this.lastUserId;
+    this.publisher.setPaused(true);
+    if (wearerChange) {
+      this.dropLink();
+      // hr_sources ids belong to one user: the next wearer gets a fresh one.
+      this.revoked = false;
+      if (this.notice === "revoked" || this.notice === "sensor_forgotten") this.notice = null;
+      this.publisher.setSourceId(remintSourceId(this.storage));
     }
     this.signedOut = false;
     if (this.notice === "signed_out") this.notice = null;
-    if (next !== prev) {
-      this.publisher.setUser(next); // discards the outbox, new stream, seq 0
-      this.publisher.setPaused(false);
-      this.userId = next;
-      this.subscribeSensor(next);
-      if (prev) {
-        // A different wearer: drop to idle; they pick the strap themselves.
-        this.stopReconnect();
-        this.connectSeq++;
-        await this.driver.disconnect();
-        this.bpm = null;
-        this.contact = null;
-        this.setMode("idle");
-      }
-    } else this.publisher.setPaused(false);
+    this.publisher.setUser(next); // discards the outbox, new stream, seq 0
+    this.userId = next;
+    this.lastUserId = next;
+    this.publisher.setPaused(this.revoked);
+    this.subscribeSensor(next);
+    this.emit();
+  }
+
+  /** Wearer change: strap disconnected, everything known about it cleared, idle. */
+  private dropLink() {
+    this.stopReconnect();
+    this.connectSeq++;
+    if (this.kind === "demo") {
+      void this.demoDriver?.disconnect();
+      this.kind = "web_ble";
+    }
+    void this.d.driver.disconnect();
+    this.sensor = null;
+    this.bpm = null;
+    this.contact = null;
+    this.holderName = null;
+    this.differentStrap = null;
+    this.connectedAtLocal = null;
+    this.publisher.dropClaim();
+    this.setMode("idle");
+  }
+
+  /** hr_ingest refused the source id as another user's (a stale id on a shared device). */
+  private remintSource() {
+    this.publisher.setSourceId(remintSourceId(this.storage));
+    this.publisher.modeChanged();
     this.emit();
   }
 
@@ -382,7 +432,7 @@ export class RelayController {
   private onSensorRow(row: HrSensorRow | null) {
     this.sensorRow = row;
     if (!row) return;
-    if (row.forgotten_at && this.linkMode !== "idle" && this.kind !== "demo") {
+    if (row.forgotten_at && this.holdsForgettableStrap()) {
       void this.onForgotten();
       return;
     }
@@ -542,8 +592,9 @@ export class RelayController {
   /** revoked: "Add it again" mints a new source id; the next Connect claims. */
   addAgain() {
     const id = remintSourceId(this.storage);
+    this.revoked = false;
     this.publisher.setSourceId(id);
-    this.publisher.setPaused(false);
+    this.publisher.setPaused(!this.userId);
     this.notice = null;
     this.setMode("idle");
   }
@@ -682,6 +733,15 @@ export class RelayController {
     await this.reconnectAttemptOnce();
   }
 
+  /**
+   * sensor_forgotten applies to a strap this relay held before the Forget, never to a connect the
+   * user is making now (choosing/connecting, or a claim not yet sent: that claim re-pairs it).
+   */
+  private holdsForgettableStrap(): boolean {
+    if (this.kind === "demo" || this.publisher.claimPending) return false;
+    return FORGETTABLE.has(this.linkMode);
+  }
+
   private async onForgotten() {
     this.stopReconnect();
     this.connectSeq++;
@@ -702,6 +762,7 @@ export class RelayController {
       return;
     }
     if (r.revoked) {
+      this.revoked = true;
       this.stopReconnect();
       this.connectSeq++;
       void this.driver.disconnect();
@@ -722,11 +783,17 @@ export class RelayController {
       }
       return;
     }
-    if (r.sensor_forgotten && this.kind !== "demo") {
-      if (!sent.claim) void this.onForgotten();
+    if (r.sensor_forgotten) {
+      // One shot: onForgotten drops to idle, and idle never re-runs it.
+      if (!sent.claim && this.holdsForgettableStrap()) void this.onForgotten();
       return;
     }
     if (r.rate_limited) return;
+    // While the user is connecting (or their claim is not yet delivered), "not wanted" is stale:
+    // the claim that follows the pick opens the demand window.
+    const userConnecting =
+      this.linkMode === "choosing" || this.linkMode === "connecting" || this.publisher.claimPending;
+    if (r.stop_requested && userConnecting) return this.emit();
     if (r.stop_requested) {
       // Standby frees the strap's BLE slot. The simulated strap holds none and never saves a
       // strap (so no demand window can open for it): it keeps sending and the backend decides
