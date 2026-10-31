@@ -9,10 +9,13 @@ export const dButton = cva(
     variants: {
       variant: {
         /** One per screen. Iron text on Spot, never white. */
-        primary: "bg-spot text-on-accent active:bg-spot-press disabled:bg-surface-2 disabled:text-text-3",
+        primary:
+          "bg-spot text-on-accent active:bg-spot-press disabled:bg-surface-2 disabled:text-text-3",
         secondary: "bg-surface-2 text-text",
         quiet: "bg-transparent text-text-2 font-medium",
         outline: "bg-surface text-text border border-line font-medium",
+        /** V1 destructive confirm: Iron fill with the verb ("Delete", "End", "Remove"). */
+        danger: "bg-text text-bg",
       },
       size: {
         lg: "h-[58px] w-full rounded-btn px-6 text-headline",
@@ -26,8 +29,7 @@ export const dButton = cva(
 );
 
 export interface DButtonProps
-  extends ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof dButton> {
+  extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof dButton> {
   icon?: ReactNode;
   loading?: boolean;
 }

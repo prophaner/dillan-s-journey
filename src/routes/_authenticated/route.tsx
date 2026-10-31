@@ -1,18 +1,24 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
-import { supabase } from "@/integrations/supabase/client";
+import { getApi } from "@/v1/data/client";
+import { UserProvider } from "@/v1/ui/user-context";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
-  beforeLoad: async () => {
-    const { data, error } = await supabase.auth.getUser();
-    if (data.user) return { user: { id: data.user.id, email: data.user.email ?? "" } };
-    // Offline, the server check can't run: trust the session on this device (AT-36).
-    if (error && (!navigator.onLine || error.name === "AuthRetryableFetchError")) {
-      const { data: s } = await supabase.auth.getSession();
-      const u = s.session?.user;
-      if (u) return { user: { id: u.id, email: u.email ?? "" } };
-    }
-    throw redirect({ to: "/auth" });
+  beforeLoad: async ({ location }) => {
+    const api = await getApi();
+    const user = await api.auth.getUser();
+    if (user) return { user };
+    // Signed out: log in first, then come back here (handoff acceptance 5: the TV code is kept).
+    throw redirect({ to: "/auth", search: { redirect: location.href } });
   },
-  component: () => <Outlet />,
+  component: AuthenticatedLayout,
 });
+
+function AuthenticatedLayout() {
+  const { user } = Route.useRouteContext();
+  return (
+    <UserProvider user={user}>
+      <Outlet />
+    </UserProvider>
+  );
+}

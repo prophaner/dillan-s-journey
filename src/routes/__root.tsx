@@ -12,16 +12,20 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { supabase } from "@/integrations/supabase/client";
+import { getApi } from "@/v1/data/client";
 import { ToastProvider } from "@/components/dillan/overlays";
+import { MockBadge } from "@/components/dillan/mock-badge";
 
 function NotFoundComponent() {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-bg px-margin">
       <div className="max-w-md text-center">
         <p className="font-voice text-voice-xl">I can't find that page.</p>
-        <Link to="/" className="mt-6 inline-flex h-11 items-center rounded-btn bg-surface-2 px-5 font-bold">
-          Go to Today
+        <Link
+          to="/"
+          className="mt-6 inline-flex h-11 items-center rounded-btn bg-surface-2 px-5 font-bold"
+        >
+          Go to Home
         </Link>
       </div>
     </div>
@@ -38,7 +42,9 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
     <div className="flex min-h-dvh items-center justify-center bg-bg px-margin">
       <div className="max-w-md text-center">
         <h1 className="text-title2 font-bold">This page didn't load</h1>
-        <p className="mt-2 text-subhead text-text-2">Anything you logged is still saved on this device.</p>
+        <p className="mt-2 text-subhead text-text-2">
+          Anything you logged is still saved on this device.
+        </p>
         <button
           onClick={() => {
             router.invalidate();
@@ -62,16 +68,30 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { name: "theme-color", content: "#F6F3EC" },
-      { title: "Dillan — your home-gym coach" },
-      { name: "description", content: "Dillan plans, spots and adapts your home-gym training." },
-      { property: "og:title", content: "Dillan — your home-gym coach" },
-      { property: "og:description", content: "Dillan plans, spots and adapts your home-gym training." },
+      { title: "Dillan — your workouts, on the big screen" },
+      {
+        name: "description",
+        content:
+          "Your home-gym workouts, your heart rate on the big screen, your history in one place.",
+      },
+      { property: "og:title", content: "Dillan — your workouts, on the big screen" },
+      {
+        property: "og:description",
+        content:
+          "Your home-gym workouts, your heart rate on the big screen, your history in one place.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "preload", href: "/fonts/Satoshi-Variable.woff2", as: "font", type: "font/woff2", crossOrigin: "anonymous" },
+      {
+        rel: "preload",
+        href: "/fonts/Satoshi-Variable.woff2",
+        as: "font",
+        type: "font/woff2",
+        crossOrigin: "anonymous",
+      },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
       { rel: "manifest", href: "/manifest.webmanifest" },
@@ -102,18 +122,32 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
   useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
-      router.invalidate();
-      if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
+    // Signing in or out re-runs route guards; signing out also drops every cached query
+    // so the next user never sees the previous user's data.
+    let off: (() => void) | undefined;
+    let live = true;
+    void getApi().then(async (api) => {
+      let last = (await api.auth.getUser().catch(() => null))?.id ?? null;
+      if (!live) return;
+      off = api.auth.onChange((user) => {
+        const id = user?.id ?? null;
+        if (id === last) return; // token refreshes etc.
+        last = id;
+        if (!id) queryClient.clear();
+        void router.invalidate();
+      });
     });
-    return () => data.subscription.unsubscribe();
+    return () => {
+      live = false;
+      off?.();
+    };
   }, [router, queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <Outlet />
+        <MockBadge />
       </ToastProvider>
     </QueryClientProvider>
   );

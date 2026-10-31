@@ -9,29 +9,20 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as TvApproveRouteImport } from './routes/tv-approve'
 import { Route as AuthenticatedAppRouteRouteImport } from './routes/_authenticated/_app/route'
-import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
-import { Route as AuthenticatedAppDillanRouteImport } from './routes/_authenticated/_app/dillan'
-import { Route as AuthenticatedAppProfileRouteImport } from './routes/_authenticated/_app/profile'
-import { Route as AuthenticatedAppProgressRouteImport } from './routes/_authenticated/_app/progress'
-import { Route as AuthenticatedAppSettingsRouteImport } from './routes/_authenticated/_app/settings'
-import { Route as AuthenticatedAppTodayRouteImport } from './routes/_authenticated/_app/today'
-import { Route as AuthenticatedAppTrainRouteImport } from './routes/_authenticated/_app/train'
-import { Route as AuthenticatedSessionIdRouteImport } from './routes/_authenticated/session.$id'
-import { Route as AuthenticatedAppDevComponentsRouteImport } from './routes/_authenticated/_app/dev.components'
-import { Route as AuthenticatedAppDevSpikesRouteImport } from './routes/_authenticated/_app/dev.spikes'
-import { Route as AuthenticatedAppPlanIndexRouteImport } from './routes/_authenticated/_app/plan.index'
-import { Route as AuthenticatedAppPlanEditRouteImport } from './routes/_authenticated/_app/plan.edit'
-import { Route as AuthenticatedAppPlanExerciseIdRouteImport } from './routes/_authenticated/_app/plan.exercise.$id'
+import { Route as AuthenticatedAppIndexRouteImport } from './routes/_authenticated/_app/index'
+import { Route as AuthenticatedAppApproveTvRouteImport } from './routes/_authenticated/_app/approve-tv'
+import { Route as AuthenticatedAppCalendarRouteImport } from './routes/_authenticated/_app/calendar'
+import { Route as AuthenticatedAppProfileIndexRouteImport } from './routes/_authenticated/_app/profile.index'
+import { Route as AuthenticatedAppProfileDevicesRouteImport } from './routes/_authenticated/_app/profile.devices'
+import { Route as AuthenticatedAppProfileZonesRouteImport } from './routes/_authenticated/_app/profile.zones'
+import { Route as AuthenticatedAppProgramIndexRouteImport } from './routes/_authenticated/_app/program.index'
+import { Route as AuthenticatedAppProgramIdRouteImport } from './routes/_authenticated/_app/program.$id'
+import { Route as AuthenticatedAppProgramNewRouteImport } from './routes/_authenticated/_app/program.new'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
@@ -41,208 +32,163 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TvApproveRoute = TvApproveRouteImport.update({
+  id: '/tv-approve',
+  path: '/tv-approve',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedAppRouteRoute = AuthenticatedAppRouteRouteImport.update({
   id: '/_app',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedOnboardingRoute = AuthenticatedOnboardingRouteImport.update({
-  id: '/onboarding',
-  path: '/onboarding',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedAppDillanRoute = AuthenticatedAppDillanRouteImport.update({
-  id: '/dillan',
-  path: '/dillan',
+const AuthenticatedAppIndexRoute = AuthenticatedAppIndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => AuthenticatedAppRouteRoute,
 } as any)
-const AuthenticatedAppProfileRoute = AuthenticatedAppProfileRouteImport.update({
-  id: '/profile',
-  path: '/profile',
-  getParentRoute: () => AuthenticatedAppRouteRoute,
-} as any)
-const AuthenticatedAppProgressRoute =
-  AuthenticatedAppProgressRouteImport.update({
-    id: '/progress',
-    path: '/progress',
+const AuthenticatedAppApproveTvRoute =
+  AuthenticatedAppApproveTvRouteImport.update({
+    id: '/approve-tv',
+    path: '/approve-tv',
     getParentRoute: () => AuthenticatedAppRouteRoute,
   } as any)
-const AuthenticatedAppSettingsRoute =
-  AuthenticatedAppSettingsRouteImport.update({
-    id: '/settings',
-    path: '/settings',
+const AuthenticatedAppCalendarRoute =
+  AuthenticatedAppCalendarRouteImport.update({
+    id: '/calendar',
+    path: '/calendar',
     getParentRoute: () => AuthenticatedAppRouteRoute,
   } as any)
-const AuthenticatedAppTodayRoute = AuthenticatedAppTodayRouteImport.update({
-  id: '/today',
-  path: '/today',
-  getParentRoute: () => AuthenticatedAppRouteRoute,
-} as any)
-const AuthenticatedAppTrainRoute = AuthenticatedAppTrainRouteImport.update({
-  id: '/train',
-  path: '/train',
-  getParentRoute: () => AuthenticatedAppRouteRoute,
-} as any)
-const AuthenticatedSessionIdRoute = AuthenticatedSessionIdRouteImport.update({
-  id: '/session/$id',
-  path: '/session/$id',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedAppDevComponentsRoute =
-  AuthenticatedAppDevComponentsRouteImport.update({
-    id: '/dev/components',
-    path: '/dev/components',
+const AuthenticatedAppProfileIndexRoute =
+  AuthenticatedAppProfileIndexRouteImport.update({
+    id: '/profile/',
+    path: '/profile/',
     getParentRoute: () => AuthenticatedAppRouteRoute,
   } as any)
-const AuthenticatedAppDevSpikesRoute =
-  AuthenticatedAppDevSpikesRouteImport.update({
-    id: '/dev/spikes',
-    path: '/dev/spikes',
+const AuthenticatedAppProfileDevicesRoute =
+  AuthenticatedAppProfileDevicesRouteImport.update({
+    id: '/profile/devices',
+    path: '/profile/devices',
     getParentRoute: () => AuthenticatedAppRouteRoute,
   } as any)
-const AuthenticatedAppPlanIndexRoute =
-  AuthenticatedAppPlanIndexRouteImport.update({
-    id: '/plan/',
-    path: '/plan/',
+const AuthenticatedAppProfileZonesRoute =
+  AuthenticatedAppProfileZonesRouteImport.update({
+    id: '/profile/zones',
+    path: '/profile/zones',
     getParentRoute: () => AuthenticatedAppRouteRoute,
   } as any)
-const AuthenticatedAppPlanEditRoute =
-  AuthenticatedAppPlanEditRouteImport.update({
-    id: '/plan/edit',
-    path: '/plan/edit',
+const AuthenticatedAppProgramIndexRoute =
+  AuthenticatedAppProgramIndexRouteImport.update({
+    id: '/program/',
+    path: '/program/',
     getParentRoute: () => AuthenticatedAppRouteRoute,
   } as any)
-const AuthenticatedAppPlanExerciseIdRoute =
-  AuthenticatedAppPlanExerciseIdRouteImport.update({
-    id: '/plan/exercise/$id',
-    path: '/plan/exercise/$id',
+const AuthenticatedAppProgramIdRoute =
+  AuthenticatedAppProgramIdRouteImport.update({
+    id: '/program/$id',
+    path: '/program/$id',
+    getParentRoute: () => AuthenticatedAppRouteRoute,
+  } as any)
+const AuthenticatedAppProgramNewRoute =
+  AuthenticatedAppProgramNewRouteImport.update({
+    id: '/program/new',
+    path: '/program/new',
     getParentRoute: () => AuthenticatedAppRouteRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
+  '/': typeof AuthenticatedAppIndexRoute
   '/auth': typeof AuthRoute
-  '/onboarding': typeof AuthenticatedOnboardingRoute
-  '/dillan': typeof AuthenticatedAppDillanRoute
-  '/profile': typeof AuthenticatedAppProfileRoute
-  '/progress': typeof AuthenticatedAppProgressRoute
-  '/settings': typeof AuthenticatedAppSettingsRoute
-  '/today': typeof AuthenticatedAppTodayRoute
-  '/train': typeof AuthenticatedAppTrainRoute
-  '/session/$id': typeof AuthenticatedSessionIdRoute
-  '/dev/components': typeof AuthenticatedAppDevComponentsRoute
-  '/dev/spikes': typeof AuthenticatedAppDevSpikesRoute
-  '/plan/edit': typeof AuthenticatedAppPlanEditRoute
-  '/plan/': typeof AuthenticatedAppPlanIndexRoute
-  '/plan/exercise/$id': typeof AuthenticatedAppPlanExerciseIdRoute
+  '/tv-approve': typeof TvApproveRoute
+  '/approve-tv': typeof AuthenticatedAppApproveTvRoute
+  '/calendar': typeof AuthenticatedAppCalendarRoute
+  '/profile/devices': typeof AuthenticatedAppProfileDevicesRoute
+  '/profile/zones': typeof AuthenticatedAppProfileZonesRoute
+  '/program/$id': typeof AuthenticatedAppProgramIdRoute
+  '/program/new': typeof AuthenticatedAppProgramNewRoute
+  '/profile/': typeof AuthenticatedAppProfileIndexRoute
+  '/program/': typeof AuthenticatedAppProgramIndexRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
+  '/': typeof AuthenticatedAppIndexRoute
   '/auth': typeof AuthRoute
-  '/onboarding': typeof AuthenticatedOnboardingRoute
-  '/dillan': typeof AuthenticatedAppDillanRoute
-  '/profile': typeof AuthenticatedAppProfileRoute
-  '/progress': typeof AuthenticatedAppProgressRoute
-  '/settings': typeof AuthenticatedAppSettingsRoute
-  '/today': typeof AuthenticatedAppTodayRoute
-  '/train': typeof AuthenticatedAppTrainRoute
-  '/session/$id': typeof AuthenticatedSessionIdRoute
-  '/dev/components': typeof AuthenticatedAppDevComponentsRoute
-  '/dev/spikes': typeof AuthenticatedAppDevSpikesRoute
-  '/plan/edit': typeof AuthenticatedAppPlanEditRoute
-  '/plan': typeof AuthenticatedAppPlanIndexRoute
-  '/plan/exercise/$id': typeof AuthenticatedAppPlanExerciseIdRoute
+  '/tv-approve': typeof TvApproveRoute
+  '/approve-tv': typeof AuthenticatedAppApproveTvRoute
+  '/calendar': typeof AuthenticatedAppCalendarRoute
+  '/profile/devices': typeof AuthenticatedAppProfileDevicesRoute
+  '/profile/zones': typeof AuthenticatedAppProfileZonesRoute
+  '/program/$id': typeof AuthenticatedAppProgramIdRoute
+  '/program/new': typeof AuthenticatedAppProgramNewRoute
+  '/profile': typeof AuthenticatedAppProfileIndexRoute
+  '/program': typeof AuthenticatedAppProgramIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/tv-approve': typeof TvApproveRoute
   '/_authenticated/_app': typeof AuthenticatedAppRouteRouteWithChildren
-  '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
-  '/_authenticated/_app/dillan': typeof AuthenticatedAppDillanRoute
-  '/_authenticated/_app/profile': typeof AuthenticatedAppProfileRoute
-  '/_authenticated/_app/progress': typeof AuthenticatedAppProgressRoute
-  '/_authenticated/_app/settings': typeof AuthenticatedAppSettingsRoute
-  '/_authenticated/_app/today': typeof AuthenticatedAppTodayRoute
-  '/_authenticated/_app/train': typeof AuthenticatedAppTrainRoute
-  '/_authenticated/session/$id': typeof AuthenticatedSessionIdRoute
-  '/_authenticated/_app/dev/components': typeof AuthenticatedAppDevComponentsRoute
-  '/_authenticated/_app/dev/spikes': typeof AuthenticatedAppDevSpikesRoute
-  '/_authenticated/_app/plan/edit': typeof AuthenticatedAppPlanEditRoute
-  '/_authenticated/_app/plan/': typeof AuthenticatedAppPlanIndexRoute
-  '/_authenticated/_app/plan/exercise/$id': typeof AuthenticatedAppPlanExerciseIdRoute
+  '/_authenticated/_app/approve-tv': typeof AuthenticatedAppApproveTvRoute
+  '/_authenticated/_app/calendar': typeof AuthenticatedAppCalendarRoute
+  '/_authenticated/_app/': typeof AuthenticatedAppIndexRoute
+  '/_authenticated/_app/profile/devices': typeof AuthenticatedAppProfileDevicesRoute
+  '/_authenticated/_app/profile/zones': typeof AuthenticatedAppProfileZonesRoute
+  '/_authenticated/_app/program/$id': typeof AuthenticatedAppProgramIdRoute
+  '/_authenticated/_app/program/new': typeof AuthenticatedAppProgramNewRoute
+  '/_authenticated/_app/profile/': typeof AuthenticatedAppProfileIndexRoute
+  '/_authenticated/_app/program/': typeof AuthenticatedAppProgramIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/auth'
-    | '/onboarding'
-    | '/dillan'
-    | '/profile'
-    | '/progress'
-    | '/settings'
-    | '/today'
-    | '/train'
-    | '/session/$id'
-    | '/dev/components'
-    | '/dev/spikes'
-    | '/plan/edit'
-    | '/plan/'
-    | '/plan/exercise/$id'
+    | '/tv-approve'
+    | '/approve-tv'
+    | '/calendar'
+    | '/profile/devices'
+    | '/profile/zones'
+    | '/program/$id'
+    | '/program/new'
+    | '/profile/'
+    | '/program/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
-    | '/onboarding'
-    | '/dillan'
+    | '/tv-approve'
+    | '/approve-tv'
+    | '/calendar'
+    | '/profile/devices'
+    | '/profile/zones'
+    | '/program/$id'
+    | '/program/new'
     | '/profile'
-    | '/progress'
-    | '/settings'
-    | '/today'
-    | '/train'
-    | '/session/$id'
-    | '/dev/components'
-    | '/dev/spikes'
-    | '/plan/edit'
-    | '/plan'
-    | '/plan/exercise/$id'
+    | '/program'
   id:
     | '__root__'
-    | '/'
     | '/_authenticated'
     | '/auth'
+    | '/tv-approve'
     | '/_authenticated/_app'
-    | '/_authenticated/onboarding'
-    | '/_authenticated/_app/dillan'
-    | '/_authenticated/_app/profile'
-    | '/_authenticated/_app/progress'
-    | '/_authenticated/_app/settings'
-    | '/_authenticated/_app/today'
-    | '/_authenticated/_app/train'
-    | '/_authenticated/session/$id'
-    | '/_authenticated/_app/dev/components'
-    | '/_authenticated/_app/dev/spikes'
-    | '/_authenticated/_app/plan/edit'
-    | '/_authenticated/_app/plan/'
-    | '/_authenticated/_app/plan/exercise/$id'
+    | '/_authenticated/_app/approve-tv'
+    | '/_authenticated/_app/calendar'
+    | '/_authenticated/_app/'
+    | '/_authenticated/_app/profile/devices'
+    | '/_authenticated/_app/profile/zones'
+    | '/_authenticated/_app/program/$id'
+    | '/_authenticated/_app/program/new'
+    | '/_authenticated/_app/profile/'
+    | '/_authenticated/_app/program/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  TvApproveRoute: typeof TvApproveRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_authenticated': {
       id: '/_authenticated'
       path: ''
@@ -257,6 +203,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tv-approve': {
+      id: '/tv-approve'
+      path: '/tv-approve'
+      fullPath: '/tv-approve'
+      preLoaderRoute: typeof TvApproveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/_app': {
       id: '/_authenticated/_app'
       path: ''
@@ -264,126 +217,94 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/onboarding': {
-      id: '/_authenticated/onboarding'
-      path: '/onboarding'
-      fullPath: '/onboarding'
-      preLoaderRoute: typeof AuthenticatedOnboardingRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/_app/dillan': {
-      id: '/_authenticated/_app/dillan'
-      path: '/dillan'
-      fullPath: '/dillan'
-      preLoaderRoute: typeof AuthenticatedAppDillanRouteImport
+    '/_authenticated/_app/': {
+      id: '/_authenticated/_app/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedAppIndexRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
-    '/_authenticated/_app/profile': {
-      id: '/_authenticated/_app/profile'
+    '/_authenticated/_app/approve-tv': {
+      id: '/_authenticated/_app/approve-tv'
+      path: '/approve-tv'
+      fullPath: '/approve-tv'
+      preLoaderRoute: typeof AuthenticatedAppApproveTvRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
+    '/_authenticated/_app/calendar': {
+      id: '/_authenticated/_app/calendar'
+      path: '/calendar'
+      fullPath: '/calendar'
+      preLoaderRoute: typeof AuthenticatedAppCalendarRouteImport
+      parentRoute: typeof AuthenticatedAppRouteRoute
+    }
+    '/_authenticated/_app/profile/': {
+      id: '/_authenticated/_app/profile/'
       path: '/profile'
-      fullPath: '/profile'
-      preLoaderRoute: typeof AuthenticatedAppProfileRouteImport
+      fullPath: '/profile/'
+      preLoaderRoute: typeof AuthenticatedAppProfileIndexRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
-    '/_authenticated/_app/progress': {
-      id: '/_authenticated/_app/progress'
-      path: '/progress'
-      fullPath: '/progress'
-      preLoaderRoute: typeof AuthenticatedAppProgressRouteImport
+    '/_authenticated/_app/profile/devices': {
+      id: '/_authenticated/_app/profile/devices'
+      path: '/profile/devices'
+      fullPath: '/profile/devices'
+      preLoaderRoute: typeof AuthenticatedAppProfileDevicesRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
-    '/_authenticated/_app/settings': {
-      id: '/_authenticated/_app/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof AuthenticatedAppSettingsRouteImport
+    '/_authenticated/_app/profile/zones': {
+      id: '/_authenticated/_app/profile/zones'
+      path: '/profile/zones'
+      fullPath: '/profile/zones'
+      preLoaderRoute: typeof AuthenticatedAppProfileZonesRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
-    '/_authenticated/_app/today': {
-      id: '/_authenticated/_app/today'
-      path: '/today'
-      fullPath: '/today'
-      preLoaderRoute: typeof AuthenticatedAppTodayRouteImport
+    '/_authenticated/_app/program/': {
+      id: '/_authenticated/_app/program/'
+      path: '/program'
+      fullPath: '/program/'
+      preLoaderRoute: typeof AuthenticatedAppProgramIndexRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
-    '/_authenticated/_app/train': {
-      id: '/_authenticated/_app/train'
-      path: '/train'
-      fullPath: '/train'
-      preLoaderRoute: typeof AuthenticatedAppTrainRouteImport
+    '/_authenticated/_app/program/$id': {
+      id: '/_authenticated/_app/program/$id'
+      path: '/program/$id'
+      fullPath: '/program/$id'
+      preLoaderRoute: typeof AuthenticatedAppProgramIdRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
-    '/_authenticated/session/$id': {
-      id: '/_authenticated/session/$id'
-      path: '/session/$id'
-      fullPath: '/session/$id'
-      preLoaderRoute: typeof AuthenticatedSessionIdRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/_app/dev/components': {
-      id: '/_authenticated/_app/dev/components'
-      path: '/dev/components'
-      fullPath: '/dev/components'
-      preLoaderRoute: typeof AuthenticatedAppDevComponentsRouteImport
-      parentRoute: typeof AuthenticatedAppRouteRoute
-    }
-    '/_authenticated/_app/dev/spikes': {
-      id: '/_authenticated/_app/dev/spikes'
-      path: '/dev/spikes'
-      fullPath: '/dev/spikes'
-      preLoaderRoute: typeof AuthenticatedAppDevSpikesRouteImport
-      parentRoute: typeof AuthenticatedAppRouteRoute
-    }
-    '/_authenticated/_app/plan/': {
-      id: '/_authenticated/_app/plan/'
-      path: '/plan'
-      fullPath: '/plan/'
-      preLoaderRoute: typeof AuthenticatedAppPlanIndexRouteImport
-      parentRoute: typeof AuthenticatedAppRouteRoute
-    }
-    '/_authenticated/_app/plan/edit': {
-      id: '/_authenticated/_app/plan/edit'
-      path: '/plan/edit'
-      fullPath: '/plan/edit'
-      preLoaderRoute: typeof AuthenticatedAppPlanEditRouteImport
-      parentRoute: typeof AuthenticatedAppRouteRoute
-    }
-    '/_authenticated/_app/plan/exercise/$id': {
-      id: '/_authenticated/_app/plan/exercise/$id'
-      path: '/plan/exercise/$id'
-      fullPath: '/plan/exercise/$id'
-      preLoaderRoute: typeof AuthenticatedAppPlanExerciseIdRouteImport
+    '/_authenticated/_app/program/new': {
+      id: '/_authenticated/_app/program/new'
+      path: '/program/new'
+      fullPath: '/program/new'
+      preLoaderRoute: typeof AuthenticatedAppProgramNewRouteImport
       parentRoute: typeof AuthenticatedAppRouteRoute
     }
   }
 }
 
 interface AuthenticatedAppRouteRouteChildren {
-  AuthenticatedAppDillanRoute: typeof AuthenticatedAppDillanRoute
-  AuthenticatedAppProfileRoute: typeof AuthenticatedAppProfileRoute
-  AuthenticatedAppProgressRoute: typeof AuthenticatedAppProgressRoute
-  AuthenticatedAppSettingsRoute: typeof AuthenticatedAppSettingsRoute
-  AuthenticatedAppTodayRoute: typeof AuthenticatedAppTodayRoute
-  AuthenticatedAppTrainRoute: typeof AuthenticatedAppTrainRoute
-  AuthenticatedAppDevComponentsRoute: typeof AuthenticatedAppDevComponentsRoute
-  AuthenticatedAppDevSpikesRoute: typeof AuthenticatedAppDevSpikesRoute
-  AuthenticatedAppPlanEditRoute: typeof AuthenticatedAppPlanEditRoute
-  AuthenticatedAppPlanIndexRoute: typeof AuthenticatedAppPlanIndexRoute
-  AuthenticatedAppPlanExerciseIdRoute: typeof AuthenticatedAppPlanExerciseIdRoute
+  AuthenticatedAppApproveTvRoute: typeof AuthenticatedAppApproveTvRoute
+  AuthenticatedAppCalendarRoute: typeof AuthenticatedAppCalendarRoute
+  AuthenticatedAppIndexRoute: typeof AuthenticatedAppIndexRoute
+  AuthenticatedAppProfileDevicesRoute: typeof AuthenticatedAppProfileDevicesRoute
+  AuthenticatedAppProfileZonesRoute: typeof AuthenticatedAppProfileZonesRoute
+  AuthenticatedAppProgramIdRoute: typeof AuthenticatedAppProgramIdRoute
+  AuthenticatedAppProgramNewRoute: typeof AuthenticatedAppProgramNewRoute
+  AuthenticatedAppProfileIndexRoute: typeof AuthenticatedAppProfileIndexRoute
+  AuthenticatedAppProgramIndexRoute: typeof AuthenticatedAppProgramIndexRoute
 }
 
 const AuthenticatedAppRouteRouteChildren: AuthenticatedAppRouteRouteChildren = {
-  AuthenticatedAppDillanRoute: AuthenticatedAppDillanRoute,
-  AuthenticatedAppProfileRoute: AuthenticatedAppProfileRoute,
-  AuthenticatedAppProgressRoute: AuthenticatedAppProgressRoute,
-  AuthenticatedAppSettingsRoute: AuthenticatedAppSettingsRoute,
-  AuthenticatedAppTodayRoute: AuthenticatedAppTodayRoute,
-  AuthenticatedAppTrainRoute: AuthenticatedAppTrainRoute,
-  AuthenticatedAppDevComponentsRoute: AuthenticatedAppDevComponentsRoute,
-  AuthenticatedAppDevSpikesRoute: AuthenticatedAppDevSpikesRoute,
-  AuthenticatedAppPlanEditRoute: AuthenticatedAppPlanEditRoute,
-  AuthenticatedAppPlanIndexRoute: AuthenticatedAppPlanIndexRoute,
-  AuthenticatedAppPlanExerciseIdRoute: AuthenticatedAppPlanExerciseIdRoute,
+  AuthenticatedAppApproveTvRoute: AuthenticatedAppApproveTvRoute,
+  AuthenticatedAppCalendarRoute: AuthenticatedAppCalendarRoute,
+  AuthenticatedAppIndexRoute: AuthenticatedAppIndexRoute,
+  AuthenticatedAppProfileDevicesRoute: AuthenticatedAppProfileDevicesRoute,
+  AuthenticatedAppProfileZonesRoute: AuthenticatedAppProfileZonesRoute,
+  AuthenticatedAppProgramIdRoute: AuthenticatedAppProgramIdRoute,
+  AuthenticatedAppProgramNewRoute: AuthenticatedAppProgramNewRoute,
+  AuthenticatedAppProfileIndexRoute: AuthenticatedAppProfileIndexRoute,
+  AuthenticatedAppProgramIndexRoute: AuthenticatedAppProgramIndexRoute,
 }
 
 const AuthenticatedAppRouteRouteWithChildren =
@@ -393,23 +314,19 @@ const AuthenticatedAppRouteRouteWithChildren =
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAppRouteRoute: typeof AuthenticatedAppRouteRouteWithChildren
-  AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
-  AuthenticatedSessionIdRoute: typeof AuthenticatedSessionIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAppRouteRoute: AuthenticatedAppRouteRouteWithChildren,
-  AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
-  AuthenticatedSessionIdRoute: AuthenticatedSessionIdRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  TvApproveRoute: TvApproveRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
