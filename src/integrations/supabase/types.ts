@@ -14,6 +14,744 @@ export type Database = {
   }
   public: {
     Tables: {
+      // --- V1 (drizzle/migrations/0006_v1_core.sql), added by hand until Lovable regenerates this file ---
+      device_grants: {
+        Row: {
+          created_at: string
+          device_id: string
+          id: string
+          label: string
+          last_seen_at: string
+          revoked_at: string | null
+          session_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          id?: string
+          label?: string
+          last_seen_at?: string
+          revoked_at?: string | null
+          session_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          id?: string
+          label?: string
+          last_seen_at?: string
+          revoked_at?: string | null
+          session_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      hr_demo_samples: {
+        Row: {
+          bpm: number | null
+          contact: boolean | null
+          id: number
+          is_demo: boolean
+          measured_at: string
+          metric: string
+          received_at: string
+          rr_ms: number[] | null
+          schema_version: number
+          seq: number
+          session_id: string
+          source_id: string
+          stream_id: string
+          unit: string
+          user_id: string
+        }
+        Insert: {
+          bpm?: number | null
+          contact?: boolean | null
+          id?: number
+          is_demo?: boolean
+          measured_at: string
+          metric?: string
+          received_at?: string
+          rr_ms?: number[] | null
+          schema_version?: number
+          seq: number
+          session_id: string
+          source_id: string
+          stream_id: string
+          unit?: string
+          user_id: string
+        }
+        Update: {
+          bpm?: number | null
+          contact?: boolean | null
+          id?: number
+          is_demo?: boolean
+          measured_at?: string
+          metric?: string
+          received_at?: string
+          rr_ms?: number[] | null
+          schema_version?: number
+          seq?: number
+          session_id?: string
+          source_id?: string
+          stream_id?: string
+          unit?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_demo_samples_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "workout_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_demo_samples_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "hr_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_live: {
+        Row: {
+          active_session_id: string | null
+          battery_pct: number | null
+          bpm: number | null
+          connected_at: string | null
+          contact: boolean | null
+          holder_name: string
+          holder_source_id: string
+          holder_stream_id: string
+          is_demo: boolean
+          last_seen_at: string
+          measured_at: string | null
+          relay_mode: string
+          rev: number
+          sensor_name: string | null
+          sensor_serial: string | null
+          source_kind: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active_session_id?: string | null
+          battery_pct?: number | null
+          bpm?: number | null
+          connected_at?: string | null
+          contact?: boolean | null
+          holder_name: string
+          holder_source_id: string
+          holder_stream_id: string
+          is_demo?: boolean
+          last_seen_at?: string
+          measured_at?: string | null
+          relay_mode: string
+          rev?: number
+          sensor_name?: string | null
+          sensor_serial?: string | null
+          source_kind: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active_session_id?: string | null
+          battery_pct?: number | null
+          bpm?: number | null
+          connected_at?: string | null
+          contact?: boolean | null
+          holder_name?: string
+          holder_source_id?: string
+          holder_stream_id?: string
+          is_demo?: boolean
+          last_seen_at?: string
+          measured_at?: string | null
+          relay_mode?: string
+          rev?: number
+          sensor_name?: string | null
+          sensor_serial?: string | null
+          source_kind?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_live_active_session_id_fkey"
+            columns: ["active_session_id"]
+            isOneToOne: false
+            referencedRelation: "workout_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_live_holder_source_id_fkey"
+            columns: ["holder_source_id"]
+            isOneToOne: false
+            referencedRelation: "hr_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_samples: {
+        Row: {
+          bpm: number | null
+          contact: boolean | null
+          id: number
+          is_demo: boolean
+          measured_at: string
+          metric: string
+          received_at: string
+          rr_ms: number[] | null
+          schema_version: number
+          seq: number
+          session_id: string
+          source_id: string
+          stream_id: string
+          unit: string
+          user_id: string
+        }
+        Insert: {
+          bpm?: number | null
+          contact?: boolean | null
+          id?: number
+          is_demo?: boolean
+          measured_at: string
+          metric?: string
+          received_at?: string
+          rr_ms?: number[] | null
+          schema_version?: number
+          seq: number
+          session_id: string
+          source_id: string
+          stream_id: string
+          unit?: string
+          user_id: string
+        }
+        Update: {
+          bpm?: number | null
+          contact?: boolean | null
+          id?: number
+          is_demo?: boolean
+          measured_at?: string
+          metric?: string
+          received_at?: string
+          rr_ms?: number[] | null
+          schema_version?: number
+          seq?: number
+          session_id?: string
+          source_id?: string
+          stream_id?: string
+          unit?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_samples_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "workout_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hr_samples_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "hr_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_sensors: {
+        Row: {
+          battery_read_at: string | null
+          forgotten_at: string | null
+          last_battery_pct: number | null
+          last_source_id: string | null
+          paired_at: string
+          sensor_kind: string
+          sensor_name: string
+          sensor_serial: string | null
+          user_id: string
+          wanted_until: string | null
+        }
+        Insert: {
+          battery_read_at?: string | null
+          forgotten_at?: string | null
+          last_battery_pct?: number | null
+          last_source_id?: string | null
+          paired_at?: string
+          sensor_kind?: string
+          sensor_name: string
+          sensor_serial?: string | null
+          user_id: string
+          wanted_until?: string | null
+        }
+        Update: {
+          battery_read_at?: string | null
+          forgotten_at?: string | null
+          last_battery_pct?: number | null
+          last_source_id?: string | null
+          paired_at?: string
+          sensor_kind?: string
+          sensor_name?: string
+          sensor_serial?: string | null
+          user_id?: string
+          wanted_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hr_sensors_last_source_id_fkey"
+            columns: ["last_source_id"]
+            isOneToOne: false
+            referencedRelation: "hr_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hr_sources: {
+        Row: {
+          created_at: string
+          display_name: string
+          id: string
+          kind: string
+          last_seen_at: string | null
+          platform: string | null
+          rate_count: number
+          rate_window_at: string | null
+          revoked_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          id: string
+          kind: string
+          last_seen_at?: string | null
+          platform?: string | null
+          rate_count?: number
+          rate_window_at?: string | null
+          revoked_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          id?: string
+          kind?: string
+          last_seen_at?: string | null
+          platform?: string | null
+          rate_count?: number
+          rate_window_at?: string | null
+          revoked_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      pairing_approve_failures: {
+        Row: {
+          at: string
+          id: number
+          user_id: string
+        }
+        Insert: {
+          at?: string
+          id?: number
+          user_id: string
+        }
+        Update: {
+          at?: string
+          id?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      pairing_challenges: {
+        Row: {
+          approved_user_id: string | null
+          attempts: number
+          code_hash: string
+          consumed_at: string | null
+          created_at: string
+          device_id: string
+          device_label: string
+          expires_at: string
+          for_user_id: string | null
+          grant_id: string | null
+          id: string
+          resolved_at: string | null
+          secret_hash: string
+          status: string
+        }
+        Insert: {
+          approved_user_id?: string | null
+          attempts?: number
+          code_hash: string
+          consumed_at?: string | null
+          created_at?: string
+          device_id: string
+          device_label?: string
+          expires_at?: string
+          for_user_id?: string | null
+          grant_id?: string | null
+          id?: string
+          resolved_at?: string | null
+          secret_hash: string
+          status?: string
+        }
+        Update: {
+          approved_user_id?: string | null
+          attempts?: number
+          code_hash?: string
+          consumed_at?: string | null
+          created_at?: string
+          device_id?: string
+          device_label?: string
+          expires_at?: string
+          for_user_id?: string | null
+          grant_id?: string | null
+          id?: string
+          resolved_at?: string | null
+          secret_hash?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      session_commands: {
+        Row: {
+          client_at: string | null
+          command_id: string
+          error: string | null
+          expected_revision: number | null
+          id: number
+          kind: string
+          ok: boolean
+          received_at: string
+          result: Json
+          session_id: string | null
+          source: string | null
+          user_id: string
+        }
+        Insert: {
+          client_at?: string | null
+          command_id: string
+          error?: string | null
+          expected_revision?: number | null
+          id?: number
+          kind: string
+          ok: boolean
+          received_at?: string
+          result: Json
+          session_id?: string | null
+          source?: string | null
+          user_id: string
+        }
+        Update: {
+          client_at?: string | null
+          command_id?: string
+          error?: string | null
+          expected_revision?: number | null
+          id?: number
+          kind?: string
+          ok?: boolean
+          received_at?: string
+          result?: Json
+          session_id?: string | null
+          source?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_commands_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "workout_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      session_notes: {
+        Row: {
+          created_at: string
+          revision: number
+          session_id: string
+          text: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          revision?: number
+          session_id: string
+          text?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          revision?: number
+          session_id?: string
+          text?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_notes_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: true
+            referencedRelation: "workout_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      session_summaries: {
+        Row: {
+          active_ms: number
+          algorithm_version: number
+          coverage: number
+          created_at: string
+          elapsed_ms: number
+          ended_at: string
+          finalized_at: string | null
+          hr_finalize_dirty: boolean
+          hr_sources_used: string[]
+          hr_status: string
+          local_date: string
+          measured_ms: number
+          outcome: string
+          paused_ms: number
+          session_id: string
+          start_timezone: string
+          started_at: string
+          unmeasured_ms: number
+          user_id: string
+          zone_ms: Json
+          zone_snapshot: Json | null
+        }
+        Insert: {
+          active_ms: number
+          algorithm_version?: number
+          coverage?: number
+          created_at?: string
+          elapsed_ms: number
+          ended_at: string
+          finalized_at?: string | null
+          hr_finalize_dirty?: boolean
+          hr_sources_used?: string[]
+          hr_status: string
+          local_date: string
+          measured_ms?: number
+          outcome: string
+          paused_ms: number
+          session_id: string
+          start_timezone: string
+          started_at: string
+          unmeasured_ms: number
+          user_id: string
+          zone_ms?: Json
+          zone_snapshot?: Json | null
+        }
+        Update: {
+          active_ms?: number
+          algorithm_version?: number
+          coverage?: number
+          created_at?: string
+          elapsed_ms?: number
+          ended_at?: string
+          finalized_at?: string | null
+          hr_finalize_dirty?: boolean
+          hr_sources_used?: string[]
+          hr_status?: string
+          local_date?: string
+          measured_ms?: number
+          outcome?: string
+          paused_ms?: number
+          session_id?: string
+          start_timezone?: string
+          started_at?: string
+          unmeasured_ms?: number
+          user_id?: string
+          zone_ms?: Json
+          zone_snapshot?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_summaries_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: true
+            referencedRelation: "workout_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workout_sessions: {
+        Row: {
+          created_at: string
+          cursor: number
+          ended_at: string | null
+          id: string
+          is_demo: boolean
+          last_client_at: string | null
+          last_command_id: string | null
+          last_source: string | null
+          live_data: boolean
+          outcome: string | null
+          paused_at: string | null
+          paused_ms: number
+          pauses: Json
+          rest_ends_at: string | null
+          rest_started_at: string | null
+          results: Json
+          revision: number
+          snapshot: Json
+          start_timezone: string
+          started_at: string | null
+          state: string
+          steps: Json
+          template_id: string | null
+          updated_at: string
+          user_id: string
+          zone_snapshot: Json | null
+        }
+        Insert: {
+          created_at?: string
+          cursor?: number
+          ended_at?: string | null
+          id?: string
+          is_demo?: boolean
+          last_client_at?: string | null
+          last_command_id?: string | null
+          last_source?: string | null
+          live_data: boolean
+          outcome?: string | null
+          paused_at?: string | null
+          paused_ms?: number
+          pauses?: Json
+          rest_ends_at?: string | null
+          rest_started_at?: string | null
+          results?: Json
+          revision?: number
+          snapshot: Json
+          start_timezone: string
+          started_at?: string | null
+          state?: string
+          steps: Json
+          template_id?: string | null
+          updated_at?: string
+          user_id: string
+          zone_snapshot?: Json | null
+        }
+        Update: {
+          created_at?: string
+          cursor?: number
+          ended_at?: string | null
+          id?: string
+          is_demo?: boolean
+          last_client_at?: string | null
+          last_command_id?: string | null
+          last_source?: string | null
+          live_data?: boolean
+          outcome?: string | null
+          paused_at?: string | null
+          paused_ms?: number
+          pauses?: Json
+          rest_ends_at?: string | null
+          rest_started_at?: string | null
+          results?: Json
+          revision?: number
+          snapshot?: Json
+          start_timezone?: string
+          started_at?: string | null
+          state?: string
+          steps?: Json
+          template_id?: string | null
+          updated_at?: string
+          user_id?: string
+          zone_snapshot?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workout_sessions_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "workout_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workout_templates: {
+        Row: {
+          blocks: Json
+          created_at: string
+          deleted_at: string | null
+          id: string
+          name: string
+          revision: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          blocks: Json
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          name: string
+          revision?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          blocks?: Json
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          name?: string
+          revision?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      zone_configs: {
+        Row: {
+          b1: number
+          b2: number
+          b3: number
+          b4: number
+          confirmed_at: string | null
+          created_at: string
+          updated_at: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          b1: number
+          b2: number
+          b3: number
+          b4: number
+          confirmed_at?: string | null
+          created_at?: string
+          updated_at?: string
+          user_id?: string
+          version?: number
+        }
+        Update: {
+          b1?: number
+          b2?: number
+          b3?: number
+          b4?: number
+          confirmed_at?: string | null
+          created_at?: string
+          updated_at?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
+      // --- end V1 ---
       audit_events: {
         Row: {
           action: string
@@ -601,6 +1339,7 @@ export type Database = {
           updated_at: string
           version: number
           week_start: number | null
+          weekly_goal: number
           weight_unit: string
         }
         Insert: {
@@ -620,6 +1359,7 @@ export type Database = {
           updated_at?: string
           version?: number
           week_start?: number | null
+          weekly_goal?: number
           weight_unit?: string
         }
         Update: {
@@ -639,6 +1379,7 @@ export type Database = {
           updated_at?: string
           version?: number
           week_start?: number | null
+          weekly_goal?: number
           weight_unit?: string
         }
         Relationships: []
@@ -1010,6 +1751,91 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      // --- V1 RPCs (0006_v1_core.sql), added by hand ---
+      approve_pairing: {
+        Args: { p_code: string; p_confirm_other_user?: boolean }
+        Returns: Json
+      }
+      delete_my_v1_data: { Args: never; Returns: Json }
+      deny_pairing: { Args: { p_code: string }; Returns: Json }
+      device_grant_register: {
+        Args: { p_device_id: string; p_label?: string }
+        Returns: Json
+      }
+      device_grant_touch: { Args: { p_device_id: string }; Returns: Json }
+      hr_forget_sensor: { Args: never; Returns: undefined }
+      hr_ingest: {
+        Args: {
+          p_claim: boolean
+          p_connected_at: string | null
+          p_expected_user_id: string
+          p_mode: string
+          p_platform?: string | null
+          p_samples: Json
+          p_sensor: Json | null
+          p_source_id: string
+          p_source_kind: string
+          p_source_name?: string | null
+          p_stream_id: string
+        }
+        Returns: Json
+      }
+      hr_request: { Args: { p_minutes?: number }; Returns: undefined }
+      pairing_cancel: { Args: { p_id: string; p_secret: string }; Returns: Json }
+      pairing_consume: { Args: { p_id: string; p_secret: string }; Returns: Json }
+      pairing_create: {
+        Args: {
+          p_device_id: string
+          p_device_label?: string
+          p_for_user_id?: string | null
+          p_secret_hash: string
+        }
+        Returns: Json
+      }
+      pairing_preview: { Args: { p_code: string }; Returns: Json }
+      pairing_status: { Args: { p_id: string; p_secret: string }; Returns: Json }
+      revoke_device_grant: { Args: { p_grant_id: string }; Returns: Json }
+      server_time: { Args: never; Returns: string }
+      session_command: {
+        Args: {
+          p_client_at?: string | null
+          p_command_id: string
+          p_expected_revision: number
+          p_kind: string
+          p_payload?: Json
+          p_session_id: string
+          p_source: string
+        }
+        Returns: Json
+      }
+      session_hr_finalize: {
+        Args: {
+          p_algorithm_version: number
+          p_session_id: string
+          p_sources_used?: string[]
+          p_unmeasured_ms: number
+          p_zone_ms: number[]
+        }
+        Returns: Json
+      }
+      session_note_save: {
+        Args: { p_expected_revision: number; p_session_id: string; p_text: string }
+        Returns: Json
+      }
+      session_start: {
+        Args: {
+          p_client_at?: string | null
+          p_command_id: string
+          p_is_demo?: boolean
+          p_live_data: boolean
+          p_template_id: string
+          p_timezone: string
+        }
+        Returns: Json
+      }
+      v1_build_steps: { Args: { p_blocks: Json }; Returns: Json }
+      v1_template_errors: { Args: { p_blocks: Json; p_name: string }; Returns: Json }
+      // --- end V1 ---
       _resolve_exercise: {
         Args: { _demo: boolean; _name: string; _owner: string }
         Returns: string
