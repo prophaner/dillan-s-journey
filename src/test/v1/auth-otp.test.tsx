@@ -134,6 +134,28 @@ describe("S02 code step (handoff 4.1, acceptance 2-3)", () => {
     expect(input).toBeDisabled();
   });
 
+  it("network failures are not wrong tries: they never lock the code step", async () => {
+    setup((api) => {
+      api.auth.verifyOtp = async () => ({ ok: false, error: "network" });
+    });
+    const input = await toCodeStep();
+    for (let i = 0; i < 6; i++) {
+      await waitFor(() => expect(input).toBeEnabled());
+      fireEvent.change(input, { target: { value: "123456" } });
+      await screen.findByText("Couldn't reach Dillan. Check your connection and try again.");
+    }
+    await waitFor(() => expect(input).toBeEnabled());
+    expect(input.value).toBe("123456"); // kept for another try
+    expect(screen.queryByText(AUTH_COPY.tooMany)).toBeNull();
+  });
+
+  it("does not state a fixed code expiry", async () => {
+    setup();
+    await toCodeStep();
+    expect(screen.getByText(AUTH_COPY.codeHelp)).toBeInTheDocument();
+    expect(screen.queryByText(/expire after/)).toBeNull();
+  });
+
   it("a known contact goes straight in; a new one gets the name step", async () => {
     const { onDone } = setup();
     const input = await toCodeStep();
@@ -154,5 +176,21 @@ describe("S02 code step (handoff 4.1, acceptance 2-3)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Finish" }));
     await waitFor(() => expect(second.onDone).toHaveBeenCalled());
     expect((await second.api.profile.get()).display_name).toBe("Ana");
+  });
+
+  it("the name step never pre-fills the email-derived name, and has a way out", async () => {
+    const { api } = setup((a) => {
+      const get = a.profile.get.bind(a.profile);
+      // what the signup trigger stores: display_name = email local-part
+      a.profile.get = async () => ({ ...(await get()), display_name: "luis.ramos.work" });
+    });
+    const input = await toCodeStep("luis.ramos.work@example.com");
+    fireEvent.change(input, { target: { value: "123456" } });
+    const name = (await screen.findByLabelText("What should we call you?")) as HTMLInputElement;
+    await act(async () => {});
+    expect(name.value).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: AUTH_COPY.useDifferent }));
+    expect(await screen.findByLabelText("Email address")).toBeInTheDocument();
+    expect(await api.auth.getUser()).toBeNull();
   });
 });

@@ -52,7 +52,6 @@ export function authErrorCode(e: AnyError, channel: "email" | "sms"): AuthErrorC
   if (
     channel === "sms" &&
     (code === "phone_provider_disabled" ||
-      code === "sms_send_failed" ||
       msg.includes("unsupported phone provider") ||
       msg.includes("phone provider") ||
       msg.includes("sms provider"))
@@ -60,6 +59,17 @@ export function authErrorCode(e: AnyError, channel: "email" | "sms"): AuthErrorC
     return "sms_not_configured";
   if (e.status === 429 || code.startsWith("over_") || msg.includes("rate limit"))
     return "rate_limited";
+  // Explicit contact codes first: their messages also contain "invalid"
+  // ('Email address "x" is invalid', "Invalid phone number format (E.164 required)").
+  if (
+    code === "validation_failed" ||
+    code === "email_address_invalid" ||
+    code === "sms_send_failed" ||
+    msg.includes("email address") ||
+    msg.includes("phone number") ||
+    msg.includes("invalid format")
+  )
+    return "invalid_contact";
   if (
     code === "otp_expired" ||
     code === "invalid_credentials" ||
@@ -67,7 +77,6 @@ export function authErrorCode(e: AnyError, channel: "email" | "sms"): AuthErrorC
     msg.includes("invalid")
   )
     return "invalid_code";
-  if (code === "validation_failed" || code === "email_address_invalid") return "invalid_contact";
   return "unknown";
 }
 
@@ -207,9 +216,10 @@ export function createSupabaseApi(): DillanApi {
           return { ok: false, error: error ? authErrorCode(error, channel) : "unknown" };
         return { ok: true, user };
       },
-      async signOut() {
+      async signOut(opts) {
         await supabase.removeAllChannels();
-        await supabase.auth.signOut();
+        // auth-js defaults to { scope: "global" }, which would also end every approved TV.
+        await supabase.auth.signOut({ scope: opts?.everywhere ? "global" : "local" });
       },
       onChange(cb) {
         const { data } = supabase.auth.onAuthStateChange((_event, session) =>
@@ -325,13 +335,24 @@ export function createSupabaseApi(): DillanApi {
         );
         return row ? asTemplate(row) : null;
       },
-      async create(body: TemplateBody) {
+      async create(body: TemplateBody, id?: string) {
         const res = await supabase
           .from("workout_templates")
-          .insert({ name: body.name.trim(), blocks: body.blocks as unknown as Json })
+          .insert({
+            ...(id ? { id } : {}),
+            name: body.name.trim(),
+            blocks: body.blocks as unknown as Json,
+          })
           .select("*")
           .single();
-        if (res.error) throw parseInvalid(res.error) ?? check(res);
+        if (res.error) {
+          // A retry after a lost response: the row with this client id is already saved.
+          if (id && res.error.code === "23505") {
+            const existing = await api.templates.get(id);
+            if (existing && !existing.deleted_at) return existing;
+          }
+          throw parseInvalid(res.error) ?? check(res);
+        }
         return asTemplate(res.data);
       },
       async update(id, body, expectedRevision) {
@@ -547,10 +568,20 @@ export function createSupabaseApi(): DillanApi {
     account: {
       async deleteMyData() {
         const data = check(await supabase.rpc("delete_my_v1_data")) as {
+          ok?: boolean;
+          error?: string;
           sessions?: number;
           templates?: number;
         } | null;
+        if (data?.ok === false) throw new Error(data.error ?? "delete_failed");
         return { sessions: data?.sessions ?? 0, templates: data?.templates ?? 0 };
+      },
+      async deleteAccount() {
+        // Server function: V1 data via the caller's own session, then auth.admin.deleteUser.
+        const { deleteMyAccount } = await import("./account.functions");
+        await deleteMyAccount();
+        await supabase.removeAllChannels();
+        await supabase.auth.signOut({ scope: "local" });
       },
     },
   };

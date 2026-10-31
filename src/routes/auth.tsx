@@ -1,9 +1,10 @@
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate, useRouter } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { getApi } from "@/v1/data/client";
 import { qk } from "@/v1/data/queries";
 import { AuthFlow } from "@/v1/ui/auth-flow";
 import { safeRedirect } from "@/v1/ui/redirect";
+import { ScreenState } from "@/components/dillan/surfaces";
 
 type AuthSearch = { redirect?: string | undefined };
 
@@ -24,19 +25,34 @@ export const Route = createFileRoute("/auth")({
   beforeLoad: async ({ search }) => {
     const api = await getApi();
     const user = await api.auth.getUser().catch(() => null);
-    if (!user) return { needsName: false };
+    if (!user) return { needsName: false, profileFailed: false };
     const profile = await api.profile.get().catch(() => null);
-    if (profile && !profile.needs_name) throw redirect({ href: safeRedirect(search.redirect) });
-    return { needsName: true };
+    // A failed read is not "needs a name": showing the name step to an existing user would let
+    // Finish overwrite their timezone and units with this browser's defaults.
+    if (!profile) return { needsName: false, profileFailed: true };
+    if (!profile.needs_name) throw redirect({ href: safeRedirect(search.redirect) });
+    return { needsName: true, profileFailed: false };
   },
   component: AuthRoute,
 });
 
 function AuthRoute() {
   const { redirect: target } = Route.useSearch();
-  const { needsName } = Route.useRouteContext();
+  const { needsName, profileFailed } = Route.useRouteContext();
   const navigate = useNavigate();
+  const router = useRouter();
   const qc = useQueryClient();
+  if (profileFailed)
+    return (
+      <div className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col justify-center px-margin">
+        <ScreenState
+          kind="failed"
+          title="Couldn't load your profile"
+          body="Check your connection, then try again."
+          action={{ label: "Try again", onClick: () => void router.invalidate() }}
+        />
+      </div>
+    );
   return (
     <AuthFlow
       initialStep={needsName ? "name" : "welcome"}

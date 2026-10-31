@@ -43,3 +43,15 @@ export function timeZoneOptions(keep?: string): string[] {
   if (keep && !set.has(keep)) all = [keep, ...all];
   return all;
 }
+
+/** "9:29 PM" in the given timezone (falls back to the browser's on a bad zone or date). */
+export function formatClock(isoOrMs: string | number, timeZone?: string): string {
+  const d = new Date(isoOrMs);
+  if (Number.isNaN(d.getTime())) return "";
+  const opts: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
+  try {
+    return new Intl.DateTimeFormat("en-US", { ...opts, timeZone }).format(d);
+  } catch {
+    return new Intl.DateTimeFormat("en-US", opts).format(d);
+  }
+}

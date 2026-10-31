@@ -158,6 +158,8 @@
 @utility press {
   transition: transform 120ms var(--ease-settle), opacity 120ms var(--ease-settle);
   &:active { transform: scale(0.98); opacity: 0.85; }
+  /* Acceptance 37: no CSS transition longer than 0 ms under reduced motion. */
+  @media (prefers-reduced-motion: reduce) { transition: none; }
 }
 
 /* Spot drop: the dot settles into the cradle when a set is logged. */

@@ -97,6 +97,35 @@ describe("Supabase auth error mapping never reveals account existence", () => {
       authErrorCode({ name: "AuthRetryableFetchError", message: "Failed to fetch" }, "email"),
     ).toBe("network");
   });
+  it("server-rejected contacts are contact errors, not 'code didn't match'", () => {
+    expect(
+      authErrorCode(
+        {
+          code: "email_address_invalid",
+          message: 'Email address "a@b.co" is invalid',
+          status: 400,
+        },
+        "email",
+      ),
+    ).toBe("invalid_contact");
+    expect(
+      authErrorCode({ message: "Unable to validate email address: invalid format" }, "email"),
+    ).toBe("invalid_contact");
+    expect(
+      authErrorCode(
+        { code: "validation_failed", message: "Invalid phone number format (E.164 required)" },
+        "sms",
+      ),
+    ).toBe("invalid_contact");
+    // the provider refusing a number is not "SMS isn't set up"
+    expect(authErrorCode({ code: "sms_send_failed", message: "Error sending sms" }, "sms")).toBe(
+      "invalid_contact",
+    );
+    // a wrong code is still a wrong code
+    expect(authErrorCode({ message: "Token has expired or is invalid" }, "email")).toBe(
+      "invalid_code",
+    );
+  });
 });
 
 const body = (name: string): TemplateBody => ({
@@ -244,6 +273,33 @@ describe("mock api", () => {
       error: "invalid_code",
     });
     expect((await api.devices.list()).every((g) => g.user_id === MOCK_LUIS)).toBe(true);
+  });
+
+  it("templates: a create retried with the same client id returns the saved row", async () => {
+    const api = await signedIn();
+    const before = (await api.templates.list()).length;
+    const id = "11111111-1111-4111-8111-111111111111";
+    const a = await api.templates.create(body("Legs"), id);
+    const b = await api.templates.create(body("Legs"), id);
+    expect(a.id).toBe(id);
+    expect(b).toEqual(a);
+    expect(await api.templates.list()).toHaveLength(before + 1);
+  });
+
+  it("pairing preview carries the request time", async () => {
+    const api = await signedIn();
+    const p = await api.pairing.preview("DLN-7RGZ");
+    expect(p.ok && Number.isFinite(Date.parse(p.created_at))).toBe(true);
+  });
+
+  it("delete account removes the user and every row they own, and signs out", async () => {
+    const api = await signedIn();
+    await api.account.deleteAccount();
+    expect(await api.auth.getUser()).toBeNull();
+    const db = api.db();
+    expect(db.users.some((u) => u.id === MOCK_LUIS)).toBe(false);
+    expect(db.templates.some((t) => t.user_id === MOCK_LUIS)).toBe(false);
+    expect(db.templates.filter((t) => t.user_id === MOCK_MAYA)).toHaveLength(1);
   });
 
   it("delete my data removes only the caller's rows", async () => {

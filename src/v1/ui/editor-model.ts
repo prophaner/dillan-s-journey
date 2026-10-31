@@ -341,6 +341,8 @@ export interface StoredDraft {
   baseRevision: number | null;
   draft: Draft;
   savedAt: number;
+  /** id the next create uses, fixed per draft so a retried save never inserts a duplicate */
+  createId?: string;
 }
 
 export const draftKey = (userId: string) => `dillan.v1.draft.${userId}`;

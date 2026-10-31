@@ -153,6 +153,62 @@ describe("S06 workout editor", () => {
     expect(localStorage.getItem(draftKey(MOCK_LUIS))).toBeNull();
   });
 
+  it("superset member labels are never truncated (acceptance 36)", async () => {
+    renderAt(["/program/new"]);
+    await screen.findByLabelText("Workout name");
+    fireEvent.click(screen.getByRole("radio", { name: "Superset" }));
+    const label = await screen.findByText("Superset A1");
+    expect(label.className).not.toMatch(/truncate|text-ellipsis/);
+    expect(label.parentElement?.className).toMatch(/flex-wrap/);
+  });
+
+  it("a missing load basis focuses a named radio that carries the error", async () => {
+    renderAt(["/program/new"]);
+    await screen.findByLabelText("Workout name");
+    fireEvent.change(byId("ed-name"), { target: { value: "Legs" } });
+    fireEvent.change(byId("ed-blocks.0.exercise.name"), { target: { value: "Squat" } });
+    fireEvent.change(byId("ed-blocks.0.exercise.weight"), { target: { value: "30" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save workout" }));
+    await screen.findByText("Choose Per implement or Total load.");
+    await waitFor(() => expect(document.activeElement?.getAttribute("role")).toBe("radio"));
+    const group = document.activeElement!.closest('[role="radiogroup"]')!;
+    expect(group).toHaveAttribute("aria-invalid", "true");
+    expect(group).toHaveAccessibleName("Load basis");
+    const err = document.getElementById(group.getAttribute("aria-describedby")!);
+    expect(err).toHaveTextContent("Choose Per implement or Total load.");
+  });
+
+  it("inputs only point aria-describedby at help or error text that exists", async () => {
+    renderAt(["/program/new"]);
+    await screen.findByLabelText("Workout name");
+    for (const el of document.querySelectorAll("[aria-describedby]"))
+      for (const id of el.getAttribute("aria-describedby")!.split(" "))
+        expect(document.getElementById(id), id).not.toBeNull();
+  });
+
+  it("Discard on a restored draft takes the current revision (no false conflict on save)", async () => {
+    const [t] = await api.templates.list();
+    writeDraft({
+      v: 1,
+      userId: MOCK_LUIS,
+      templateId: t!.id,
+      baseRevision: t!.revision,
+      draft: setName(newDraft("lb"), "Old draft"),
+      savedAt: Date.now(),
+    });
+    // saved on another device after the draft was written
+    await api.templates.update(t!.id, { name: "Newer", blocks: t!.blocks }, t!.revision);
+    renderAt([`/program/${t!.id}`]);
+    expect(await screen.findByText(EDITOR_COPY.restored)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    await waitFor(() => expect(byId("ed-name").value).toBe("Newer"));
+    fireEvent.change(byId("ed-name"), { target: { value: "Newer 2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save workout" }));
+    expect(await screen.findByText("Program list")).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect((await api.templates.get(t!.id))?.name).toBe("Newer 2");
+  });
+
   it("autosaves the draft per user and restores it after a reload", async () => {
     renderAt(["/program/new"]);
     await screen.findByLabelText("Workout name");

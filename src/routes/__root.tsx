@@ -13,6 +13,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { getApi } from "@/v1/data/client";
+import { clearDraft } from "@/v1/ui/editor-model";
 import { ToastProvider } from "@/components/dillan/overlays";
 import { MockBadge } from "@/components/dillan/mock-badge";
 
@@ -132,6 +133,9 @@ function RootComponent() {
       off = api.auth.onChange((user) => {
         const id = user?.id ?? null;
         if (id === last) return; // token refreshes etc.
+        // However the session ended (Log out, revoked elsewhere, expired), drop the previous
+        // user's private caches: the query cache and their unsaved workout draft.
+        if (last && last !== id) clearDraft(last);
         last = id;
         if (!id) queryClient.clear();
         void router.invalidate();

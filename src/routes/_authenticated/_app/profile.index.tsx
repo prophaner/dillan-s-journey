@@ -25,7 +25,7 @@ import { ConfirmDialog } from "@/components/dillan/confirm-dialog";
 import { useToast } from "@/components/dillan/overlays";
 
 // S15 Account & devices (phone/desktop): name, units, timezone, weekly goal, heart-rate strap &
-// zones, devices, log out, delete my data.
+// zones, devices, log out (this device), log out everywhere, delete my data, delete account.
 export const Route = createFileRoute("/_authenticated/_app/profile/")({
   head: () => ({ meta: [{ title: "Profile · Dillan" }] }),
   component: ProfilePage,
@@ -67,7 +67,11 @@ function ProfileBody({ profile }: { profile: Profile }) {
   const [name, setName] = useState(profile.display_name);
   const [nameError, setNameError] = useState<string | null>(null);
   const [running, setRunning] = useState<WorkoutSessionRow | null>(null);
+  /** which log out the M4 "A workout is running" dialog continues with */
+  const [pendingEverywhere, setPendingEverywhere] = useState(false);
+  const [askEverywhere, setAskEverywhere] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [busy, setBusy] = useState(false);
   useEffect(() => setName(profile.display_name), [profile.display_name]);
 
@@ -86,19 +90,32 @@ function ProfileBody({ profile }: { profile: Profile }) {
     save({ display_name: n }, "Name saved");
   };
 
-  const signOut = async () => {
+  const signOut = async (everywhere: boolean) => {
     setBusy(true);
     clearDraft(user.id);
     await qc.cancelQueries();
     qc.clear();
-    await api.auth.signOut();
+    await api.auth.signOut({ everywhere });
     void navigate({ to: "/auth", search: { redirect: undefined }, replace: true });
   };
 
-  const logOut = async () => {
-    // M4: never silently leave a workout running (handoff 4.2).
-    const cur = await api.sessions.current().catch(() => null);
-    if (cur && cur.state !== "ended" && cur.state !== "preparing") return setRunning(cur);
+  const logOut = async (everywhere = false) => {
+    // M4: never silently leave a workout running (handoff 4.2). A failed lookup is not
+    // "nothing running": stop and say so instead of signing out.
+    setBusy(true);
+    let cur: WorkoutSessionRow | null;
+    try {
+      cur = await api.sessions.current();
+    } catch {
+      setBusy(false);
+      toast({ text: "Couldn't check for a running workout. Check your connection and try again." });
+      return;
+    }
+    setBusy(false);
+    if (cur && cur.state !== "ended" && cur.state !== "preparing") {
+      setPendingEverywhere(everywhere);
+      return setRunning(cur);
+    }
     if (cur && cur.state === "preparing") {
       await api.sessions
         .command({
@@ -109,7 +126,7 @@ function ProfileBody({ profile }: { profile: Profile }) {
         })
         .catch(() => null);
     }
-    await signOut();
+    await signOut(everywhere);
   };
 
   const endThenLogOut = async () => {
@@ -129,7 +146,7 @@ function ProfileBody({ profile }: { profile: Profile }) {
       return;
     }
     setRunning(null);
-    await signOut();
+    await signOut(pendingEverywhere);
   };
 
   const contacts = [user.email, user.phone]
@@ -220,6 +237,7 @@ function ProfileBody({ profile }: { profile: Profile }) {
           >
             <select
               id="profile-tz"
+              aria-describedby="profile-tz-help"
               className={inputClass}
               value={profile.timezone}
               onChange={(e) => save({ timezone: e.target.value }, "Timezone saved")}
@@ -257,7 +275,8 @@ function ProfileBody({ profile }: { profile: Profile }) {
             size="md"
             className="w-full"
             icon={<LogOut className="size-4" aria-hidden />}
-            loading={busy && !running}
+            loading={busy && !running && !askEverywhere}
+            disabled={busy}
             onClick={() => void logOut()}
           >
             Log out
@@ -268,10 +287,27 @@ function ProfileBody({ profile }: { profile: Profile }) {
           <DButton
             variant="quiet"
             size="md"
-            className="mt-4 w-full"
+            className="mt-2 w-full"
+            disabled={busy}
+            onClick={() => setAskEverywhere(true)}
+          >
+            Log out everywhere
+          </DButton>
+          <DButton
+            variant="quiet"
+            size="md"
+            className="mt-2 w-full"
             onClick={() => setDeleting(true)}
           >
             Delete my data
+          </DButton>
+          <DButton
+            variant="quiet"
+            size="md"
+            className="mt-2 w-full"
+            onClick={() => setDeletingAccount(true)}
+          >
+            Delete account
           </DButton>
         </Card>
       </div>
@@ -312,7 +348,52 @@ function ProfileBody({ profile }: { profile: Profile }) {
         }}
       >
         This permanently deletes your workouts, history, notes, heart-rate data, zones and TV
-        approvals. Your sign-in and profile stay. This can't be undone.
+        approvals. Your sign-in and profile stay — use Delete account to remove those too. This
+        can't be undone.
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={askEverywhere}
+        title="Log out everywhere?"
+        cancelLabel="Cancel"
+        confirmLabel="Log out everywhere"
+        busy={busy}
+        onCancel={() => setAskEverywhere(false)}
+        onConfirm={async () => {
+          setAskEverywhere(false);
+          await logOut(true);
+        }}
+      >
+        This signs you out on every phone, computer and approved TV. Your workouts stay in your
+        account.
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={deletingAccount}
+        title="Delete your account?"
+        cancelLabel="Cancel"
+        confirmLabel="Delete account"
+        busy={busy}
+        onCancel={() => setDeletingAccount(false)}
+        onConfirm={async () => {
+          setBusy(true);
+          try {
+            await api.account.deleteAccount();
+          } catch {
+            setBusy(false);
+            setDeletingAccount(false);
+            toast({ text: "Nothing was deleted. Check your connection and try again." });
+            return;
+          }
+          clearDraft(user.id);
+          await qc.cancelQueries();
+          qc.clear();
+          void navigate({ to: "/auth", search: { redirect: undefined }, replace: true });
+        }}
+      >
+        This permanently deletes your account: your sign-in, name and settings, workouts, history,
+        notes, heart-rate data, zones and TV approvals. Every device is signed out. This can't be
+        undone.
       </ConfirmDialog>
     </>
   );

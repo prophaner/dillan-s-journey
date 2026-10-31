@@ -39,6 +39,11 @@ export const AUTH_COPY = {
   smsNotSetUp:
     "SMS isn't set up yet. Use email for now — text-message codes arrive once SMS is switched on.",
   tooMany: "Too many tries for this code. Request a new code.",
+  /** The expiry is set in Supabase Auth by the owner (docs/v1/owner-setup.md), so no fixed time. */
+  codeHelp: "Use the newest code we sent. Check spam if it hasn't arrived.",
+  /** V1 links one contact per account (build-plan D18); says nothing about whether one exists. */
+  sameContact: "Use the one you registered with — a different one starts a new account.",
+  useDifferent: "Use a different email or number",
 } as const;
 
 const SEND_ERRORS: Record<AuthErrorCode, string> = {
@@ -132,16 +137,16 @@ export function AuthFlow({
       .catch(() => ({ ok: false as const, error: "network" as const }));
     if (!r.ok) {
       setBusy(false);
+      if (r.error !== "invalid_code") {
+        // The server never judged the code (network, rate limit...): not a wrong try, keep it.
+        setCodeError(SEND_ERRORS[r.error]);
+        window.setTimeout(() => codeRef.current?.focus(), 0);
+        return;
+      }
       const n = attempts + 1;
       setAttempts(n);
       setCode("");
-      setCodeError(
-        r.error === "network"
-          ? SEND_ERRORS.network
-          : n >= MAX_CODE_ATTEMPTS
-            ? AUTH_COPY.tooMany
-            : AUTH_COPY.mismatch,
-      );
+      setCodeError(n >= MAX_CODE_ATTEMPTS ? AUTH_COPY.tooMany : AUTH_COPY.mismatch);
       // after React re-enables the input
       window.setTimeout(() => codeRef.current?.focus(), 0);
       return;
@@ -164,6 +169,14 @@ export function AuthFlow({
         onSaved={(p) => {
           onProfileSaved?.(p);
           onDone();
+        }}
+        onExit={async () => {
+          await api.auth.signOut().catch(() => {});
+          setCode("");
+          setCodeError(null);
+          setError(null);
+          setContact("");
+          setStep("contact");
         }}
       />
     );
@@ -233,8 +246,8 @@ export function AuthFlow({
                 error={error}
                 help={
                   channel === "email"
-                    ? "We send a 6-digit code. No passwords."
-                    : "We only text a code — never marketing."
+                    ? `We send a 6-digit code. No passwords. ${AUTH_COPY.sameContact}`
+                    : `We only text a code — never marketing. ${AUTH_COPY.sameContact}`
                 }
               >
                 <TextInput
@@ -288,7 +301,7 @@ export function AuthFlow({
                   codeError ? "text-subhead font-medium text-hold" : "text-subhead text-text-2"
                 }
               >
-                {codeError ?? "Codes expire after 10 minutes."}
+                {codeError ?? AUTH_COPY.codeHelp}
               </p>
               <DButton
                 type="submit"
@@ -323,7 +336,13 @@ export function AuthFlow({
   );
 }
 
-function NameStep({ onSaved }: { onSaved: (p: Profile) => void }) {
+function NameStep({
+  onSaved,
+  onExit,
+}: {
+  onSaved: (p: Profile) => void;
+  onExit: () => Promise<void>;
+}) {
   const api = useApi();
   const [name, setName] = useState("");
   const [tz, setTz] = useState(browserTimeZone());
@@ -338,7 +357,9 @@ function NameStep({ onSaved }: { onSaved: (p: Profile) => void }) {
       .get()
       .then((p) => {
         if (!live) return;
-        if (p.display_name && !p.display_name.includes("@")) setName((n) => n || p.display_name);
+        // Never pre-fill a name the person didn't choose: the signup trigger seeds display_name
+        // with the email local-part, and this name is shown on the shared TV.
+        if (!p.needs_name && p.display_name) setName((n) => n || p.display_name);
         setUnit(p.weight_unit);
       })
       .catch(() => {});
@@ -402,7 +423,13 @@ function NameStep({ onSaved }: { onSaved: (p: Profile) => void }) {
           />
         </Field>
         <Field label="Timezone" htmlFor="tz" help="Weeks run Monday–Sunday in this timezone.">
-          <select id="tz" className={inputClass} value={tz} onChange={(e) => setTz(e.target.value)}>
+          <select
+            id="tz"
+            aria-describedby="tz-help"
+            className={inputClass}
+            value={tz}
+            onChange={(e) => setTz(e.target.value)}
+          >
             {timeZoneOptions(tz).map((z) => (
               <option key={z} value={z}>
                 {z.replace(/_/g, " ")}
@@ -424,6 +451,16 @@ function NameStep({ onSaved }: { onSaved: (p: Profile) => void }) {
         </div>
         <DButton type="submit" variant="primary" loading={busy} disabled={busy}>
           Finish
+        </DButton>
+        <DButton
+          variant="quiet"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            void onExit().finally(() => setBusy(false));
+          }}
+        >
+          {AUTH_COPY.useDifferent}
         </DButton>
       </form>
     </div>

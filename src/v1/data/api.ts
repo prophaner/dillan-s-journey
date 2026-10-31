@@ -65,12 +65,21 @@ export interface HistoryItem extends SessionSummaryRow {
 }
 
 export type PairingError =
-  "invalid_code" | "expired" | "already_resolved" | "rate_limited" | "for_other_user" | "network";
+  | "invalid_code"
+  | "expired"
+  | "already_resolved"
+  | "rate_limited"
+  | "for_other_user"
+  /** the caller is a paired TV session; approvals happen from a phone or computer */
+  | "device_session_forbidden"
+  | "network";
 
 export type PairingPreview =
   | {
       ok: true;
       device_label: string;
+      /** when the TV asked (shown as "Requested 9:29 PM") */
+      created_at: string;
       expires_at: string;
       for_other_user: boolean;
       for_name: string | null;
@@ -136,7 +145,11 @@ export interface DillanApi {
       contact: string,
       code: string,
     ): Promise<AuthResult<{ user: AuthUser }>>;
-    signOut(): Promise<void>;
+    /**
+     * Ends this device's session only. `everywhere` also revokes every other session of the
+     * user, approved TVs included (an explicit, separate action in Profile).
+     */
+    signOut(opts?: { everywhere?: boolean }): Promise<void>;
     onChange(cb: (user: AuthUser | null) => void): Unsubscribe;
   };
 
@@ -156,7 +169,11 @@ export interface DillanApi {
     list(): Promise<WorkoutTemplate[]>;
     /** includes soft-deleted rows (null when missing) */
     get(id: string): Promise<WorkoutTemplate | null>;
-    create(body: TemplateBody): Promise<WorkoutTemplate>;
+    /**
+     * `id` is chosen by the client once per draft so a retry after a lost response returns the
+     * row that was already created instead of inserting a duplicate.
+     */
+    create(body: TemplateBody, id?: string): Promise<WorkoutTemplate>;
     /** throws RevisionConflictError when expectedRevision is not current */
     update(id: string, body: TemplateBody, expectedRevision: number): Promise<WorkoutTemplate>;
     /** soft delete; throws RevisionConflictError when expectedRevision is not current */
@@ -209,6 +226,11 @@ export interface DillanApi {
   account: {
     /** delete_my_v1_data(): every V1 row the caller owns */
     deleteMyData(): Promise<{ sessions: number; templates: number }>;
+    /**
+     * Deletes the account itself: V1 data, then the auth user (which cascades to the profile and
+     * every owned row), then ends this device's session. Refused to a paired TV session.
+     */
+    deleteAccount(): Promise<void>;
   };
 }
 

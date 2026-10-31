@@ -6,6 +6,7 @@ import { useApi } from "@/v1/data/client";
 import { normalizePairingCode, type PairingError } from "@/v1/data/api";
 import { qk, useProfile } from "@/v1/data/queries";
 import { useUser } from "@/v1/ui/user-context";
+import { formatClock } from "@/v1/ui/timezones";
 import { ScreenHeader } from "@/components/dillan/app-shell";
 import { DButton, dButton } from "@/components/dillan/button";
 import { Banner, Card } from "@/components/dillan/surfaces";
@@ -29,12 +30,23 @@ const ERRORS: Record<PairingError, string> = {
   expired: "This code expired. Ask the TV for a new one.",
   rate_limited: "Too many tries. Wait a few minutes, then try again.",
   for_other_user: "This request was for someone else.",
+  device_session_forbidden: "Approve TVs from your phone or computer, not from a TV.",
   network: "Couldn't reach Dillan. Check your connection and try again.",
 };
+const FALLBACK_ERROR = "That didn't work. Ask the TV for a new code.";
+/** Unknown server codes still say something (never a silent Continue). */
+const errorText = (e: string) => ERRORS[e as PairingError] ?? FALLBACK_ERROR;
 
 type Step =
   | { kind: "code" }
-  | { kind: "confirm"; code: string; label: string; forName: string | null; otherUser: boolean }
+  | {
+      kind: "confirm";
+      code: string;
+      label: string;
+      requestedAt: string;
+      forName: string | null;
+      otherUser: boolean;
+    }
   | { kind: "approved"; label: string }
   | { kind: "denied" };
 
@@ -58,6 +70,12 @@ function ApproveTv({ initialCode }: { initialCode: string }) {
   const input = useRef<HTMLInputElement>(null);
   const tried = useRef(false);
 
+  // After a failed approve/deny the code step re-mounts: put focus (and the error, through
+  // aria-describedby) back on the code field.
+  useEffect(() => {
+    if (step.kind === "code" && error) input.current?.focus();
+  }, [step.kind, error]);
+
   const lookUp = async (raw: string) => {
     const c = normalizePairingCode(raw);
     if (!c) {
@@ -72,7 +90,7 @@ function ApproveTv({ initialCode }: { initialCode: string }) {
       .catch(() => ({ ok: false as const, error: "network" as const }));
     setBusy(false);
     if (!r.ok) {
-      setError(ERRORS[r.error]);
+      setError(errorText(r.error));
       input.current?.focus();
       return;
     }
@@ -81,6 +99,7 @@ function ApproveTv({ initialCode }: { initialCode: string }) {
       kind: "confirm",
       code: c,
       label: r.device_label,
+      requestedAt: r.created_at,
       forName: r.for_name,
       otherUser: r.for_other_user,
     });
@@ -101,7 +120,7 @@ function ApproveTv({ initialCode }: { initialCode: string }) {
       .catch(() => ({ ok: false as const, error: "network" as const }));
     setBusy(false);
     if (!r.ok) {
-      setError(ERRORS[r.error]);
+      setError(errorText(r.error));
       setStep({ kind: "code" });
       return;
     }
@@ -119,7 +138,7 @@ function ApproveTv({ initialCode }: { initialCode: string }) {
       .catch(() => ({ ok: false as const, error: "network" as const }));
     setBusy(false);
     if (!r.ok) {
-      setError(ERRORS[r.error]);
+      setError(errorText(r.error));
       setStep({ kind: "code" });
       return;
     }
@@ -185,7 +204,11 @@ function ApproveTv({ initialCode }: { initialCode: string }) {
           <Card>
             <Eyebrow>This TV</Eyebrow>
             <p className="mt-1 text-title2 font-bold">{step.label}</p>
-            <p className="mt-1 text-footnote text-text-2">Code {step.code}</p>
+            <p className="mt-1 text-footnote text-text-2">
+              {step.requestedAt &&
+                `Requested ${formatClock(step.requestedAt, profile?.timezone)} · `}
+              Code {step.code}
+            </p>
           </Card>
           <p className="text-body text-text-2">
             Approving signs this TV in as <strong className="text-text">{me}</strong> and lets it

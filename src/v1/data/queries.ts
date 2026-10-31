@@ -3,7 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "./client";
-import type { ProfilePatch } from "./api";
+import type { Profile, ProfilePatch } from "./api";
 import type { TemplateBody, ZoneCutoffs } from "@/v1/core/types";
 
 export const qk = {
@@ -20,13 +20,46 @@ export function useProfile(uid: string) {
   return useQuery({ queryKey: qk.profile(uid), queryFn: () => api.profile.get() });
 }
 
+/**
+ * Optimistic and serialized: the cache takes the patch the moment mutate() is called (so a second
+ * tap on the weekly-goal stepper builds on the first), saves run one at a time in tap order, and
+ * only the last one to finish writes the server's row back. A failure re-reads the profile.
+ */
 export function useUpdateProfile(uid: string) {
   const api = useApi();
   const qc = useQueryClient();
-  return useMutation({
+  const key = qk.profile(uid);
+  const mutationKey = [...key, "update"] as const;
+  const m = useMutation({
+    mutationKey,
+    scope: { id: `profile-update:${uid}` },
     mutationFn: (patch: ProfilePatch) => api.profile.update(patch),
-    onSuccess: (p) => qc.setQueryData(qk.profile(uid), p),
+    onSuccess: (p) => {
+      if (qc.isMutating({ mutationKey }) <= 1) qc.setQueryData(key, p);
+    },
+    onError: () => {
+      void qc.invalidateQueries({ queryKey: key });
+    },
   });
+  const mutate: typeof m.mutate = (patch, opts) => {
+    void qc.cancelQueries({ queryKey: key });
+    qc.setQueryData<Profile>(key, (p) => (p ? applyProfilePatch(p, patch) : p));
+    m.mutate(patch, opts);
+  };
+  return { ...m, mutate };
+}
+
+export function applyProfilePatch(p: Profile, patch: ProfilePatch): Profile {
+  return {
+    ...p,
+    ...(patch.display_name !== undefined ? { display_name: patch.display_name.trim() } : {}),
+    ...(patch.timezone !== undefined ? { timezone: patch.timezone } : {}),
+    ...(patch.weight_unit !== undefined ? { weight_unit: patch.weight_unit } : {}),
+    ...(patch.weekly_goal !== undefined ? { weekly_goal: patch.weekly_goal } : {}),
+    ...(patch.complete_name_step
+      ? { needs_name: !(patch.display_name ?? p.display_name).trim() }
+      : {}),
+  };
 }
 
 export function useZones(uid: string) {

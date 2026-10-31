@@ -9,7 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronUp, Plus } from "lucide-react";
 import type { LoadBasis, RepMode, Unit, WorkoutTemplate } from "@/v1/core/types";
 import { errorsByPath, validateTemplate } from "@/v1/core/validate";
-import { RevisionConflictError, TemplateInvalidError } from "@/v1/data/api";
+import { newId, RevisionConflictError, TemplateInvalidError } from "@/v1/data/api";
 import { useApi } from "@/v1/data/client";
 import { qk } from "@/v1/data/queries";
 import { ScreenHeader } from "@/components/dillan/app-shell";
@@ -83,6 +83,7 @@ export function WorkoutEditor({
   const [askDelete, setAskDelete] = useState(false);
   const [conflict, setConflict] = useState<Conflict>(null);
   const leaving = useRef(false);
+  const createId = useRef<string>(newId());
   const nameRef = useRef<HTMLInputElement>(null);
   const templateId = template?.id ?? null;
 
@@ -92,6 +93,7 @@ export function WorkoutEditor({
     if (s && s.templateId === templateId && !sameDraft(s.draft, baseline)) {
       setDraft(s.draft);
       if (s.baseRevision != null) setRevision(s.baseRevision);
+      if (s.createId) createId.current = s.createId;
       setRestored(true);
     }
     if (!templateId) nameRef.current?.focus();
@@ -104,7 +106,15 @@ export function WorkoutEditor({
   useEffect(() => {
     if (leaving.current) return;
     if (dirty)
-      writeDraft({ v: 1, userId, templateId, baseRevision: revision, draft, savedAt: Date.now() });
+      writeDraft({
+        v: 1,
+        userId,
+        templateId,
+        baseRevision: revision,
+        draft,
+        savedAt: Date.now(),
+        createId: createId.current,
+      });
     else {
       const s = readDraft(userId);
       if (s && s.templateId === templateId) clearDraft(userId);
@@ -177,7 +187,7 @@ export function WorkoutEditor({
       if (templateId && revision != null && !opts.asNew) {
         finishSaved(await api.templates.update(templateId, body, revision), false);
       } else {
-        finishSaved(await api.templates.create(body), true);
+        finishSaved(await api.templates.create(body, createId.current), true);
       }
     } catch (e) {
       if (e instanceof RevisionConflictError) setConflict({ latest: e.latest });
@@ -241,10 +251,13 @@ export function WorkoutEditor({
           action={
             <DButton
               variant="quiet"
-              size="sm"
+              size="md"
               onClick={() => {
                 clearDraft(userId);
                 setDraft(baseline);
+                // The baseline is the current template, so its revision goes with it (the restored
+                // draft's older base revision would make the next save a false conflict).
+                setRevision(template?.revision ?? null);
                 setRestored(false);
               }}
             >
@@ -373,7 +386,7 @@ export function WorkoutEditor({
                   {b.exercises.length === 1 && (
                     <DButton
                       variant="secondary"
-                      size="sm"
+                      size="md"
                       className="mt-2 bg-surface"
                       onClick={() => update(convertToStraight(draft, bi))}
                     >
@@ -532,36 +545,40 @@ function CardHead({
 }) {
   const icon = "grid size-11 place-items-center rounded-full text-text-2 disabled:opacity-30";
   return (
-    <div className="mb-2 flex items-center gap-1">
-      <p className="min-w-0 flex-1 truncate text-footnote font-bold uppercase tracking-wider text-text-2">
+    <div className="mb-2 flex flex-wrap items-center gap-x-1">
+      {/* Never truncated (acceptance 36): the label keeps its width and the controls wrap to
+          their own row when a narrow superset card can't fit both. */}
+      <p className="min-h-11 grow py-3 text-footnote font-bold uppercase leading-tight tracking-wider text-text-2 [overflow-wrap:anywhere]">
         {label}
       </p>
-      <button
-        type="button"
-        className={icon}
-        aria-label={`Move ${label} up`}
-        disabled={!canUp}
-        onClick={() => onMove(-1)}
-      >
-        <ChevronUp className="size-5" aria-hidden />
-      </button>
-      <button
-        type="button"
-        className={icon}
-        aria-label={`Move ${label} down`}
-        disabled={!canDown}
-        onClick={() => onMove(1)}
-      >
-        <ChevronDown className="size-5" aria-hidden />
-      </button>
-      <button
-        type="button"
-        className="min-h-11 px-2 text-subhead font-bold text-text-2"
-        aria-label={`Remove ${label}`}
-        onClick={onRemove}
-      >
-        Remove
-      </button>
+      <div className="ml-auto flex items-center gap-1">
+        <button
+          type="button"
+          className={icon}
+          aria-label={`Move ${label} up`}
+          disabled={!canUp}
+          onClick={() => onMove(-1)}
+        >
+          <ChevronUp className="size-5" aria-hidden />
+        </button>
+        <button
+          type="button"
+          className={icon}
+          aria-label={`Move ${label} down`}
+          disabled={!canDown}
+          onClick={() => onMove(1)}
+        >
+          <ChevronDown className="size-5" aria-hidden />
+        </button>
+        <button
+          type="button"
+          className="min-h-11 px-2 text-subhead font-bold text-text-2"
+          aria-label={`Remove ${label}`}
+          onClick={onRemove}
+        >
+          Remove
+        </button>
+      </div>
     </div>
   );
 }
@@ -686,13 +703,13 @@ function ExerciseFields({
           >
             Load basis
           </span>
-          <div
-            id={fieldId(`${path}.load_basis`)}
-            tabIndex={-1}
-            className={cn("rounded-btn", lbErr && "ring-2 ring-hold")}
-          >
+          <div className={cn("rounded-btn", lbErr && "ring-2 ring-hold")}>
             <Segmented<LoadBasis>
               label="Load basis"
+              labelledBy={fieldId(`${path}.load_basis`) + "-label"}
+              focusId={fieldId(`${path}.load_basis`)}
+              invalid={!!lbErr}
+              describedBy={fieldId(`${path}.load_basis`) + (lbErr ? "-err" : "-help")}
               value={ex.load_basis}
               options={[
                 { value: "per_implement", label: "Per implement" },
@@ -702,9 +719,14 @@ function ExerciseFields({
             />
           </div>
           {lbErr ? (
-            <p className="text-footnote font-medium text-hold">{lbErr}</p>
+            <p
+              id={fieldId(`${path}.load_basis`) + "-err"}
+              className="text-footnote font-medium text-hold"
+            >
+              {lbErr}
+            </p>
           ) : (
-            <p className="text-footnote text-text-2">
+            <p id={fieldId(`${path}.load_basis`) + "-help"} className="text-footnote text-text-2">
               Per implement = each dumbbell or kettlebell. Total = the full load. So "{ex.weight}{" "}
               {ex.unit}" is never ambiguous.
             </p>

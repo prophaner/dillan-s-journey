@@ -1008,6 +1008,30 @@ describe("TV pairing", () => {
         tv1.sid,
       ),
     ).rejects.toThrow(/row-level security/);
+    // profile settings are owner settings too: the TV reads them but cannot change or delete them
+    const tvProfile = await as(
+      D,
+      () =>
+        q<{ id: string }>(
+          "update public.profiles set weekly_goal = 9, version = version where id = $1 returning id",
+          [D],
+        ),
+      tv1.sid,
+    );
+    expect(tvProfile).toHaveLength(0);
+    await expect(
+      as(D, () => q("delete from public.profiles where id = $1", [D]), tv1.sid),
+    ).rejects.toThrow(/permission denied/);
+    expect(
+      await as(D, () => q("select id from public.profiles where id = $1", [D]), tv1.sid),
+    ).toHaveLength(1);
+    const phoneProfile = await as(D, () =>
+      q<{ weekly_goal: number }>(
+        "update public.profiles set weekly_goal = 4, version = version where id = $1 returning weekly_goal",
+        [D],
+      ),
+    );
+    expect(phoneProfile[0]?.weekly_goal).toBe(4);
     // the TV can still read and run workouts, and can sign itself out
     const tid = await newTemplate(D, [straight()]);
     const tvTemplates = await as(D, () => q("select id from public.workout_templates"), tv1.sid);

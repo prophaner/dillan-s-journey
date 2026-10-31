@@ -21,7 +21,8 @@ export const dButton = cva(
         lg: "h-[58px] w-full rounded-btn px-6 text-headline",
         log: "h-16 w-full rounded-btn px-6 text-title3",
         md: "h-11 rounded-btn px-5 text-subhead",
-        sm: "h-9 rounded-chip px-4 text-footnote",
+        /** 36 px visual; the ::after extends the hit area to 44 px (handoff: touch targets ≥44×44). */
+        sm: "relative h-9 min-w-11 rounded-chip px-4 text-footnote after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']",
       },
     },
     defaultVariants: { variant: "secondary", size: "lg" },

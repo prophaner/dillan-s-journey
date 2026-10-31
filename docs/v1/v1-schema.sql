@@ -4,7 +4,8 @@
 --
 -- Re-runnable: tables/indexes use IF NOT EXISTS, triggers CREATE OR REPLACE, policies are dropped
 -- and recreated, the publication is only extended for tables not yet in it. Nothing is dropped
--- or rewritten in any table from migrations 0000-0005.
+-- or rewritten in any table from migrations 0000-0005; the one Phase-0 policy replaced is
+-- "profiles: owner all" (split so a paired TV session cannot write the profile).
 --
 -- Conventions
 --   * Every V1 table has RLS on. Clients read their own rows; every write that carries
@@ -718,6 +719,22 @@ create policy "zone_configs: owner insert" on public.zone_configs for insert to 
 drop policy if exists "zone_configs: owner update" on public.zone_configs;
 create policy "zone_configs: owner update" on public.zone_configs for update to authenticated
   using (user_id = auth.uid() and not public.v1_is_device_session()) with check (user_id = auth.uid());
+
+-- profiles (Phase 0 table): name, timezone, units and weekly goal are owner settings like templates
+-- and zones, so a paired TV session may read them but not write them. Replaces the Phase-0
+-- "profiles: owner all" policy; clients never delete a profile (account deletion removes the
+-- auth user server-side, which cascades).
+drop policy if exists "profiles: owner all" on public.profiles;
+revoke delete on public.profiles from authenticated;
+drop policy if exists "profiles: owner read" on public.profiles;
+create policy "profiles: owner read" on public.profiles for select to authenticated
+  using (id = auth.uid());
+drop policy if exists "profiles: owner insert" on public.profiles;
+create policy "profiles: owner insert" on public.profiles for insert to authenticated
+  with check (id = auth.uid() and not public.v1_is_device_session());
+drop policy if exists "profiles: owner update" on public.profiles;
+create policy "profiles: owner update" on public.profiles for update to authenticated
+  using (id = auth.uid() and not public.v1_is_device_session()) with check (id = auth.uid());
 
 -- read-only to clients; writes only through the RPCs below
 grant select on public.workout_sessions, public.session_commands, public.session_notes,

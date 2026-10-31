@@ -304,13 +304,19 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
         const u = user();
         return clone(db.templates.find((t) => t.id === id && t.user_id === u.id) ?? null);
       },
-      async create(body) {
+      async create(body, id) {
         const u = user();
         const errs = validateTemplate(body);
         if (errs.length)
           throw new TemplateInvalidError(errs.map(({ path, code }) => ({ path, code })));
+        // Same id again = a retry of a create that already went through (no duplicate row).
+        const existing = id ? db.templates.find((x) => x.id === id) : undefined;
+        if (existing) {
+          if (existing.user_id !== u.id || existing.deleted_at) throw new Error("duplicate_id");
+          return clone(existing);
+        }
         const t: WorkoutTemplate = {
-          id: newId(),
+          id: id ?? newId(),
           user_id: u.id,
           name: body.name.trim(),
           blocks: clone(body.blocks),
@@ -560,6 +566,7 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
         return {
           ok: true,
           device_label: p.device_label,
+          created_at: p.created_at,
           expires_at: p.expires_at,
           for_other_user: !!p.for_user_id && p.for_user_id !== u.id,
           for_name: forName,
@@ -642,6 +649,13 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
           if (k.startsWith(`${u.id}:`)) delete db.commands[k];
         persist();
         return { sessions: mine.length, templates: tpl };
+      },
+      async deleteAccount() {
+        const u = user();
+        await api.account.deleteMyData();
+        db.users = db.users.filter((x) => x.id !== u.id);
+        persist();
+        writeSession(null);
       },
     },
   };
