@@ -20,6 +20,7 @@ import { Eyebrow } from "@/components/dillan/form-pieces";
 import { Card } from "@/components/dillan/surfaces";
 import { StatusTag } from "@/components/dillan/tags";
 import { cn } from "@/lib/utils";
+import { coverageLine } from "@/v1/core/hr-views";
 
 export const SUMMARY_COPY = {
   title: "Workout saved",
@@ -127,10 +128,7 @@ export function ZonesCard({
           unmeasuredMs={summary.unmeasured_ms}
           cutoffs={cutoffs}
         />
-        <p className="mt-2 text-footnote text-text-2">
-          Heart-rate coverage {Math.round(Number(summary.coverage) * 100)}%
-          {summary.hr_sources_used.length ? ` · via ${summary.hr_sources_used.join(", ")}` : ""}
-        </p>
+        <p className="mt-2 text-footnote text-text-2">{coverageLine(summary)}</p>
       </>
     );
   return (

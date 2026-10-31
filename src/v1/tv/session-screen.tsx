@@ -12,6 +12,7 @@ import type { Block, EngineState, Step, WorkoutSessionRow, ZoneCutoffs } from "@
 import { useProfile, useSummary } from "@/v1/data/queries";
 import { counts, loadText, repsText } from "@/v1/session/format";
 import { sourceLine } from "@/v1/core/health";
+import { coverageLine } from "@/v1/core/hr-views";
 import { healthFor, useLiveHr, useLiveZones } from "@/v1/session/live-hr";
 import { useNow, useSessionController, useWakeLock } from "@/v1/session/use-session";
 import { DASH_COPY } from "@/v1/ui/session-page";
@@ -731,6 +732,7 @@ function TvSummary({ row }: { row: WorkoutSessionRow }) {
             <>
               {!cutoffs && <p className="text-tv-base text-text-2">{SUMMARY_COPY.zonesNotSet}</p>}
               <TvZoneBars zoneMs={s.zone_ms} unmeasuredMs={s.unmeasured_ms} cutoffs={cutoffs} />
+              {s.measured_ms > 0 && <p className="text-tv-sm text-text-2">{coverageLine(s)}</p>}
               <p className="text-tv-sm text-text-2">{ZONE_COPY.caption}</p>
             </>
           )}

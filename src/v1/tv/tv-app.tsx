@@ -673,6 +673,11 @@ function SignedIn({
     },
     playPause: () => {
       if (screen.name === "session" && !modal) sessionHandle.current?.togglePause();
+      // S08: Play/Pause equals Start only while Start is enabled (heart rate Live).
+      if (screen.name === "preflight" && !modal)
+        document
+          .querySelector<HTMLButtonElement>('[data-focus-id="pre-start"]:not([disabled])')
+          ?.click();
     },
     menu: () => go({ name: "profile" }),
   };

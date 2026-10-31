@@ -112,6 +112,16 @@ export function homeHrCard(
   return { ...base, chip: { label: h.label, tone: "warn" }, text: h.detail };
 }
 
+/** S11/S13: "Heart-rate coverage {pct}% · via Gym tablet, Office laptop" */
+export function coverageLine(s: {
+  coverage: number | string;
+  hr_sources_used: readonly string[];
+}): string {
+  const pct = Math.round(Number(s.coverage) * 100);
+  const via = s.hr_sources_used.length ? ` · via ${s.hr_sources_used.join(", ")}` : "";
+  return `Heart-rate coverage ${pct}%${via}`;
+}
+
 /** S16 relay: label per mode (h10-design 6 S16 table). */
 export const RELAY_COPY = {
   title: "Dillan relay",

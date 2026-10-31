@@ -40,6 +40,7 @@ import {
   TvQr,
   TvZoneBars,
 } from "./ui";
+import { coverageLine } from "@/v1/core/hr-views";
 
 const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -403,6 +404,9 @@ export function TvDetail({ sessionId, day }: { sessionId: string; day?: string |
                 unmeasuredMs={s.unmeasured_ms}
                 cutoffs={row.zone_snapshot?.cutoffs ?? null}
               />
+            )}
+            {s && s.hr_status === "final" && s.measured_ms > 0 && (
+              <p className="text-tv-sm text-text-2">{coverageLine(s)}</p>
             )}
             <TvEyebrow className="mt-2">Notes</TvEyebrow>
             <TvNoteText sessionId={row.id} />
