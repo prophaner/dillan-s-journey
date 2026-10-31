@@ -1,58 +1,104 @@
-// Live heart rate for preflight and the dashboard: the caller's hr_live row (Realtime + initial
-// read), the paired strap, the H-state from core/health.ts every second, and the live zone
-// aggregates from core/zones.ts (the same module the saved summary uses). Slice E adds the relay;
-// until then the Supabase hr_live row is empty and the mock backend simulates one (mock-hr.ts).
+// Live heart rate for every viewer (h10-design 2, 4.3, 5.5): the caller's hr_live row and
+// hr_sensors row (initial read + Realtime, re-read on (re)subscribe and when the page becomes
+// visible again), the H-state from core/health.ts recomputed every second from server-corrected
+// time, and the live zone aggregates from core/zones.ts (the same module the saved summary uses).
+// Viewers never touch Bluetooth and never treat relay_mode = 'live' as Live on its own.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deriveHealthState, type HealthState } from "@/v1/core/health";
-import type { HrLiveRow, StoredSample } from "@/v1/core/hr";
+import { sensorActive, type HrLiveRow, type HrSensorRow, type StoredSample } from "@/v1/core/hr";
 import { activeIntervals } from "@/v1/core/timing";
 import type { EngineState, ZoneCutoffs } from "@/v1/core/types";
 import { accountZones, zoneOf, type ZoneNumber, type ZoneTotals } from "@/v1/core/zones";
 import { useApi } from "@/v1/data/client";
-import { useServerClock } from "./use-session";
+import { useNow } from "./use-session";
 
 export interface LiveHr {
   live: HrLiveRow | null;
+  /** what deriveHealthState needs: a strap is paired (or a demo relay is publishing) */
   sensor: { paired: boolean } | null;
+  /** the hr_sensors row when paired (null when none or forgotten) */
+  sensorRow: HrSensorRow | null;
   loaded: boolean;
 }
 
-/** hr_live + hr_sensors for the signed-in user. */
+/**
+ * Paired = an hr_sensors row that is not tombstoned. A demo relay never saves a strap, so a
+ * demo hr_live row counts as paired too (its readings carry the DEMO badge everywhere).
+ */
+export function pairedFrom(row: HrSensorRow | null, live: HrLiveRow | null) {
+  return sensorActive(row) || live?.source_kind === "demo" ? { paired: true } : null;
+}
+
+/** hr_live + hr_sensors for the signed-in user (one channel each, torn down on unmount). */
 export function useLiveHr(userId: string): LiveHr {
   const api = useApi();
-  const [state, setState] = useState<LiveHr>({ live: null, sensor: null, loaded: false });
+  const [state, setState] = useState<{
+    live: HrLiveRow | null;
+    row: HrSensorRow | null;
+    loaded: boolean;
+  }>({ live: null, row: null, loaded: false });
   useEffect(() => {
     let on = true;
     let lastRev = -1;
+    // Different user (Switch user): never show the previous user's row, even for a frame.
+    setState({ live: null, row: null, loaded: false });
     const take = (row: HrLiveRow | null) => {
-      if (!on) return;
+      if (!on || !row || row.user_id !== userId) return;
       // Rows with rev <= the cached rev are ignored (h10-design 5.5).
-      if (row && row.rev <= lastRev) return;
-      lastRev = row?.rev ?? lastRev;
+      if (row.rev <= lastRev) return;
+      lastRev = row.rev;
       setState((s) => ({ ...s, live: row }));
     };
-    void Promise.all([api.hr.live().catch(() => null), api.hr.sensor().catch(() => null)]).then(
-      ([live, sensor]) => {
+    const takeSensor = (row: HrSensorRow | null) => {
+      if (!on || (row && row.user_id !== userId)) return;
+      setState((s) => ({ ...s, row }));
+    };
+    const reselect = () =>
+      void Promise.all([
+        api.hr.live().catch(() => undefined),
+        api.hr.sensorRow().catch(() => undefined),
+      ]).then(([live, row]) => {
         if (!on) return;
-        // A Realtime row may have arrived first: keep it unless the read is newer.
-        if (live && live.rev > lastRev) {
-          lastRev = live.rev;
-          setState({ live, sensor, loaded: true });
-        } else setState((s) => ({ ...s, sensor, loaded: true }));
-      },
-    );
-    const off = api.realtime.onHrLive(userId, take);
+        setState((s) => {
+          let next = s;
+          // A Realtime row may have arrived first: keep it unless the read is newer.
+          if (live && live.user_id === userId && live.rev > lastRev) {
+            lastRev = live.rev;
+            next = { ...next, live };
+          } else if (live === null && lastRev < 0) next = { ...next, live: null };
+          if (row !== undefined) next = { ...next, row };
+          return { ...next, loaded: true };
+        });
+      });
+    reselect();
+    const offLive = api.realtime.onHrLive(userId, take);
+    const offSensor = api.realtime.onHrSensor(userId, takeSensor);
+    // A TV waking from sleep never shows stale data as Live: re-read when visible again.
+    const onVis = () => {
+      if (document.visibilityState === "visible") reselect();
+    };
+    if (typeof document !== "undefined") document.addEventListener("visibilitychange", onVis);
     return () => {
       on = false;
-      off();
+      offLive();
+      offSensor();
+      if (typeof document !== "undefined") document.removeEventListener("visibilitychange", onVis);
     };
   }, [api, userId]);
-  return state;
+  return useMemo(
+    () => ({
+      live: state.live,
+      sensor: pairedFrom(state.row, state.live),
+      sensorRow: sensorActive(state.row) ? state.row : null,
+      loaded: state.loaded,
+    }),
+    [state],
+  );
 }
 
 export function healthFor(
-  hr: LiveHr,
+  hr: Pick<LiveHr, "live" | "sensor">,
   nowMs: number,
   session: {
     status: "active" | "paused" | "none";
@@ -68,6 +114,23 @@ export function healthFor(
     session,
     zonesConfirmed,
   });
+}
+
+export interface HeartRateContext {
+  session?: { status: "active" | "paused" | "none"; liveData: boolean; isDemo: boolean };
+  zonesConfirmed?: boolean;
+}
+
+/**
+ * Everything a viewer shows about heart rate: the rows, server-corrected now (ticking every
+ * second) and the derived health state.
+ */
+export function useLiveHeartRate(userId: string, ctx: HeartRateContext = {}) {
+  const hr = useLiveHr(userId);
+  const now = useNow();
+  const session = ctx.session ?? { status: "none" as const, liveData: true, isDemo: false };
+  const health = healthFor(hr, now, session, !!ctx.zonesConfirmed);
+  return { ...hr, now, health };
 }
 
 export interface LiveZones {

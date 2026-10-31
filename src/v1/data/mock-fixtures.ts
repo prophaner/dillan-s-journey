@@ -2,6 +2,7 @@
 // templates, history made by running the real engine, one TV grant and two pairing codes.
 // Nothing here is a real person or a real contact.
 
+import type { MockHrDb } from "./mock-hr";
 import { applyCommand, initialState } from "@/v1/core/engine";
 import { localDateKey } from "@/v1/core/week";
 import type {
@@ -55,6 +56,8 @@ export interface MockDb {
   notes: SessionNoteRow[];
   grants: DeviceGrantRow[];
   pairings: MockPairing[];
+  /** heart rate written by relay tabs through the mock hr_ingest (mock-hr.ts) */
+  hr?: MockHrDb;
 }
 
 export const MOCK_LUIS = "00000000-0000-4000-8000-00000000a001";

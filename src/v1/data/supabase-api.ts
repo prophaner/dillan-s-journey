@@ -7,7 +7,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { clearLocalUserData } from "@/v1/session/local-data";
 import { isPlaceholderEmail } from "@/v1/core/placeholder-email";
 import type { Json } from "@/integrations/supabase/types";
-import type { HrLiveRow, StoredSample } from "@/v1/core/hr";
+import type {
+  HrIngestRequest,
+  HrIngestResponse,
+  HrLiveRow,
+  HrSensorRow,
+  HrSourceRow,
+  StoredSample,
+} from "@/v1/core/hr";
 import type {
   DeviceGrantRow,
   SessionNoteRow,
@@ -20,6 +27,7 @@ import type {
   ZoneConfig,
 } from "@/v1/core/types";
 import {
+  HrAuthError,
   newId,
   RevisionConflictError,
   TemplateInvalidError,
@@ -136,6 +144,23 @@ async function dropLocalSession() {
  */
 export function isAuthRejection(status: number, code?: string | null): boolean {
   return status === 401 || status === 403 || code === "PGRST301" || code === "PGRST303";
+}
+
+/** hr_ingest arguments as the RPC expects them (jsonb for sensor and samples). */
+function ingestArgs(req: HrIngestRequest) {
+  return {
+    p_source_id: req.p_source_id,
+    p_stream_id: req.p_stream_id,
+    p_expected_user_id: req.p_expected_user_id,
+    p_source_kind: req.p_source_kind,
+    p_mode: req.p_mode,
+    p_connected_at: req.p_connected_at,
+    p_sensor: req.p_sensor as unknown as Json,
+    p_claim: req.p_claim,
+    p_samples: req.p_samples as unknown as Json,
+    p_source_name: req.p_source_name ?? null,
+    p_platform: req.p_platform ?? null,
+  };
 }
 
 function check<T>(res: { data: T; error: AnyError }): T {
@@ -686,6 +711,19 @@ export function createSupabaseApi(): DillanApi {
           .subscribe();
         return () => void supabase.removeChannel(ch);
       },
+      onHrSensor(userId, cb) {
+        const ch: RealtimeChannel = supabase
+          .channel(`v1-hrs-${userId}-${newId()}`)
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "hr_sensors", filter: `user_id=eq.${userId}` },
+            (p) => {
+              if (p.eventType !== "DELETE") cb(p.new as unknown as HrSensorRow);
+            },
+          )
+          .subscribe();
+        return () => void supabase.removeChannel(ch);
+      },
     },
 
     hr: {
@@ -707,8 +745,80 @@ export function createSupabaseApi(): DillanApi {
         );
         return row && !row.forgotten_at ? { paired: true } : null;
       },
+      async sensorRow() {
+        const id = await uid();
+        const row = check(
+          await supabase.from("hr_sensors").select("*").eq("user_id", id).maybeSingle(),
+        );
+        return (row as unknown as HrSensorRow) ?? null;
+      },
       async request(minutes) {
         check(await supabase.rpc("hr_request", { p_minutes: minutes }));
+      },
+      async ingest(req) {
+        const res = await supabase.rpc("hr_ingest", ingestArgs(req));
+        if (res.error) {
+          if (isAuthRejection(res.status, res.error.code) || res.error.code === "28000")
+            throw new HrAuthError();
+          throw Object.assign(new Error(res.error.message ?? "ingest_failed"), {
+            code: res.error.code,
+          });
+        }
+        return res.data as unknown as HrIngestResponse;
+      },
+      ingestKeepalive(req) {
+        // The page is being hidden: supabase-js may not finish, a keepalive fetch can.
+        void (async () => {
+          try {
+            const url = import.meta.env["VITE_SUPABASE_URL"] as string | undefined;
+            const key = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] as string | undefined;
+            const { data } = await supabase.auth.getSession();
+            const token = data.session?.access_token;
+            if (!url || !key || !token) return;
+            await fetch(`${url.replace(/\/+$/, "")}/rest/v1/rpc/hr_ingest`, {
+              method: "POST",
+              keepalive: true,
+              headers: {
+                apikey: key,
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(ingestArgs(req)),
+            });
+          } catch {
+            /* best effort */
+          }
+        })();
+      },
+      async forgetSensor() {
+        check(await supabase.rpc("hr_forget_sensor"));
+      },
+      async sources() {
+        const id = await uid();
+        const rows = check(
+          await supabase
+            .from("hr_sources")
+            .select(
+              "id, user_id, kind, display_name, platform, last_seen_at, created_at, revoked_at",
+            )
+            .eq("user_id", id)
+            .order("created_at", { ascending: false }),
+        );
+        return (rows ?? []) as unknown as HrSourceRow[];
+      },
+      async renameSource(id, name) {
+        const v = name.trim().slice(0, 60);
+        if (!v) throw new Error("invalid_name");
+        check(await supabase.from("hr_sources").update({ display_name: v }).eq("id", id));
+      },
+      async revokeSource(id) {
+        check(
+          await supabase
+            .from("hr_sources")
+            .update({ revoked_at: new Date().toISOString() })
+            .eq("id", id)
+            .is("revoked_at", null),
+        );
       },
       async samples(sessionId, isDemo) {
         const out: StoredSample[] = [];

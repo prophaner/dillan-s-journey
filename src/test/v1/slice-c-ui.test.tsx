@@ -276,7 +276,13 @@ describe("summary finalization", () => {
     await live.auth.verifyOtp("email", "luis@example.com", "123456");
     await live.zones.confirm([114, 133, 152, 171]);
     const tpl = (await live.templates.list())[0]!;
-    const r = await live.sessions.start({ templateId: tpl.id, liveData: true, timezone: "UTC" });
+    // The mock's simulated relay is a demo source: its readings count only in demo sessions.
+    const r = await live.sessions.start({
+      templateId: tpl.id,
+      liveData: true,
+      timezone: "UTC",
+      isDemo: true,
+    });
     const id = r.session!.id;
     await live.sessions.command({
       sessionId: id,

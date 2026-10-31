@@ -158,6 +158,23 @@ export interface HrSensorRow {
   battery_read_at: string | null;
 }
 
+/** public.hr_sources row (a relay device; S14 "Relay devices") */
+export interface HrSourceRow {
+  id: string;
+  user_id: string;
+  kind: SourceKind;
+  display_name: string;
+  platform: string | null;
+  last_seen_at: string | null;
+  created_at: string;
+  revoked_at: string | null;
+}
+
+/** hr_sensors row is present and not tombstoned (Forget strap). */
+export function sensorActive(row: HrSensorRow | null | undefined): row is HrSensorRow {
+  return !!row && row.forgotten_at == null;
+}
+
 /** A stored sample as zone accounting sees it (hr_samples / hr_demo_samples). */
 export interface StoredSample {
   stream_id: string;

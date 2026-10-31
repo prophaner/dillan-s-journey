@@ -41,15 +41,14 @@ export class ServerClock {
     }
   }
 
-  /** Three samples now, then one every 5 minutes. Safe to call more than once. */
+  /** Three samples now, then one every 60 s (h10-design 3: viewers). Safe to call more than once. */
   start(): void {
     if (this.started) return;
     this.started = true;
     void (async () => {
       for (let i = 0; i < 3; i++) await this.sample();
     })();
-    if (typeof window !== "undefined")
-      this.timer = setInterval(() => void this.sample(), 5 * 60_000);
+    if (typeof window !== "undefined") this.timer = setInterval(() => void this.sample(), 60_000);
   }
 
   stop(): void {

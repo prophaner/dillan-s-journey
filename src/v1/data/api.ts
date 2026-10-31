@@ -3,7 +3,14 @@
 //  - mock-api.ts: in-memory + localStorage, runs src/v1/core; dev builds with ?mock=1 only
 // Screens never import supabase directly; they call useApi() (src/v1/data/client.ts).
 
-import type { HrLiveRow, StoredSample } from "@/v1/core/hr";
+import type {
+  HrIngestRequest,
+  HrIngestResponse,
+  HrLiveRow,
+  HrSensorRow,
+  HrSourceRow,
+  StoredSample,
+} from "@/v1/core/hr";
 import type {
   CommandKind,
   CommandPayload,
@@ -157,6 +164,14 @@ export class RevisionConflictError extends Error {
   }
 }
 
+/** hr_ingest refused the call because nobody is signed in (or the session expired). */
+export class HrAuthError extends Error {
+  constructor() {
+    super("not_authenticated");
+    this.name = "HrAuthError";
+  }
+}
+
 /** Server rejected a template (same codes as core/validate). */
 export class TemplateInvalidError extends Error {
   constructor(public details: Array<{ path: string; code: string }>) {
@@ -273,6 +288,8 @@ export interface DillanApi {
     onSession(userId: string, cb: (row: WorkoutSessionRow) => void): Unsubscribe;
     /** the caller's own hr_live row */
     onHrLive(userId: string, cb: (row: HrLiveRow | null) => void): Unsubscribe;
+    /** the caller's own hr_sensors row (paired strap, Forget tombstone, demand window) */
+    onHrSensor(userId: string, cb: (row: HrSensorRow | null) => void): Unsubscribe;
   };
 
   hr: {
@@ -280,6 +297,22 @@ export interface DillanApi {
     serverTime(): Promise<number>;
     /** the caller's paired strap (hr_sensors); null when none or forgotten */
     sensor(): Promise<{ paired: boolean } | null>;
+    /** the caller's hr_sensors row, tombstoned or not (null when there is none) */
+    sensorRow(): Promise<HrSensorRow | null>;
+    /** public.hr_ingest (relay only). Throws HrAuthError when the caller is signed out. */
+    ingest(req: HrIngestRequest): Promise<HrIngestResponse>;
+    /**
+     * Best-effort heartbeat while the relay page is being hidden (fetch keepalive survives the
+     * page freezing). Never throws; optional because only a real backend needs it.
+     */
+    ingestKeepalive?(req: HrIngestRequest): void;
+    /** S14 Forget strap: tombstones hr_sensors (hr_forget_sensor) */
+    forgetSensor(): Promise<void>;
+    /** S14 Relay devices: the caller's relays, newest first (revoked ones included) */
+    sources(): Promise<HrSourceRow[]>;
+    renameSource(id: string, name: string): Promise<void>;
+    /** S14 Remove: sets revoked_at; the relay is refused from its next call */
+    revokeSource(id: string): Promise<void>;
     /** preflight demand window (h10-design 5.4): minutes 0 stops it */
     request(minutes: number): Promise<void>;
     /** stored samples of one session (real or demo table), by measured_at */

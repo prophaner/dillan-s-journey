@@ -18,6 +18,7 @@ import { validateTemplate } from "@/v1/core/validate";
 import { isValidTimeZone } from "@/v1/core/week";
 import { validCutoffs } from "@/v1/core/zones";
 import {
+  HrAuthError,
   newId,
   normalizeEmail,
   normalizePairingCode,
@@ -31,9 +32,24 @@ import {
   type Profile,
 } from "./api";
 import { seedMockDb, summaryFor, type MockDb, type MockUser } from "./mock-fixtures";
-import { mockHrLive, mockSamples, readMockHrMode, type MockHrMode } from "./mock-hr";
+import {
+  emptyHrDb,
+  mockForgetSensor,
+  mockHrRequest,
+  mockIngest,
+  readMockHrGaps,
+  readMockHrMode,
+  readMockHrSince,
+  relayRowRecent,
+  simHrLive,
+  simSamples,
+  SIM_NAME,
+  SIM_STREAM_ID,
+  type MockHrDb,
+  type MockHrMode,
+} from "./mock-hr";
 import { finalizeTotals, needsFinalize } from "@/v1/core/finalize";
-import type { HrLiveRow } from "@/v1/core/hr";
+import type { HrLiveRow, HrSensorRow, StoredSample } from "@/v1/core/hr";
 import { clearLocalUserData } from "@/v1/session/local-data";
 
 export const MOCK_DB_KEY = "dillan.mock.db.v1";
@@ -46,8 +62,10 @@ export interface MockOptions {
   storage?: Storage | null;
   now?: () => number;
   db?: MockDb;
-  /** simulated strap state; default reads localStorage["dillan.mock.hr"] (see mock-hr.ts) */
+  /** simulated relay state; default reads localStorage["dillan.mock.hr"] (see mock-hr.ts) */
   hrMode?: () => MockHrMode;
+  /** when that state was chosen (stall/offline freeze from here); default localStorage */
+  hrSince?: () => number;
   /** where the signed-in user id is kept (default MOCK_SESSION_KEY; the TV uses its own) */
   sessionKey?: string;
 }
@@ -62,6 +80,8 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
   let me: string | null = readSession();
 
   const hrMode = opts.hrMode ?? (() => readMockHrMode(storage));
+  const hrSince = opts.hrSince ?? (() => readMockHrSince(storage));
+  const hrGaps = () => (opts.hrMode ? [] : readMockHrGaps(storage));
   const authListeners = new Set<(u: AuthUser | null) => void>();
   const sessionListeners = new Set<{ userId: string; cb: (r: WorkoutSessionRow) => void }>();
 
@@ -133,6 +153,49 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
     const u = db.users.find((x) => x.id === me);
     if (!u) throw new Error("not_authenticated");
     return u;
+  }
+  function hrDb(): MockHrDb {
+    db.hr ??= emptyHrDb();
+    return db.hr;
+  }
+  /** a relay tab's row while it is recent, else the simulated Demo relay */
+  function liveFor(userId: string): HrLiveRow | null {
+    const real = hrDb().live.find((l) => l.user_id === userId) ?? null;
+    if (relayRowRecent(real, now())) return real;
+    const active = db.sessions.find(
+      (s) => s.user_id === userId && (s.state === "active" || s.state === "paused"),
+    );
+    return (
+      simHrLive(userId, hrMode(), hrSince(), now(), active?.is_demo ? active.id : null) ?? real
+    );
+  }
+  /** stored samples (relay tabs) plus the simulated relay's readings for demo sessions */
+  function sessionSamples(row: WorkoutSessionRow): StoredSample[] {
+    const stored = hrDb()
+      .samples.filter((x) => x.session_id === row.id && x.is_demo === row.is_demo)
+      .map((x) => ({
+        stream_id: x.stream_id,
+        seq: x.seq,
+        measured_at: x.measured_at,
+        bpm: x.bpm,
+        contact: x.contact,
+        is_demo: x.is_demo,
+      }));
+    return [...stored, ...simSamples(row, hrMode(), hrSince(), hrGaps(), now())].sort(
+      (a, b) => a.measured_at - b.measured_at,
+    );
+  }
+  function sourcesUsed(row: WorkoutSessionRow, samples: StoredSample[]): string[] {
+    const ids = new Set(
+      hrDb()
+        .samples.filter((x) => x.session_id === row.id)
+        .map((x) => x.source_id),
+    );
+    const names = hrDb()
+      .sources.filter((x) => ids.has(x.id))
+      .map((x) => x.display_name);
+    if (samples.some((x) => x.stream_id === SIM_STREAM_ID)) names.push(SIM_NAME);
+    return [...new Set(names)];
   }
   function authUser(): AuthUser | null {
     const u = db.users.find((x) => x.id === me);
@@ -479,6 +542,8 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
           });
           const sum = summaryFor(row);
           if (sum && !db.summaries.some((x) => x.session_id === row.id)) db.summaries.push(sum);
+          // End stops heart-rate demand (h10-design: End calls hr_request(0)).
+          if (row.state === "ended") mockHrRequest(hrDb(), u.id, 0, at);
           result = { ok: true, session: clone(row) };
           emitSession(row);
         } else {
@@ -521,7 +586,8 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
         if (!needsFinalize(sum)) return clone(sum);
         const row = db.sessions.find((s) => s.id === id && s.user_id === u.id);
         if (!row) return clone(sum);
-        const t = finalizeTotals(row, mockSamples(row, hrMode(), now()), sum.active_ms);
+        const samples = sessionSamples(row);
+        const t = finalizeTotals(row, samples, sum.active_ms);
         if (!t) return clone(sum);
         Object.assign(sum, {
           zone_ms: t.zone_ms,
@@ -529,7 +595,7 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
           unmeasured_ms: t.unmeasured_ms,
           coverage: Math.round(t.coverage * 10_000) / 10_000,
           algorithm_version: t.algorithm_version,
-          hr_sources_used: t.measured_ms > 0 ? ["Mock relay"] : [],
+          hr_sources_used: t.measured_ms > 0 ? sourcesUsed(row, samples) : [],
           hr_status: "final",
           hr_finalize_dirty: false,
           finalized_at: iso(),
@@ -729,12 +795,26 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
         return () => sessionListeners.delete(l);
       },
       onHrLive(userId, cb) {
-        // Simulated strap (mock-hr.ts): a new reading every second while someone listens.
+        // The relay tab's row (mock hr_ingest) or the simulated Demo relay, checked every second.
         if (typeof window === "undefined") return () => {};
         const tick = () => {
           if (me !== userId) return;
-          const live = db.sessions.find((s) => s.user_id === userId && s.state !== "ended");
-          cb(mockHrLive(userId, hrMode(), now(), live?.id ?? null));
+          const row = liveFor(userId);
+          if (row) cb(clone(row));
+        };
+        const t = window.setInterval(tick, 1000);
+        return () => window.clearInterval(t);
+      },
+      onHrSensor(userId, cb) {
+        if (typeof window === "undefined") return () => {};
+        let last = "";
+        const tick = () => {
+          if (me !== userId) return;
+          const row = hrDb().sensors.find((s) => s.user_id === userId) ?? null;
+          const key = JSON.stringify(row);
+          if (key === last) return;
+          last = key;
+          if (row) cb(clone(row));
         };
         const t = window.setInterval(tick, 1000);
         return () => window.clearInterval(t);
@@ -744,23 +824,73 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
     hr: {
       async live(): Promise<HrLiveRow | null> {
         const u = user();
-        const live = db.sessions.find((s) => s.user_id === u.id && s.state !== "ended");
-        return mockHrLive(u.id, hrMode(), now(), live?.id ?? null);
+        return clone(liveFor(u.id));
       },
       async serverTime() {
         return now();
       },
       async sensor() {
-        user();
-        return hrMode() === "off" ? null : { paired: true };
+        const u = user();
+        const s = hrDb().sensors.find((x) => x.user_id === u.id);
+        return s && !s.forgotten_at ? { paired: true } : null;
       },
-      async request() {
-        user();
+      async sensorRow(): Promise<HrSensorRow | null> {
+        const u = user();
+        return clone(hrDb().sensors.find((x) => x.user_id === u.id) ?? null);
+      },
+      async request(minutes) {
+        const u = user();
+        mockHrRequest(hrDb(), u.id, minutes, now());
+        persist();
+      },
+      async ingest(req) {
+        db = load() ?? db;
+        if (!me) throw new HrAuthError();
+        const res = mockIngest(hrDb(), db, me, req, now());
+        persist();
+        return res;
+      },
+      async forgetSensor() {
+        const u = user();
+        mockForgetSensor(hrDb(), u.id, now());
+        persist();
+      },
+      async sources() {
+        const u = user();
+        return hrDb()
+          .sources.filter((s) => s.user_id === u.id)
+          .sort((a, b) => b.created_at.localeCompare(a.created_at))
+          .map((s) => ({
+            id: s.id,
+            user_id: s.user_id,
+            kind: s.kind,
+            display_name: s.display_name,
+            platform: s.platform,
+            last_seen_at: s.last_seen_at,
+            created_at: s.created_at,
+            revoked_at: s.revoked_at,
+          }));
+      },
+      async renameSource(id, name) {
+        const u = user();
+        const s = hrDb().sources.find((x) => x.id === id && x.user_id === u.id);
+        const v = name.trim().slice(0, 60);
+        if (!s || !v) throw new Error("invalid_name");
+        s.display_name = v;
+        persist();
+      },
+      async revokeSource(id) {
+        const u = user();
+        const s = hrDb().sources.find((x) => x.id === id && x.user_id === u.id);
+        if (s && !s.revoked_at) {
+          s.revoked_at = iso();
+          persist();
+        }
       },
       async samples(sessionId) {
         const u = user();
         const row = db.sessions.find((s) => s.id === sessionId && s.user_id === u.id);
-        return row ? mockSamples(row, hrMode(), now()) : [];
+        return row ? sessionSamples(row) : [];
       },
     },
 
@@ -775,6 +905,11 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
         db.templates = db.templates.filter((t) => t.user_id !== u.id);
         db.zones = db.zones.filter((z) => z.user_id !== u.id);
         db.grants = db.grants.filter((g) => g.user_id !== u.id);
+        const hr = hrDb();
+        hr.sources = hr.sources.filter((x) => x.user_id !== u.id);
+        hr.sensors = hr.sensors.filter((x) => x.user_id !== u.id);
+        hr.live = hr.live.filter((x) => x.user_id !== u.id);
+        hr.samples = hr.samples.filter((x) => x.user_id !== u.id);
         db.pairings = db.pairings.filter(
           (p) => p.approved_user_id !== u.id && p.for_user_id !== u.id,
         );
