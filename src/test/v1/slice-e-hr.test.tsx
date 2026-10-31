@@ -16,7 +16,7 @@ import {
 } from "@tanstack/react-router";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import type { ReactNode } from "react";
+import { StrictMode, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { deriveHealthState, HEALTH_COPY } from "@/v1/core/health";
 import type { HrIngestRequest, HrLiveRow, HrSensorRow } from "@/v1/core/hr";
@@ -156,6 +156,20 @@ describe("useLiveHeartRate freshness (fake timers)", () => {
     await act(() => vi.advanceTimersByTimeAsync(1_000)); // 31 s
     expect(screen.getByTestId("label").textContent).toBe("No recent reading");
     expect(screen.getByTestId("bpm").textContent).toBe("--");
+  });
+
+  it("under StrictMode (double-invoked updaters) the first read still lands", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(T0);
+    const s = stubApi();
+    setApiForTests(s.api);
+    render(
+      <StrictMode>
+        <Probe />
+      </StrictMode>,
+    );
+    await act(() => vi.advanceTimersByTimeAsync(1_000));
+    expect(screen.getByTestId("label").textContent).toBe("Live");
   });
 
   it("a relay that stops heartbeating shows Relay offline after 15 s", async () => {

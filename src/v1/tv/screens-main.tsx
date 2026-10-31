@@ -156,7 +156,7 @@ export function TvHome() {
       ]}
     >
       <div className="grid h-full grid-cols-[1.3fr_1fr] gap-12">
-        <div className="flex min-h-0 flex-col gap-8">
+        <div className="flex min-h-0 flex-col gap-6">
           <h1 className="shrink-0 truncate text-tv-3xl font-bold leading-tight">
             {live ? TV_MAIN_COPY.workoutRunning : name ? `Hi, ${name}` : "Hi"}
           </h1>
@@ -196,10 +196,10 @@ export function TvHome() {
             type="button"
             data-focus=""
             data-focus-id="hr-card"
-            className="flex items-center gap-8 rounded-tv-lg border-2 border-line bg-surface p-8 text-left data-[focused]:border-text"
+            className="flex shrink-0 items-center gap-8 rounded-tv-lg border-2 border-line bg-surface px-8 py-4 text-left data-[focused]:border-text"
             onClick={() => tv.openModal({ kind: "relay_qr" })}
           >
-            <span className="flex min-w-0 flex-1 flex-col gap-3">
+            <span className="flex min-w-0 flex-1 flex-col gap-2">
               <span className="flex items-center justify-between gap-4">
                 <TvEyebrow>{HOME_HR_COPY.eyebrow}</TvEyebrow>
                 <span className="flex items-center gap-3">
@@ -211,17 +211,18 @@ export function TvHome() {
                   <TvChip {...hrCard.chip} />
                 </span>
               </span>
-              <span className="line-clamp-2 text-tv-base text-text-2">{hrCard.text}</span>
+              {/* TV: H1/H6 says where to open the relay, next to the QR (h10-design 6 S04). */}
+              <span className="line-clamp-2 text-tv-base text-text-2">
+                {hrCard.showRelayQr
+                  ? HOME_HR_COPY.tvOpenRelay(host, hr.live?.holder_name ?? "your relay device")
+                  : hrCard.text}
+              </span>
               {hrCard.battery && (
                 <span className="text-tv-sm font-bold text-hold">{hrCard.battery}</span>
               )}
               {hrCard.notSetUp ? (
                 <span className="text-tv-sm text-text-3">{HOME_HR_COPY.tvFallback}</span>
-              ) : hrCard.showRelayQr ? (
-                <span className="text-tv-sm text-text-3">
-                  {HOME_HR_COPY.tvOpenRelay(host, hr.live?.holder_name ?? "your relay device")}
-                </span>
-              ) : (
+              ) : hrCard.showRelayQr ? null : (
                 zones.data &&
                 !zones.data.confirmed_at && (
                   <span className="text-tv-sm text-text-3">{TV_MAIN_COPY.zonesHelp}</span>
@@ -624,7 +625,7 @@ export function TvPreflight({ templateId }: { templateId: string }) {
     zonesConfirmed,
   });
   const health = hr.health;
-  const ready = health.id === "H3_live" && hr.live?.contact !== false;
+  const ready = health.id === "H3_live" && hr.live?.contact !== false && health.bpm != null;
   // Acceptance 43: turning Live never moves focus; a polite live region says so.
   const [announce, setAnnounce] = useState("");
   const wasReady = useRef<boolean | null>(null);

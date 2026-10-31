@@ -33,8 +33,17 @@ function DevMockBadge() {
       setHr(m);
       setMode(m.readMockHrMode(window.localStorage));
     });
+    // Another tab (the TV) switched the simulated relay: show it here too.
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== "dillan.mock.hr") return;
+      void import("@/v1/data/mock-hr").then(
+        (m) => live && setMode(m.readMockHrMode(window.localStorage)),
+      );
+    };
+    window.addEventListener("storage", onStorage);
     return () => {
       live = false;
+      window.removeEventListener("storage", onStorage);
     };
   }, []);
   if (!on) return null;

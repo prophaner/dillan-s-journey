@@ -71,7 +71,8 @@ export function PreflightPage({
     zonesConfirmed,
   });
   const health = hr.health;
-  const ready = health.id === "H3_live" && hr.live?.contact !== false;
+  // Ready means a live reading right now (H3 with a BPM), never relay_mode alone.
+  const ready = health.id === "H3_live" && hr.live?.contact !== false && health.bpm != null;
   const chip = preflightChip(health, hr.live?.contact);
 
   const [busy, setBusy] = useState<"live" | "off" | null>(null);
@@ -221,7 +222,7 @@ export function PreflightPage({
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Eyebrow>{PREFLIGHT_COPY.strap}</Eyebrow>
-            <HealthChip label={chip.label} tone={chip.tone} />
+            {hr.loaded && <HealthChip label={chip.label} tone={chip.tone} />}
           </div>
           <p className="mt-2 flex flex-wrap items-center gap-2 text-subhead text-text-2">
             <span>{body}</span>

@@ -60,16 +60,16 @@ export function useLiveHr(userId: string): LiveHr {
         api.hr.sensorRow().catch(() => undefined),
       ]).then(([live, row]) => {
         if (!on) return;
-        setState((s) => {
-          let next = s;
-          // A Realtime row may have arrived first: keep it unless the read is newer.
-          if (live && live.user_id === userId && live.rev > lastRev) {
-            lastRev = live.rev;
-            next = { ...next, live };
-          } else if (live === null && lastRev < 0) next = { ...next, live: null };
-          if (row !== undefined) next = { ...next, row };
-          return { ...next, loaded: true };
-        });
+        // Decided here, not inside the state updater: React may call an updater twice.
+        // A Realtime row may have arrived first: keep it unless the read is newer.
+        const newer = !!live && live.user_id === userId && live.rev > lastRev;
+        if (newer) lastRev = (live as HrLiveRow).rev;
+        setState((s) => ({
+          ...s,
+          ...(newer ? { live: live as HrLiveRow } : {}),
+          ...(row !== undefined ? { row } : {}),
+          loaded: true,
+        }));
       });
     reselect();
     const offLive = api.realtime.onHrLive(userId, take);

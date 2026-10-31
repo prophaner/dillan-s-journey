@@ -33,7 +33,8 @@ export const isBatteryLow = (pct: number | null) => pct != null && pct <= BATTER
 
 /** S08 Preflight chip (phone and TV). */
 export function preflightChip(h: HealthState, contact: boolean | null | undefined): Chip {
-  if (h.id === "H3_live" && contact !== false) return { label: "Live · ready", tone: "live" };
+  if (h.id === "H3_live" && contact !== false && h.bpm != null)
+    return { label: "Live · ready", tone: "live" };
   switch (h.id) {
     case "H0_not_set_up":
       return { label: "Not configured", tone: "off" };

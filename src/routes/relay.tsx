@@ -20,5 +20,6 @@ export const Route = createFileRoute("/relay")({
 function RelayRoute() {
   const api = Route.useLoaderData();
   const { demo } = Route.useSearch();
-  return <RelayPage api={api} demo={!!demo} />;
+  // The simulated strap is a development tool (h10-design 6 S14 "Dev only").
+  return <RelayPage api={api} demo={import.meta.env.DEV && !!demo} />;
 }

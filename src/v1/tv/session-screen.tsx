@@ -465,28 +465,29 @@ function TvDashboard({
                 </p>
               </div>
             )}
-            {row.live_data && (
-              <TvButton
-                focusId="all-zones"
-                size="md"
-                className="mt-auto"
-                data-focus-down="hr-panel"
-                onPress={() => tv.openModal({ kind: "zones" })}
-              >
-                {ZONE_COPY.allZones}
-              </TvButton>
-            )}
             {/* h10-design acceptance 45: All zones ↓ Heart rate ↓ Pause */}
-            <TvButton
-              focusId="hr-panel"
-              size="md"
-              variant="ghost"
-              className={row.live_data ? undefined : "mt-auto"}
-              data-focus-down="pause"
-              onPress={() => tv.openModal({ kind: "hr" })}
-            >
-              {TV_HR_COPY.sheetTitle}
-            </TvButton>
+            <div className="mt-auto flex gap-4">
+              {row.live_data && (
+                <TvButton
+                  focusId="all-zones"
+                  size="md"
+                  className="flex-1"
+                  data-focus-down="hr-panel"
+                  onPress={() => tv.openModal({ kind: "zones" })}
+                >
+                  {ZONE_COPY.allZones}
+                </TvButton>
+              )}
+              <TvButton
+                focusId="hr-panel"
+                size="md"
+                className="flex-1"
+                data-focus-down="pause"
+                onPress={() => tv.openModal({ kind: "hr" })}
+              >
+                {TV_HR_COPY.sheetTitle}
+              </TvButton>
+            </div>
           </TvPanel>
         </div>
         <TvHints

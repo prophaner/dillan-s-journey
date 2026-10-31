@@ -240,7 +240,7 @@ export function TvQr({
       viewBox={`0 0 ${n} ${n}`}
       role="img"
       aria-label={label}
-      className={cn("size-tv-qr shrink-0 rounded-tv-lg", className)}
+      className={cn("shrink-0 rounded-tv-lg", className ?? "size-tv-qr")}
       shapeRendering="crispEdges"
       data-qr-value={value}
     >

@@ -695,7 +695,8 @@ export class RelayController {
   }
 
   private onResponse(r: HrIngestResponse, sent: { mode: RelayMode; claim: boolean }) {
-    if (r.accepted > 0 || r.duplicates > 0) this.lastSentLocal = this.now();
+    // Delivered to Dillan (stored, duplicate, or refused as outside a session alike).
+    if (r.accepted + r.duplicates + r.rejected.length > 0) this.lastSentLocal = this.now();
     if (r.identity_mismatch) {
       void this.d.api.auth.getUser().then((u) => this.handleUser(u));
       return;
@@ -727,6 +728,10 @@ export class RelayController {
     }
     if (r.rate_limited) return;
     if (r.stop_requested) {
+      // Standby frees the strap's BLE slot. The simulated strap holds none and never saves a
+      // strap (so no demand window can open for it): it keeps sending and the backend decides
+      // what to store and publish (only demo sessions take its readings).
+      if (this.kind === "demo") return this.emit();
       if (LINK_ACTIVE.has(this.linkMode) || this.linkMode === "sensor_lost") void this.goStandby();
     } else if (this.linkMode === "standby") {
       void this.wakeFromStandby();
