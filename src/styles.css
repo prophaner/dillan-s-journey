@@ -67,6 +67,18 @@
   --color-hold: var(--hold);
   --color-hold-tint: var(--hold-tint);
   --color-unknown: var(--unknown);
+  --color-z1: var(--z1);
+  --color-z1-tint: var(--z1-tint);
+  --color-z2: var(--z2);
+  --color-z2-tint: var(--z2-tint);
+  --color-z3: var(--z3);
+  --color-z3-tint: var(--z3-tint);
+  --color-z4: var(--z4);
+  --color-z4-tint: var(--z4-tint);
+  --color-z5: var(--z5);
+  --color-z5-tint: var(--z5-tint);
+  --color-zu: var(--zu);
+  --color-zu-tint: var(--zu-tint);
 
   /* shadcn aliases so any stock component stays on-brand */
   --color-background: var(--bg);

@@ -1,0 +1,87 @@
+// React Query hooks over useApi(). Keys start with the user id so one user's cache is never
+// shown to another (sign-out also clears the whole cache).
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useApi } from "./client";
+import type { ProfilePatch } from "./api";
+import type { TemplateBody, ZoneCutoffs } from "@/v1/core/types";
+
+export const qk = {
+  profile: (uid: string) => ["v1", uid, "profile"] as const,
+  zones: (uid: string) => ["v1", uid, "zones"] as const,
+  templates: (uid: string) => ["v1", uid, "templates"] as const,
+  template: (uid: string, id: string) => ["v1", uid, "template", id] as const,
+  devices: (uid: string) => ["v1", uid, "devices"] as const,
+  history: (uid: string) => ["v1", uid, "history"] as const,
+};
+
+export function useProfile(uid: string) {
+  const api = useApi();
+  return useQuery({ queryKey: qk.profile(uid), queryFn: () => api.profile.get() });
+}
+
+export function useUpdateProfile(uid: string) {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: ProfilePatch) => api.profile.update(patch),
+    onSuccess: (p) => qc.setQueryData(qk.profile(uid), p),
+  });
+}
+
+export function useZones(uid: string) {
+  const api = useApi();
+  return useQuery({ queryKey: qk.zones(uid), queryFn: () => api.zones.get() });
+}
+
+export function useConfirmZones(uid: string) {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (c: ZoneCutoffs) => api.zones.confirm(c),
+    onSuccess: (z) => qc.setQueryData(qk.zones(uid), z),
+  });
+}
+
+export function useTemplates(uid: string) {
+  const api = useApi();
+  return useQuery({ queryKey: qk.templates(uid), queryFn: () => api.templates.list() });
+}
+
+export function useTemplate(uid: string, id: string | null) {
+  const api = useApi();
+  return useQuery({
+    queryKey: qk.template(uid, id ?? "new"),
+    queryFn: () => (id ? api.templates.get(id) : Promise.resolve(null)),
+    enabled: !!id,
+  });
+}
+
+export function useSaveTemplate(uid: string) {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string | null; body: TemplateBody; revision: number | null }) =>
+      v.id && v.revision != null
+        ? api.templates.update(v.id, v.body, v.revision)
+        : api.templates.create(v.body),
+    onSuccess: (t) => {
+      qc.setQueryData(qk.template(uid, t.id), t);
+      void qc.invalidateQueries({ queryKey: qk.templates(uid) });
+    },
+  });
+}
+
+export function useDevices(uid: string) {
+  const api = useApi();
+  return useQuery({ queryKey: qk.devices(uid), queryFn: () => api.devices.list() });
+}
+
+export function useRevokeDevice(uid: string) {
+  const api = useApi();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.devices.revoke(id),
+    onSettled: () => qc.invalidateQueries({ queryKey: qk.devices(uid) }),
+  });
+}
