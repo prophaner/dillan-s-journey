@@ -425,7 +425,18 @@ export class RelayController {
         if (this.userId === uid) this.sensorRow = r;
       })
       .catch(() => undefined);
-    this.sensorOff = this.d.api.realtime.onHrSensor(uid, (row) => this.onSensorRow(row));
+    this.sensorOff = this.d.api.realtime.onHrSensor(
+      uid,
+      (row) => this.onSensorRow(row),
+      // (Re)joined: a Forget or demand-window change made while the channel was down was missed.
+      () =>
+        void this.d.api.hr
+          .sensorRow()
+          .then((r) => {
+            if (this.userId === uid) this.onSensorRow(r);
+          })
+          .catch(() => undefined),
+    );
   }
 
   /** The relay's own hr_sensors row: wakes it from standby when a preflight asks for HR. */

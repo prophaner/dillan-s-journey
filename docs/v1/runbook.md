@@ -56,8 +56,9 @@ alter publication supabase_realtime drop table public.workout_sessions, public.h
 
 -- RPCs and helpers
 drop function if exists public.delete_my_v1_data(), public.revoke_device_grant(uuid),
-  public.device_grant_touch(text), public.device_grant_register(text, text),
+  public.device_grant_touch(text, boolean), public.device_grant_register(text, text),
   public.deny_pairing(text), public.approve_pairing(text, boolean), public.pairing_preview(text),
+  public.v1_first_name(uuid),
   public.v1_pairing_lookup(text, uuid), public.pairing_cancel(uuid, text),
   public.pairing_consume(uuid, text), public.pairing_status(uuid, text),
   public.v1_pairing_check_secret(public.pairing_challenges, text),

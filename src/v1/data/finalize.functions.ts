@@ -93,6 +93,8 @@ export const finalizeSessionHr = createServerFn({ method: "POST" })
       });
       if (res.error) throw new Error("finalize_failed");
       const out = res.data as { ok?: boolean; error?: string; summary?: SessionSummaryRow } | null;
+      // Settled (the late-sample window is over): saved history is never rewritten.
+      if (out?.error === "already_final") return { summary: out.summary ?? latest };
       if (!out?.ok) throw new Error(out?.error ?? "finalize_failed");
       latest = out.summary ?? latest;
       if (samples.length >= MAX_SAMPLES) break;

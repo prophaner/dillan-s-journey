@@ -21,6 +21,8 @@ export function statusText(s: NoteStatus, tz?: string): string {
       return NOTE_COPY.error;
     case "conflict":
       return NOTE_COPY.conflict;
+    case "load_error":
+      return NOTE_COPY.loadError;
     default:
       return "";
   }
@@ -54,7 +56,7 @@ export function NotesEditor({
     void qc.invalidateQueries({ queryKey: ["v1", userId, "month"] });
     void qc.invalidateQueries({ queryKey: ["v1", userId, "history"] });
   }, [savedAt, qc, userId]);
-  const warn = st.kind === "error" || st.kind === "conflict";
+  const warn = st.kind === "error" || st.kind === "conflict" || st.kind === "load_error";
 
   return (
     <div className="flex flex-col gap-2">
@@ -81,6 +83,16 @@ export function NotesEditor({
         disabled={!snap.loaded}
         onChange={(e) => ctl.input(e.target.value)}
       />
+      {st.kind === "load_error" && (
+        <DButton
+          size="md"
+          variant="secondary"
+          className="self-start"
+          onClick={() => void ctl.load()}
+        >
+          {NOTE_COPY.loadRetry}
+        </DButton>
+      )}
       {st.kind === "error" && (
         <DButton
           size="md"

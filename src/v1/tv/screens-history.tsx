@@ -3,7 +3,7 @@
 // Mockups tv-16..tv-18. Calendar rules are the phone's (calendar-page.tsx): Monday-first, nothing
 // after the current month, future days inert, a session sits on its local start date.
 
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, NotebookPen } from "lucide-react";
 import { formatDuration } from "@/v1/core/timing";
@@ -26,6 +26,7 @@ import { ZONE_COPY } from "@/v1/ui/zone-pieces";
 import { browserTimeZone, formatClock } from "@/v1/ui/timezones";
 import { cn } from "@/lib/utils";
 import { useTv } from "./context";
+import { requestTvFocus } from "./focus";
 import { TvNavScreen } from "./screens-main";
 import {
   loadView,
@@ -75,7 +76,44 @@ export const TV_PROFILE_COPY = {
   runningConfirm: "End and save, then continue",
   editNotes: "Edit on your phone: scan to open this session there.",
   noNotes: "No notes. Add them from your phone.",
+  notesFailed: "Couldn't load the note. Check your connection.",
+  moreExercises: (n: number) =>
+    `+${n} more exercise${n === 1 ? "" : "s"} · see the full session on your phone`,
 } as const;
+
+/** How many list rows end below the list's visible height (pure, for the S13 overflow line). */
+export function hiddenRowCount(
+  listHeight: number,
+  rows: ReadonlyArray<{ top: number; height: number }>,
+): number {
+  if (listHeight <= 0) return 0;
+  return rows.filter((r) => r.top + r.height > listHeight + 1).length;
+}
+
+/** Rows of `ref` (a clipped list) that do not fit; re-measured when its size changes. */
+function useHiddenRows(ref: RefObject<HTMLElement | null>, key: unknown): number {
+  const [n, setN] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () =>
+      setN(
+        hiddenRowCount(
+          el.clientHeight,
+          [...el.children].map((c) => {
+            const h = c as HTMLElement;
+            return { top: h.offsetTop - el.offsetTop, height: h.offsetHeight };
+          }),
+        ),
+      );
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref, key]);
+  return n;
+}
 
 /** The session note, read-only (notes are edited on the phone, handoff F7). */
 export function TvNoteText({ sessionId, hideEmpty }: { sessionId: string; hideEmpty?: boolean }) {
@@ -85,6 +123,9 @@ export function TvNoteText({ sessionId, hideEmpty }: { sessionId: string; hideEm
     queryFn: () => tv.api.notes.get(sessionId),
   });
   const text = q.data?.text.trim() ?? "";
+  // A failed read is not "no note": say so instead of claiming there is none.
+  if (q.isError && q.data === undefined)
+    return <p className="text-tv-sm text-text-2">{TV_PROFILE_COPY.notesFailed}</p>;
   if (hideEmpty && !text) return null;
   return (
     <p className="line-clamp-4 whitespace-pre-wrap text-tv-sm text-text-2">
@@ -147,7 +188,7 @@ export function TvCalendar({
         ["Back", "Home"],
       ]}
     >
-      <div className="grid h-full grid-cols-[1.15fr_1fr] gap-12">
+      <div className="grid h-full grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] gap-12">
         <div className="flex min-h-0 flex-col gap-4">
           <div className="flex items-center justify-between gap-4">
             <TvButton
@@ -223,9 +264,13 @@ export function TvCalendar({
                   onFocus={() => {
                     if (c.key !== selected) select(c.key);
                   }}
-                  onClick={() => {
+                  onClick={(e) => {
                     if (items.length === 1 && items[0])
                       tv.go({ name: "detail", sessionId: items[0].session_id, day: c.key });
+                    else if (items.length > 1 && items[0] && c.key === selected)
+                      // Several sessions: OK moves into the list (geometry alone would keep
+                      // focus in the grid and re-select whichever day it lands on).
+                      requestTvFocus(e.currentTarget, `cal-session-${items[0].session_id}`);
                     else select(c.key);
                   }}
                 >
@@ -254,6 +299,8 @@ export function TvCalendar({
                     type="button"
                     data-focus=""
                     data-focus-id={`cal-session-${s.session_id}`}
+                    // Left returns to the selected day, never a neighbour that re-selects
+                    data-focus-left={`day-${selected}`}
                     className="flex w-full items-center gap-6 rounded-tv-lg border-2 border-line bg-surface-2 px-6 py-5 text-left data-[focused]:border-text"
                     onClick={() =>
                       tv.go({ name: "detail", sessionId: s.session_id, day: s.local_date })
@@ -301,6 +348,9 @@ export function TvDetail({ sessionId, day }: { sessionId: string; day?: string |
   const s = summary.data;
   const back = () => tv.go({ name: "calendar", ...(day ? { day, month: day.slice(0, 7) } : {}) });
   const origin = typeof window !== "undefined" ? window.location.origin : "";
+  // The exercise list is clipped to the canvas (no scrolling on S13): say what does not fit.
+  const listRef = useRef<HTMLUListElement>(null);
+  const hiddenRows = useHiddenRows(listRef, ended ? row?.id : null);
 
   return (
     <div data-screen={`detail:${sessionId}`} className="flex h-full flex-col">
@@ -318,7 +368,7 @@ export function TvDetail({ sessionId, day }: { sessionId: string; day?: string |
           </TvButton>
         </div>
       ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-[2fr_1fr] gap-12">
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-12">
           <div className="flex min-h-0 flex-col gap-5">
             <div className="flex flex-wrap items-center gap-4">
               <span
@@ -348,7 +398,7 @@ export function TvDetail({ sessionId, day }: { sessionId: string; day?: string |
               )}
             </div>
             <h1 className="shrink-0 truncate text-tv-2xl font-bold">{row.snapshot.name}</h1>
-            <ul className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+            <ul ref={listRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
               {exercisesWithSteps(row.snapshot, row.steps).map(
                 ({ key, ex, block, steps, label }) => (
                   <li key={key} className="rounded-tv-md bg-surface px-6 py-4">
@@ -387,6 +437,11 @@ export function TvDetail({ sessionId, day }: { sessionId: string; day?: string |
                 ),
               )}
             </ul>
+            {hiddenRows > 0 && (
+              <p className="text-tv-sm font-bold text-text-2">
+                {TV_PROFILE_COPY.moreExercises(hiddenRows)}
+              </p>
+            )}
             <p className="text-tv-xs text-text-3">{DETAIL_COPY.snapshot}</p>
             <div className="flex">
               <TvButton focusId="detail-back" autoFocus onPress={back}>

@@ -52,6 +52,16 @@ export async function replayQueuedCommands(
   }
 }
 
+/**
+ * Does the one-time "running workout" recovery on a fresh load take this path to the session?
+ * Not when it is already the session, and not for an explicit deep link: a scanned TV pairing QR
+ * (/approve-tv?code=…) must reach S03 while its 5-minute code runs (the running-workout banner
+ * still shows there).
+ */
+export function recoveryRedirects(path: string): boolean {
+  return !path.startsWith("/session/") && !path.startsWith("/approve-tv");
+}
+
 export function AppStart({ userId }: { userId: string }) {
   const api = useApi();
   const qc = useQueryClient();
@@ -69,7 +79,7 @@ export function AppStart({ userId }: { userId: string }) {
     if (!current.isSuccess || recoveredFor === userId) return;
     recoveredFor = userId;
     if (!row || (row.state !== "active" && row.state !== "paused")) return;
-    if (path.startsWith("/session/")) return;
+    if (!recoveryRedirects(path)) return;
     void navigate({ to: "/session/$id", params: { id: row.id } });
   }, [current.isSuccess, current.data, userId, path, navigate]);
 

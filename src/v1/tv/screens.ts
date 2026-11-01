@@ -103,3 +103,9 @@ export function screenKey(s: TvScreen): string {
       return s.name;
   }
 }
+
+/**
+ * Backstop re-read of the current session on the TV. Realtime re-reads on every channel rejoin;
+ * this catches anything still missed (a visible Fire TV fires no online/focus event on a blip).
+ */
+export const TV_SESSION_POLL_MS = 45_000;

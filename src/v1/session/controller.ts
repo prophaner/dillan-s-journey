@@ -11,7 +11,12 @@
 //  - stale_revision / invalid_state: adopt the server row, then re-evaluate. Pause, resume and end
 //    are retried with a fresh command_id when still valid (dropped silently when the session is
 //    already in the wanted state); set actions are dropped with a visible notice
+//  - a dropped set action takes every later queued set action with it: each was stamped with a
+//    revision that counted the dropped one, so it could otherwise land on a state the user never
+//    saw (e.g. an Undo that removes the other screen's set)
 //  - ended is terminal: anything still queued for an ended session is dropped
+//  - Realtime does not replay missed changes: the row is re-read on every channel (re)join, on
+//    online/visible, and (TV) on a slow poll as a backstop
 //  - timing: the server applies every command at its own now() when it arrives (0006
 //    session_command), not at the tap time. So pending commands are projected at "now" too, and
 //    the offline banner says pause/end take effect on reconnect; the UI never shows a pause or end
@@ -123,6 +128,11 @@ export interface ControllerOptions {
   listenWindow?: boolean;
   /** called once after this client's End is acknowledged (summary finalization) */
   onEnded?: (row: WorkoutSessionRow) => void;
+  /**
+   * Backstop re-read interval while the session is not ended (the TV passes one: a visible Fire
+   * TV fires no online/visibility event on a Wi-Fi blip). Off by default.
+   */
+  pollMs?: number;
 }
 
 export class SessionController {
@@ -255,10 +265,25 @@ export class SessionController {
       if (navigator.onLine === false) this.offline = true;
     }
     this.cleanups.push(
-      this.api.realtime.onSession(this.o.userId, (r) => {
-        if (r.id === this.o.sessionId) this.adopt(r);
-      }),
+      this.api.realtime.onSession(
+        this.o.userId,
+        (r) => {
+          if (r.id === this.o.sessionId) this.adopt(r);
+        },
+        // (Re)joined: anything that changed while the channel was joining or down was not
+        // delivered, so re-read the row.
+        () => {
+          if (!this.disposed) void this.refetch().then(() => this.pump());
+        },
+      ),
     );
+    if (this.o.pollMs && typeof setInterval !== "undefined") {
+      const t = setInterval(() => {
+        if (this.disposed || this.row?.state === "ended") return;
+        void this.refetch().then(() => this.pump());
+      }, this.o.pollMs);
+      this.cleanups.push(() => clearInterval(t));
+    }
     await this.refetch();
     await this.pump();
   }
@@ -427,6 +452,7 @@ export class SessionController {
             return;
           }
           this.drop(cmd, NOTICES.failed);
+          this.dropDependents(cmd);
           continue;
         }
         if (this.disposed) return;
@@ -458,6 +484,18 @@ export class SessionController {
     if (notice) this.notice = notice;
   }
 
+  /**
+   * After `cmd` was dropped: drop every later queued set action. Its expected revision counted
+   * `cmd`, so if another screen moved the server to that same revision it would apply to a state
+   * this user never saw. Returns how many were dropped.
+   */
+  private dropDependents(cmd: PendingCommand): number {
+    if (!SET_ACTIONS.has(cmd.kind)) return 0;
+    const later = this.pending.filter((p) => p.status === "queued" && SET_ACTIONS.has(p.kind));
+    later.forEach((p) => this.drop(p, null));
+    return later.length;
+  }
+
   private async settle(cmd: PendingCommand, res: SessionRpcResult) {
     if (res.ok) {
       this.queue.remove(cmd.commandId);
@@ -473,6 +511,7 @@ export class SessionController {
 
     if (!fresh || res.error === "not_found" || res.error === "command_id_reused") {
       this.drop(cmd, NOTICES.failed);
+      this.dropDependents(cmd);
       return;
     }
     if (fresh.state === "ended") {
@@ -504,7 +543,8 @@ export class SessionController {
       return;
     }
     // Set actions are never re-applied to a session that moved on.
-    this.droppedSets += 1;
     this.drop(cmd, res.error === "stale_revision" ? NOTICES.stale : NOTICES.failed);
+    const also = this.dropDependents(cmd);
+    this.droppedSets += 1 + also;
   }
 }

@@ -580,6 +580,26 @@ describe("session RPCs", () => {
       p_algorithm_version: 1,
     });
     expect(ok).toMatchObject({ ok: true, summary: { hr_status: "final", coverage: 0 } });
+    // Once the late-sample window is over, a final summary is never rewritten (review fix).
+    await q(
+      "update public.session_summaries set ended_at = now() - interval '10 minutes' where session_id = $1",
+      [s.id],
+    );
+    const late = {
+      p_session_id: s.id,
+      p_zone_ms: `{0,0,0,0,0}`,
+      p_unmeasured_ms: active,
+      p_algorithm_version: 1,
+    };
+    expect(await asRpc(B, "session_hr_finalize", late)).toMatchObject({
+      ok: false,
+      error: "already_final",
+    });
+    // ...unless late samples marked it dirty
+    await q("update public.session_summaries set hr_finalize_dirty = true where session_id = $1", [
+      s.id,
+    ]);
+    expect(await asRpc(B, "session_hr_finalize", late)).toMatchObject({ ok: true });
     expect(
       (
         await asRpc(A, "session_hr_finalize", {
@@ -937,6 +957,16 @@ describe("TV pairing", () => {
       error: "for_other_user",
       for_name: "bea",
     });
+    // for_user_id comes from an unauthenticated TV: only the first name is ever revealed
+    await q("update public.profiles set display_name = 'Bea Quinn Smith' where id = $1", [B]);
+    expect(await asRpc(A, "pairing_preview", { p_code: f.code })).toMatchObject({
+      ok: true,
+      for_name: "Bea",
+    });
+    expect(await asRpc(A, "approve_pairing", { p_code: f.code })).toMatchObject({
+      for_name: "Bea",
+    });
+    await q("update public.profiles set display_name = 'bea' where id = $1", [B]);
     expect(
       await asRpc(A, "approve_pairing", { p_code: f.code, p_confirm_other_user: true }),
     ).toMatchObject({ ok: true });
@@ -1048,6 +1078,15 @@ describe("TV pairing", () => {
       tv1.sid,
     );
     expect(run.ok).toBe(true);
+    // notes are phone-only: the TV token cannot write them
+    expect(
+      await asRpc(
+        D,
+        "session_note_save",
+        { p_session_id: run.session.id, p_text: "from tv", p_expected_revision: 0 },
+        tv1.sid,
+      ),
+    ).toEqual({ ok: false, error: "device_session_forbidden", note: null });
     expect((await cmd(D, run.session, "discard")).ok).toBe(true);
     expect(await asRpc(D, "revoke_device_grant", { p_grant_id: tv1.grantId }, tv1.sid)).toEqual({
       ok: true,
@@ -1057,6 +1096,48 @@ describe("TV pairing", () => {
       ok: true,
     });
     expect(await asRpc(D, "approve_pairing", { p_code: other.code })).toMatchObject({ ok: true });
+  });
+
+  it("an idle grant is revoked server-side: no activity for 15 min and no running workout", async () => {
+    const p = await create();
+    expect(await asRpc(A, "approve_pairing", { p_code: p.code })).toMatchObject({ ok: true });
+    const c = await asRpc("service", "pairing_consume", { p_id: p.id, p_secret: p.secret });
+    const sid = randomUUID();
+    await q("insert into auth.sessions (id, user_id) values ($1, $2)", [sid, A]);
+    const g = await asRpc(A, "device_grant_register", { p_device_id: c.device_id }, sid);
+    expect(g.ok).toBe(true);
+    const touch = (active: boolean) =>
+      asRpc(A, "device_grant_touch", { p_device_id: c.device_id, p_active: active }, sid);
+    const age = (mins: number) =>
+      q(
+        `update public.device_grants set last_active_at = now() - interval '${mins} minutes' where id = $1`,
+        [g.grant.id],
+      );
+    expect(await touch(false)).toMatchObject({ valid: true });
+    // reported activity keeps it alive
+    await age(14);
+    expect(await touch(true)).toMatchObject({ valid: true });
+    expect(await touch(false)).toMatchObject({ valid: true });
+    // a running workout keeps it alive too
+    const tid = await newTemplate(A, [straight()]);
+    let run = (await start(A, tid)).session;
+    run = (await cmd(A, run, "start")).session;
+    await age(30);
+    expect(await touch(false)).toMatchObject({ valid: true });
+    expect((await cmd(A, run, "discard")).ok).toBe(true);
+    // idle for 16 min with nothing running (e.g. Silk closed, reopened later): revoked
+    await age(16);
+    expect(await touch(false)).toMatchObject({ valid: false, reason: "idle" });
+    expect(await q("select * from auth.sessions where id = $1", [sid])).toHaveLength(0);
+    expect(
+      (
+        await q<{ revoked_at: string | null }>(
+          "select revoked_at from public.device_grants where id = $1",
+          [g.grant.id],
+        )
+      )[0]?.revoked_at,
+    ).not.toBeNull();
+    expect(await touch(true)).toMatchObject({ valid: false });
   });
 
   it("caps live codes and guesses globally, purges old rows, previews the creation time", async () => {

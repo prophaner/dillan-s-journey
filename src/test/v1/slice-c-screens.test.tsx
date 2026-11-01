@@ -143,6 +143,40 @@ describe("S08 Preflight initial focus (AC18)", () => {
     expect(screen.getByText("Unavailable")).toBeInTheDocument();
   });
 
+  it("a lost Start response is never replayed by the other button (review fix)", async () => {
+    hrMode = "live";
+    const tpl = (await api.templates.list())[0]!;
+    const calls: Array<{ commandId: string | undefined; liveData: boolean; timezone: string }> = [];
+    const realStart = api.sessions.start.bind(api.sessions);
+    let lose = true;
+    api.sessions.start = async (req) => {
+      calls.push({ commandId: req.commandId, liveData: req.liveData, timezone: req.timezone });
+      const r = await realStart(req);
+      if (lose) {
+        lose = false;
+        throw new TypeError("Failed to fetch"); // committed, response lost
+      }
+      return r;
+    };
+    harness(
+      { "/p": () => <PreflightPage templateId={tpl.id} demo />, "/session/$id": () => <p>Dash</p> },
+      "/p",
+    );
+    const start = await screen.findByRole("button", { name: PREFLIGHT_COPY.start });
+    await waitFor(() => expect(start).toBeEnabled());
+    fireEvent.click(start);
+    await screen.findByText(PREFLIGHT_COPY.startFailed);
+    fireEvent.click(screen.getByRole("button", { name: PREFLIGHT_COPY.withoutLive }));
+    await waitFor(() => expect(calls).toHaveLength(2));
+    expect(calls[1]!.liveData).toBe(false);
+    expect(calls[1]!.commandId).not.toBe(calls[0]!.commandId);
+    // The live session the lost request created is reported as running, not adopted silently.
+    await screen.findByText(PREFLIGHT_COPY.endThenStart);
+    expect(screen.queryByText("Dash")).not.toBeInTheDocument();
+    // The session is stamped with this device's zone.
+    expect(calls[0]!.timezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  });
+
   it("the running-workout dialog uses the canonical M4 buttons", () => {
     expect(PREFLIGHT_COPY.goToIt).toBe("Cancel");
     expect(PREFLIGHT_COPY.endThenStart).toBe("End and save, then continue");

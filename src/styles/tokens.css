@@ -70,7 +70,7 @@
   /* ---- Space: 4pt grid ---- */
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px;
   --s6: 24px; --s8: 32px; --s10: 40px; --s14: 56px;
-  --margin: 20px;          /* screen side margin (16px below 360px wide) */
+  --margin: 20px;          /* screen side margin (16px below 360px wide, 12px at 340px and below) */
   --nav-h: 64px;           /* bottom nav */
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
@@ -139,6 +139,7 @@
    lg  1024px bottom nav becomes left sidebar; content max 1120px; desktop editors
    Avoid any horizontal overflow at 320px. */
 @media (max-width: 359px) { :root { --margin: 16px; } }
+@media (max-width: 340px) { :root { --margin: 12px; } } /* design-system §101: ≤340 px gutters */
 
 /* ---- User preferences ---- */
 @media (prefers-reduced-motion: reduce) { :root { --dur-quick: 0ms; --dur-base: 150ms; --dur-calm: 150ms; } }

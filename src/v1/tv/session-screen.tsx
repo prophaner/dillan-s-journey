@@ -8,7 +8,14 @@ import { BatteryLow, Check, Pause, Play, Slash } from "lucide-react";
 import { isAfterLastSet } from "@/v1/core/engine";
 import { exerciseForStep } from "@/v1/core/steps";
 import { activeMs, formatDuration, restRemainingMs } from "@/v1/core/timing";
-import type { Block, EngineState, Step, WorkoutSessionRow, ZoneCutoffs } from "@/v1/core/types";
+import {
+  engineStateFromRow,
+  type Block,
+  type EngineState,
+  type Step,
+  type WorkoutSessionRow,
+  type ZoneCutoffs,
+} from "@/v1/core/types";
 import { useProfile, useSummary } from "@/v1/data/queries";
 import { counts, loadText, repsText } from "@/v1/session/format";
 import { sourceLine } from "@/v1/core/health";
@@ -24,6 +31,7 @@ import { useTv } from "./context";
 import { TV_HR_COPY, TvHrSheet, useHrStateToast } from "./hr-pieces";
 import { tvMemoryStorage } from "./memory-store";
 import { TvNoteText } from "./screens-history";
+import { TV_SESSION_POLL_MS } from "./screens";
 import {
   TvAvatar,
   TvButton,
@@ -31,6 +39,7 @@ import {
   TvEyebrow,
   TvHints,
   TvPanel,
+  TV_LOAD_COPY,
   TvZoneBars,
   TvZonesHeader,
   TvZonePill,
@@ -47,7 +56,14 @@ export const TV_SESSION_COPY = {
 export function TvSession({ sessionId }: { sessionId: string }) {
   const tv = useTv();
   // memory-only queue: user data is never persisted on a shared TV (handoff §6)
-  const { view, controller } = useSessionController(sessionId, tv.user.id, "tv", tvMemoryStorage);
+  // A visible Fire TV fires no online/visibility event on a Wi-Fi blip: poll as a backstop.
+  const { view, controller } = useSessionController(
+    sessionId,
+    tv.user.id,
+    "tv",
+    tvMemoryStorage,
+    TV_SESSION_POLL_MS,
+  );
   const row = view.row;
   const p = view.projected;
   const state = p?.state ?? null;
@@ -243,7 +259,7 @@ function TvDashboard({
             {notice}
           </p>
         )}
-        <div className="grid min-h-0 flex-1 grid-cols-[2fr_1fr] gap-12">
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-12">
           <div className="flex min-h-0 flex-col gap-6 overflow-hidden">
             <div className="flex items-baseline justify-between gap-4">
               <TvEyebrow>
@@ -676,9 +692,15 @@ function TvSummary({ row }: { row: WorkoutSessionRow }) {
   const discarded = row.outcome === "discarded";
   const isFinal = useSummaryFinal(row.live_data, s);
   const done = () => tv.go({ name: "calendar" });
+  // Until the summary row arrives (or if it fails), active time comes from the row (as on the
+  // phone); a failed read is said honestly with a D-pad retry, never "Adding up…" forever.
+  const active =
+    s?.active_ms ??
+    (row.ended_at ? activeMs(engineStateFromRow(row), Date.parse(row.ended_at)) : null);
+  const loadFailed = summary.isError && (!s || s.hr_status === "pending");
   return (
     <div data-screen={`summary:${row.id}`} className="flex h-full flex-col">
-      <div className="grid min-h-0 flex-1 grid-cols-[2fr_1fr] gap-12">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-12">
         <div className="flex min-h-0 flex-col gap-8">
           <div className="flex items-center gap-6">
             <span
@@ -707,7 +729,7 @@ function TvSummary({ row }: { row: WorkoutSessionRow }) {
             <p className="text-tv-md text-text-2">{SUMMARY_COPY.discarded}</p>
           ) : (
             <div className="flex gap-16">
-              <Metric value={s ? formatDuration(s.active_ms) : "…"} label="Active" />
+              <Metric value={active != null ? formatDuration(active) : "…"} label="Active" />
               <Metric value={c.done} label="Sets done" />
               {c.skipped > 0 && <Metric value={c.skipped} label="Skipped" />}
               {c.notReached > 0 && <Metric value={c.notReached} label="Not reached" />}
@@ -729,6 +751,13 @@ function TvSummary({ row }: { row: WorkoutSessionRow }) {
           <TvZonesHeader isDemo={row.is_demo} />
           {!row.live_data ? (
             <p className="text-tv-base text-text-2">{ZONE_COPY.noLiveData}</p>
+          ) : loadFailed ? (
+            <div className="flex flex-col items-start gap-4" role="alert">
+              <p className="text-tv-base text-text-2">{SUMMARY_COPY.loadFailed}</p>
+              <TvButton focusId="summary-retry" size="md" onPress={() => void summary.refetch()}>
+                {TV_LOAD_COPY.retry}
+              </TvButton>
+            </div>
           ) : !s || s.hr_status === "pending" ? (
             <p className="text-tv-base text-text-2">{SUMMARY_COPY.finalizing}</p>
           ) : (

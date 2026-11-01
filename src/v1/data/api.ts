@@ -285,22 +285,52 @@ export interface DillanApi {
      */
     pairPoll(device: TvDeviceInfo, challenge: TvChallenge): Promise<TvPairPoll>;
     pairCancel(challenge: TvChallenge): Promise<void>;
-    /** device_grant_touch: valid while the grant and its auth session exist; null = unreachable */
-    checkGrant(deviceId: string): Promise<{ valid: boolean; grantId: string | null } | null>;
+    /**
+     * device_grant_touch: valid while the grant and its auth session exist; null = unreachable.
+     * `active`: someone used the TV since the last check. After 15 minutes with no reported
+     * activity and no active/paused workout the server revokes the grant (auto-lock enforced
+     * server-side, so closing Silk or reloading never skips it).
+     */
+    checkGrant(
+      deviceId: string,
+      active?: boolean,
+    ): Promise<{ valid: boolean; grantId: string | null } | null>;
     /**
      * Lock / switch / remove: revoke this TV's grant (deletes its auth session server-side), drop
      * every Realtime channel, end the local session and wipe the auth storage.
      */
     lock(grantId: string | null): Promise<void>;
+    /**
+     * True when the signed-in session in this browser is a paired TV's (the TV marker names this
+     * user and the phone shares the TV's auth storage). Phone routes never run on it.
+     */
+    isTvSession(userId: string): boolean;
   };
 
+  /**
+   * Realtime does not replay changes made while a channel was joining or the socket was down.
+   * `onSubscribed` runs every time the channel (re)joins (first join and every rejoin after a
+   * drop): callers re-read the rows there, so nothing missed in the gap stays missed (F08).
+   */
   realtime: {
     /** changes to the caller's own workout_sessions rows */
-    onSession(userId: string, cb: (row: WorkoutSessionRow) => void): Unsubscribe;
+    onSession(
+      userId: string,
+      cb: (row: WorkoutSessionRow) => void,
+      onSubscribed?: () => void,
+    ): Unsubscribe;
     /** the caller's own hr_live row */
-    onHrLive(userId: string, cb: (row: HrLiveRow | null) => void): Unsubscribe;
+    onHrLive(
+      userId: string,
+      cb: (row: HrLiveRow | null) => void,
+      onSubscribed?: () => void,
+    ): Unsubscribe;
     /** the caller's own hr_sensors row (paired strap, Forget tombstone, demand window) */
-    onHrSensor(userId: string, cb: (row: HrSensorRow | null) => void): Unsubscribe;
+    onHrSensor(
+      userId: string,
+      cb: (row: HrSensorRow | null) => void,
+      onSubscribed?: () => void,
+    ): Unsubscribe;
   };
 
   hr: {

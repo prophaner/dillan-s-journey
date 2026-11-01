@@ -30,6 +30,7 @@ import { ConfirmDialog } from "@/components/dillan/confirm-dialog";
 import { Eyebrow } from "@/components/dillan/form-pieces";
 import { Card, ScreenState } from "@/components/dillan/surfaces";
 import { cn } from "@/lib/utils";
+import { browserTimeZone } from "./timezones";
 
 export const PREFLIGHT_COPY = {
   title: "Ready?",
@@ -85,8 +86,10 @@ export function PreflightPage({
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState<{ id: string; liveData: boolean } | null>(null);
   const [ending, setEnding] = useState(false);
-  // One command id per Start attempt: a retried request returns the same session.
-  const attempt = useRef<string>(newId());
+  // One command id per Start attempt and per choice: retrying the same button replays the same
+  // session (a lost response is not a second session), and the other button never replays a
+  // session started with the opposite live-data choice.
+  const attempt = useRef({ live: newId(), off: newId() });
 
   // h10-design 5.4: preflight asks for heart rate on open and every 2 minutes while open.
   useEffect(() => {
@@ -112,26 +115,29 @@ export function PreflightPage({
     wasReady.current = ready;
   }, [ready, hr.loaded]);
 
-  const tz = profile.data?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
+  // start_timezone is the starting device's zone (0006: the session's calendar day uses it), so a
+  // workout logged while travelling lands on the day it happened. Weeks use the profile zone.
+  const tz = browserTimeZone();
 
   async function begin(liveData: boolean) {
-    setBusy(liveData ? "live" : "off");
+    const choice = liveData ? "live" : "off";
+    setBusy(choice);
     setError(null);
     try {
       const res = await api.sessions.start({
         templateId,
         liveData,
         timezone: tz,
-        commandId: attempt.current,
+        commandId: attempt.current[choice],
         ...(demo && liveData ? { isDemo: true } : {}),
       });
       if (!res.ok && res.error === "session_running" && res.session_id) {
-        attempt.current = newId();
+        attempt.current[choice] = newId();
         setRunning({ id: res.session_id, liveData });
         return;
       }
       if (!res.ok || !res.session) {
-        attempt.current = newId();
+        attempt.current[choice] = newId();
         setError(PREFLIGHT_COPY.startFailed);
         return;
       }

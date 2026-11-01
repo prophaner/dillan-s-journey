@@ -129,27 +129,34 @@ export function useRevokeDevice(uid: string) {
  * The one unfinished session (preparing/active/paused), kept fresh by Realtime: the running-workout
  * banner and the recovery redirect read this.
  */
-export function useCurrentSession(uid: string) {
+export function useCurrentSession(uid: string, opts: { pollMs?: number } = {}) {
   const api = useApi();
   const qc = useQueryClient();
   useEffect(
     () =>
-      api.realtime.onSession(uid, (row) => {
-        const cur = qc.getQueryData<WorkoutSessionRow | null>(qk.current(uid));
-        if (row.state !== "ended") {
-          if (!cur || cur.id !== row.id || row.revision >= cur.revision)
-            qc.setQueryData(qk.current(uid), row);
-        } else if (cur?.id === row.id) {
-          qc.setQueryData(qk.current(uid), null);
-          void qc.invalidateQueries({ queryKey: qk.history(uid) });
-        }
-      }),
+      api.realtime.onSession(
+        uid,
+        (row) => {
+          const cur = qc.getQueryData<WorkoutSessionRow | null>(qk.current(uid));
+          if (row.state !== "ended") {
+            if (!cur || cur.id !== row.id || row.revision >= cur.revision)
+              qc.setQueryData(qk.current(uid), row);
+          } else if (cur?.id === row.id) {
+            qc.setQueryData(qk.current(uid), null);
+            void qc.invalidateQueries({ queryKey: qk.history(uid) });
+          }
+        },
+        // (Re)joined: changes made while the channel was down were not delivered.
+        () => void qc.invalidateQueries({ queryKey: qk.current(uid) }),
+      ),
     [api, qc, uid],
   );
   return useQuery({
     queryKey: qk.current(uid),
     queryFn: () => api.sessions.current(),
     refetchOnWindowFocus: true,
+    // The TV passes a backstop poll: a visible Fire TV fires no focus/online event on a blip.
+    ...(opts.pollMs ? { refetchInterval: opts.pollMs } : {}),
   });
 }
 

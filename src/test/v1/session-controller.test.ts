@@ -520,6 +520,14 @@ describe("account deletion clears this device's per-user session data", () => {
     await api.account.deleteAccount();
     expect(localStorage.getItem(pendingNotesKey(MOCK_LUIS))).toBeNull();
   });
+
+  it("Delete my data clears them too (the deleted sessions can never save)", async () => {
+    localStorage.setItem(queueKey(MOCK_LUIS), JSON.stringify({ s1: [] }));
+    localStorage.setItem(pendingNotesKey(MOCK_LUIS), JSON.stringify({ s1: { text: "private" } }));
+    await api.account.deleteMyData();
+    expect(localStorage.getItem(queueKey(MOCK_LUIS))).toBeNull();
+    expect(localStorage.getItem(pendingNotesKey(MOCK_LUIS))).toBeNull();
+  });
 });
 
 describe("doneText", () => {
@@ -541,5 +549,72 @@ describe("doneText", () => {
         load_basis: "total_external",
       }),
     ).toBe("0 reps · 30 lb total");
+  });
+});
+
+describe("queued commands after a dropped set action (review fix)", () => {
+  it("an Undo queued behind a stale Complete is dropped, not applied to the TV's set", async () => {
+    const row = await startedSession();
+    const f = flaky({ ...api, realtime: { ...api.realtime, onSession: () => () => {} } });
+    const c = controller(f.api, row.id);
+    await c.start();
+    // Phone offline: queues Complete (expected r) then Undo (expected r+1).
+    f.state.offline = true;
+    expect(c.send("complete_set")).toBe(true);
+    await settle();
+    expect(c.send("undo")).toBe(true);
+    // Meanwhile the TV completes set 1, moving the server to r+1.
+    await api.sessions.command({
+      sessionId: row.id,
+      kind: "complete_set",
+      payload: { step: 0 },
+      expectedRevision: row.revision,
+      source: "tv",
+    });
+    f.state.offline = false;
+    await c.pump();
+    await settle();
+    const v = c.getSnapshot();
+    expect(v.pending).toHaveLength(0);
+    expect(v.row?.cursor).toBe(1); // the TV's set survives
+    expect(v.row?.results[row.steps[0]!.key]).toBeDefined();
+    expect(v.notice).toBe(NOTICES.staleMany(2));
+    c.dispose();
+  });
+});
+
+describe("Realtime (re)subscribe re-reads the row (review fix)", () => {
+  it("an End missed while the channel was down is picked up on SUBSCRIBED", async () => {
+    const row = await startedSession();
+    let rejoin: (() => void) | undefined;
+    const quiet: DillanApi = {
+      ...api,
+      realtime: {
+        ...api.realtime,
+        onSession: (_u, _cb, onSubscribed) => {
+          rejoin = onSubscribed;
+          return () => {};
+        },
+      },
+    };
+    const c = controller(quiet, row.id);
+    await c.start();
+    expect(c.getSnapshot().row?.state).toBe("active");
+    // The other screen ends the workout while this channel is down: no event arrives.
+    await api.sessions.command({
+      sessionId: row.id,
+      kind: "end",
+      expectedRevision: row.revision,
+      source: "phone",
+    });
+    await settle();
+    expect(c.getSnapshot().row?.state).toBe("active");
+    // The channel rejoins.
+    expect(rejoin).toBeTypeOf("function");
+    rejoin!();
+    await settle();
+    await settle();
+    expect(c.getSnapshot().row?.state).toBe("ended");
+    c.dispose();
   });
 });

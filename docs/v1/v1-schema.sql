@@ -663,6 +663,10 @@ create table if not exists public.device_grants (
   session_id uuid,                        -- auth.sessions.id of the TV's own Supabase session
   created_at timestamptz not null default now(),
   last_seen_at timestamptz not null default now(),
+  -- last remote/phone activity reported by the TV (or a running workout). device_grant_touch
+  -- revokes the grant once this is 15 minutes old with no active/paused workout, so the TV
+  -- auto-lock does not depend on the TV page staying open (dev-brief: enforced server-side).
+  last_active_at timestamptz not null default now(),
   revoked_at timestamptz
 );
 create index if not exists device_grants_user on public.device_grants (user_id) where revoked_at is null;
@@ -942,6 +946,10 @@ declare
   n public.session_notes;
 begin
   if uid is null then raise exception 'not authenticated' using errcode = '28000'; end if;
+  -- notes are edited on the phone only; a paired TV session is read-only here (handoff S11/S13)
+  if public.v1_is_device_session() then
+    return jsonb_build_object('ok', false, 'error', 'device_session_forbidden', 'note', null);
+  end if;
   if p_text is null or char_length(p_text) > 4000 then
     return jsonb_build_object('ok', false, 'error', 'invalid_text', 'note', null);
   end if;
@@ -986,6 +994,11 @@ begin
   select * into sm from public.session_summaries where session_id = p_session_id and user_id = uid for update;
   if not found then return jsonb_build_object('ok', false, 'error', 'not_found'); end if;
   if sm.hr_status = 'no_live_data' then return jsonb_build_object('ok', false, 'error', 'no_live_data'); end if;
+  -- A final summary is settled once the late-sample window is over (hr_ingest marks it dirty
+  -- for 2 minutes after End): saved history is never rewritten afterwards.
+  if sm.hr_status = 'final' and not sm.hr_finalize_dirty and sm.ended_at < now() - interval '5 minutes' then
+    return jsonb_build_object('ok', false, 'error', 'already_final', 'summary', to_jsonb(sm));
+  end if;
   if p_zone_ms is null or coalesce(array_length(p_zone_ms, 1), 0) <> 5 or array_ndims(p_zone_ms) <> 1
      or p_unmeasured_ms is null or p_unmeasured_ms < 0 or p_algorithm_version is null or p_algorithm_version < 1
      or exists (select 1 from unnest(p_zone_ms) z where z is null or z < 0) then
@@ -1477,6 +1490,14 @@ begin
   end if;
 end $$;
 
+-- The first word of a profile's display name: all a pairing for a remembered tile may reveal (the
+-- TV tile shows no more). for_user_id comes from an unauthenticated TV, so it is untrusted.
+create or replace function public.v1_first_name(p_user_id uuid)
+returns text language sql stable security definer set search_path = '' as $$
+  select nullif(split_part(btrim(coalesce(p.display_name, '')), ' ', 1), '')
+    from public.profiles p where p.id = p_user_id
+$$;
+
 create or replace function public.pairing_preview(p_code text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare uid uuid := auth.uid(); ch public.pairing_challenges; cid uuid; err text; fname text;
@@ -1490,7 +1511,7 @@ begin
   if err is not null then return jsonb_build_object('ok', false, 'error', err); end if;
   select * into ch from public.pairing_challenges where id = cid;
   if ch.for_user_id is not null then
-    select display_name into fname from public.profiles where id = ch.for_user_id;
+    fname := public.v1_first_name(ch.for_user_id);
   end if;
   return jsonb_build_object('ok', true, 'device_label', ch.device_label, 'created_at', ch.created_at,
     'expires_at', ch.expires_at,
@@ -1510,7 +1531,7 @@ begin
   if err is not null then return jsonb_build_object('ok', false, 'error', err); end if;
   select * into ch from public.pairing_challenges where id = cid;
   if ch.for_user_id is not null and ch.for_user_id <> uid and not coalesce(p_confirm_other_user, false) then
-    select display_name into fname from public.profiles where id = ch.for_user_id;
+    fname := public.v1_first_name(ch.for_user_id);
     return jsonb_build_object('ok', false, 'error', 'for_other_user', 'for_name', fname);
   end if;
   update public.pairing_challenges set status = 'approved', approved_user_id = uid, resolved_at = now()
@@ -1563,9 +1584,12 @@ begin
 end $$;
 
 -- TV re-checks its grant on load and every 60 s; false once revoked or its auth session is gone.
-create or replace function public.device_grant_touch(p_device_id text)
+-- p_active: someone used the TV (remote or phone controller) since the last check. With no
+-- activity for 15 minutes and no active/paused workout the grant is revoked here and its auth
+-- session deleted, so a TV that was closed or reloaded without locking cannot reopen signed in.
+create or replace function public.device_grant_touch(p_device_id text, p_active boolean default false)
 returns jsonb language plpgsql security definer set search_path = '' as $$
-declare uid uuid := auth.uid(); sid uuid; g public.device_grants;
+declare uid uuid := auth.uid(); sid uuid; g public.device_grants; running boolean;
 begin
   if uid is null then return jsonb_build_object('valid', false); end if;
   begin
@@ -1577,7 +1601,17 @@ begin
   if not found or not exists (select 1 from auth.sessions s where s.id = sid and s.user_id = uid) then
     return jsonb_build_object('valid', false);
   end if;
-  update public.device_grants set last_seen_at = now() where id = g.id;
+  running := exists (select 1 from public.workout_sessions w
+                      where w.user_id = uid and w.state in ('active', 'paused'));
+  if not coalesce(p_active, false) and not running
+     and g.last_active_at < now() - interval '15 minutes' then
+    update public.device_grants set revoked_at = now() where id = g.id;
+    delete from auth.sessions where id = sid and user_id = uid;
+    return jsonb_build_object('valid', false, 'reason', 'idle');
+  end if;
+  update public.device_grants set last_seen_at = now(),
+    last_active_at = case when coalesce(p_active, false) or running then now() else last_active_at end
+   where id = g.id;
   return jsonb_build_object('valid', true, 'grant_id', g.id);
 end $$;
 
@@ -1659,8 +1693,8 @@ begin
     'v1_pairing_code_hash(text)', 'v1_sha256_hex(text)',
     'pairing_create(text,text,text,uuid)', 'v1_pairing_check_secret(public.pairing_challenges,text)',
     'pairing_status(uuid,text)', 'pairing_consume(uuid,text)', 'pairing_cancel(uuid,text)',
-    'v1_pairing_lookup(text,uuid)', 'pairing_preview(text)', 'approve_pairing(text,boolean)',
-    'deny_pairing(text)', 'device_grant_register(text,text)', 'device_grant_touch(text)',
+    'v1_pairing_lookup(text,uuid)', 'v1_first_name(uuid)', 'pairing_preview(text)', 'approve_pairing(text,boolean)',
+    'deny_pairing(text)', 'device_grant_register(text,text)', 'device_grant_touch(text,boolean)',
     'revoke_device_grant(uuid)', 'delete_my_v1_data()'] loop
     execute format('revoke all on function public.%s from public, anon, authenticated', f);
     execute format('grant execute on function public.%s to service_role', f);

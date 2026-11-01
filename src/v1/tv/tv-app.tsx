@@ -32,7 +32,7 @@ import { qk, useCurrentSession, useProfile } from "@/v1/data/queries";
 import { clearLocalUserData } from "@/v1/session/local-data";
 import { serverClockFor } from "@/v1/session/server-clock";
 import { UserProvider } from "@/v1/ui/user-context";
-import { AUTO_LOCK_TOAST, AutoLock } from "./autolock";
+import { AUTO_LOCK_TICK_MS, AUTO_LOCK_TOAST, AutoLock } from "./autolock";
 import { TvSignedInProvider, type SessionHandle, type TvSignedIn } from "./context";
 import {
   firstNameOf,
@@ -47,8 +47,9 @@ import {
 import { FocusEngine } from "./focus";
 import { tvKeyOf } from "./keys";
 import { runLock } from "./lock";
+import { markActivity, markerIdleExpired, readMarker, writeMarker } from "./marker";
 import { clearTvMemory } from "./memory-store";
-import { backFor, EXIT_TOAST, type TvModal, type TvScreen } from "./screens";
+import { backFor, EXIT_TOAST, TV_SESSION_POLL_MS, type TvModal, type TvScreen } from "./screens";
 import { TvChoose, TvHome, TvPreflight, TvProgram } from "./screens-main";
 import { TvCalendar, TvDetail, TvProfile, TvRunningDialog } from "./screens-history";
 import { TvLiveData } from "./screens-live-data";
@@ -58,7 +59,7 @@ import { Chooser, FirstRun, Pairing, TV_COPY } from "./signed-out";
 export const TV_W = 1920;
 export const TV_H = 1080;
 export const GRANT_CHECK_MS = 60_000;
-export const TV_SESSION_KEY = "dillan.tv.session";
+export { TV_SESSION_KEY } from "./marker";
 const TOAST_MS = 4_000;
 
 type Phase =
@@ -71,27 +72,6 @@ type OutScreen =
   | { name: "first_run" }
   | { name: "chooser" }
   | { name: "pairing"; forUser: RememberedProfile | null };
-
-/** Which signed-in Supabase session belongs to this TV (set when the TV paired it). */
-function readMarker(): { userId: string; grantId: string | null } | null {
-  try {
-    const raw = window.localStorage.getItem(TV_SESSION_KEY);
-    const v = raw ? (JSON.parse(raw) as { userId?: unknown; grantId?: unknown }) : null;
-    return v && typeof v.userId === "string"
-      ? { userId: v.userId, grantId: typeof v.grantId === "string" ? v.grantId : null }
-      : null;
-  } catch {
-    return null;
-  }
-}
-function writeMarker(v: { userId: string; grantId: string | null } | null) {
-  try {
-    if (v) window.localStorage.setItem(TV_SESSION_KEY, JSON.stringify(v));
-    else window.localStorage.removeItem(TV_SESSION_KEY);
-  } catch {
-    /* storage blocked */
-  }
-}
 
 // ---- history guard (Back as popstate) ----
 const GUARD = "dillanTvGuard";
@@ -190,23 +170,41 @@ export function TvApp({ api }: { api: DillanApi }) {
         if (live) setPhase({ kind: "out" });
         return;
       }
-      const g = await api.tv.checkGrant(device.id).catch(() => null);
+      // Not activity: the server revokes a grant left idle for 15 minutes (no running workout).
+      const g = await api.tv.checkGrant(device.id, false).catch(() => null);
       if (!live) return;
-      if (g && !g.valid) {
-        await api.tv.lock(null).catch(() => undefined);
+      const wipeAndOut = async (grantId: string | null) => {
+        qc.clear();
+        clearTvMemory();
+        clearLocalUserData(user.id);
+        await api.tv.lock(grantId).catch(() => undefined);
         writeMarker(null);
         if (live) {
           setOut(chooserOrFirstRun());
           setPhase({ kind: "out" });
         }
+      };
+      if (g && !g.valid) {
+        await wipeAndOut(null);
         return;
+      }
+      // Closed or reloaded without locking and idle past the limit (the server may be unreachable,
+      // or not know the latest activity): lock before anything private is shown, unless a
+      // workout is running (it is exempt from auto-lock).
+      if (markerIdleExpired(marker, Date.now())) {
+        const cur = await api.sessions.current().catch(() => null);
+        if (!live) return;
+        if (!cur || (cur.state !== "active" && cur.state !== "paused")) {
+          await wipeAndOut(g?.grantId ?? marker.grantId);
+          return;
+        }
       }
       setPhase({ kind: "in", user, grantId: g?.grantId ?? marker.grantId, restore: true });
     })();
     return () => {
       live = false;
     };
-  }, [api, device.id, chooserOrFirstRun]);
+  }, [api, device.id, chooserOrFirstRun, qc]);
 
   // ---- lock / switch / remove ----
   const lock = useCallback(
@@ -248,7 +246,7 @@ export function TvApp({ api }: { api: DillanApi }) {
         void api.tv.lock(null).catch(() => undefined);
         return;
       }
-      writeMarker({ userId: user.id, grantId });
+      writeMarker({ userId: user.id, grantId, lastActiveAt: Date.now() });
       setPhase({ kind: "in", user, grantId, restore: false });
     },
     [api],
@@ -441,7 +439,7 @@ function SignedIn({
   onLock: (opts?: { forget?: boolean }) => Promise<void>;
 }) {
   const device = useMemo(() => tvDevice(), []);
-  const current = useCurrentSession(user.id);
+  const current = useCurrentSession(user.id, { pollMs: TV_SESSION_POLL_MS });
   const profile = useProfile(user.id);
   const [screen, setScreen] = useState<TvScreen>({ name: "home" });
   const [modal, setModal] = useState<TvModal | null>(null);
@@ -548,11 +546,13 @@ function SignedIn({
         onWarn: () => toast(AUTO_LOCK_TOAST, true),
         onClearWarn: () => toast(null),
         onLock: () => void onLock(),
+        onActivity: (at) => markActivity(user.id, at),
       }),
-    [toast, onLock],
+    [toast, onLock, user.id],
   );
   useEffect(() => {
-    autolock.start();
+    // Resume the persisted idle clock: a reload never grants a fresh 15 minutes.
+    autolock.start(readMarker()?.lastActiveAt);
     return () => autolock.stop();
   }, [autolock]);
   // Phone-controller events (Realtime session updates) count as activity too.
@@ -564,7 +564,9 @@ function SignedIn({
   useEffect(() => {
     let live = true;
     const check = async () => {
-      const g = await api.tv.checkGrant(device.id).catch(() => null);
+      // Report whether the TV was used since the last check (a running workout counts).
+      const active = autolock.idleMs() < GRANT_CHECK_MS + AUTO_LOCK_TICK_MS;
+      const g = await api.tv.checkGrant(device.id, active).catch(() => null);
       if (live && g && !g.valid) void onLock();
     };
     const t = setInterval(() => void check(), GRANT_CHECK_MS);
@@ -572,7 +574,7 @@ function SignedIn({
       live = false;
       clearInterval(t);
     };
-  }, [api, device.id, onLock]);
+  }, [api, device.id, onLock, autolock]);
 
   const go = useCallback((s: TvScreen) => {
     setModal(null);

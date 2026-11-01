@@ -34,7 +34,8 @@ import { SpotMark } from "@/components/dillan/spot-mark";
 import { cn } from "@/lib/utils";
 import { useTv } from "./context";
 import { TV_HR_COPY, TvRelayQrDialog, useHrStateToast } from "./hr-pieces";
-import type { TvScreen } from "./screens";
+import { TV_SESSION_POLL_MS, type TvScreen } from "./screens";
+import { browserTimeZone } from "@/v1/ui/timezones";
 import {
   loadView,
   TV_LOAD_COPY,
@@ -134,7 +135,7 @@ export function TvHome() {
   const uid = tv.user.id;
   const profile = useProfile(uid);
   const history = useHistory(uid);
-  const current = useCurrentSession(uid);
+  const current = useCurrentSession(uid, { pollMs: TV_SESSION_POLL_MS });
   const zones = useZones(uid);
   const hr = useLiveHeartRate(uid, { zonesConfirmed: !!zones.data?.confirmed_at });
   const now = hr.now;
@@ -164,7 +165,7 @@ export function TvHome() {
         ["Back", live ? "Back to workout" : "Exit app (stays signed in)"],
       ]}
     >
-      <div className="grid h-full grid-cols-[1.3fr_1fr] gap-12">
+      <div className="grid h-full grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-12">
         <div className="flex min-h-0 flex-col gap-6">
           <h1 className="shrink-0 truncate text-tv-3xl font-bold leading-tight">
             {live ? TV_MAIN_COPY.workoutRunning : name ? `Hi, ${name}` : "Hi"}
@@ -405,7 +406,7 @@ export function TvProgram() {
         ["Back", "Home"],
       ]}
     >
-      <div className="grid h-full grid-cols-[2fr_1fr] gap-12">
+      <div className="grid h-full grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-12">
         <div className="flex min-h-0 flex-col gap-6">
           <h1 className="text-tv-xl font-bold">{TV_MAIN_COPY.programTitle}</h1>
           {view === "loading" ? (
@@ -527,7 +528,7 @@ export function TvChoose() {
   if (view === "ready" && list.length === 0)
     return (
       <TvNavScreen screenKey="choose:empty" nav={null} hints={[["Back", "Home"]]}>
-        <div className="grid h-full grid-cols-[2fr_1fr] items-center gap-12">
+        <div className="grid h-full grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-center gap-12">
           <div className="flex flex-col gap-6">
             <h1 className="text-tv-2xl font-bold">{TV_MAIN_COPY.createFirst}</h1>
             <p className="text-tv-md text-text-2">{TV_MAIN_COPY.createFirstBody}</p>
@@ -556,7 +557,7 @@ export function TvChoose() {
         ["Back", "Home"],
       ]}
     >
-      <div className="grid h-full grid-cols-[1.4fr_1fr] gap-12">
+      <div className="grid h-full grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-12">
         <div className="flex min-h-0 flex-col gap-4">
           <h1 className="text-tv-xl font-bold">{TV_MAIN_COPY.chooseTitle}</h1>
           <p className="text-tv-base text-text-2">{TV_MAIN_COPY.chooseSub}</p>
@@ -652,7 +653,8 @@ export function TvPreflight({ templateId }: { templateId: string }) {
   }, [ready, hr.loaded]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const attempt = useRef(newId());
+  // One command id per choice: retrying a button replays its start; the other button never does.
+  const attempt = useRef({ live: newId(), off: newId() });
   // Acceptance 18: Start is the initial focus only when live; decided once, never moved later.
   // The data-autofocus target is fixed by that decision (never follows `ready`), and Start is
   // only soft-disabled, so no HR state change can move focus (h10-design 6, acceptance 43).
@@ -668,10 +670,12 @@ export function TvPreflight({ templateId }: { templateId: string }) {
     return () => clearInterval(i);
   }, [api]);
 
-  const tz = profile.data?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
+  // start_timezone is the starting device's zone (0006); weeks use the profile zone.
+  const tz = browserTimeZone();
 
   const starting = useRef(false);
   async function begin(liveData: boolean) {
+    const choice = liveData ? "live" : "off";
     if (starting.current) return;
     starting.current = true;
     setBusy(true);
@@ -681,7 +685,7 @@ export function TvPreflight({ templateId }: { templateId: string }) {
         templateId,
         liveData,
         timezone: tz,
-        commandId: attempt.current,
+        commandId: attempt.current[choice],
       });
       if (!res.ok && res.error === "session_running" && res.session_id) {
         // Another screen started one: this TV shows that workout (one per user).
@@ -689,7 +693,7 @@ export function TvPreflight({ templateId }: { templateId: string }) {
         return;
       }
       if (!res.ok || !res.session) {
-        attempt.current = newId();
+        attempt.current[choice] = newId();
         setError(PREFLIGHT_COPY.startFailed);
         return;
       }
@@ -706,7 +710,7 @@ export function TvPreflight({ templateId }: { templateId: string }) {
       void qc.invalidateQueries({ queryKey: qk.current(user.id) });
       tv.go({ name: "session", sessionId: row.id });
     } catch {
-      attempt.current = newId();
+      // Keep the id: a retry of the same button replays a start whose response was lost.
       setError(PREFLIGHT_COPY.startFailed);
     } finally {
       starting.current = false;
@@ -745,7 +749,7 @@ export function TvPreflight({ templateId }: { templateId: string }) {
           </TvButton>
         </div>
       ) : (
-        <div className="grid h-full grid-cols-[1.25fr_1fr] gap-12">
+        <div className="grid h-full grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] gap-12">
           <div className="flex min-h-0 flex-col gap-5">
             <TvEyebrow>{TV_MAIN_COPY.ready}</TvEyebrow>
             <h1 className="shrink-0 truncate text-tv-2xl font-bold leading-tight">{t.name}</h1>
@@ -797,7 +801,7 @@ export function TvPreflight({ templateId }: { templateId: string }) {
               </p>
             )}
             <p className="text-tv-sm text-text-2">{PREFLIGHT_COPY.withoutLiveHelp}</p>
-            <div className="mt-auto flex gap-4 p-2">
+            <div className="mt-auto flex flex-wrap gap-4 p-2">
               {/* Start is soft-disabled whenever HR is not live: it ignores OK but keeps focus, so
                   an HR change never moves focus. Nothing is disabled while starting (begin()
                   ignores repeats), so focus cannot fall back to the avatar mid-start. The relay QR

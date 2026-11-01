@@ -40,6 +40,8 @@ export function useSessionController(
   source?: CommandSource,
   /** where the command queue persists (default localStorage; the TV passes memory only) */
   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null,
+  /** backstop re-read interval (the TV passes one; see ControllerOptions.pollMs) */
+  pollMs?: number,
 ): { view: SessionView; controller: SessionController } {
   const api = useApi();
   const clock = useServerClock();
@@ -53,13 +55,14 @@ export function useSessionController(
         source: source ?? deviceSource(),
         ...(storage !== undefined ? { storage } : {}),
         now: () => clock.now(),
+        ...(pollMs ? { pollMs } : {}),
         onEnded: (row: WorkoutSessionRow) => {
           // The client that ended the session finalizes its heart-rate summary.
           if (row.live_data) void api.sessions.finalize(row.id).catch(() => undefined);
           void qc.invalidateQueries({ queryKey: ["v1", userId] });
         },
       }),
-    [api, userId, sessionId, clock, qc, source, storage],
+    [api, userId, sessionId, clock, qc, source, storage, pollMs],
   );
   useEffect(() => {
     void controller.start();

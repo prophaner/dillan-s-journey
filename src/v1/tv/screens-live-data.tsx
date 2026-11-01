@@ -70,7 +70,7 @@ export function TvLiveData() {
         ["Back", "Profile"],
       ]}
     >
-      <div className="grid h-full grid-cols-[1.3fr_1fr] gap-12">
+      <div className="grid h-full grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-12">
         <div className="flex min-h-0 flex-col gap-5 overflow-hidden">
           <h1 className="shrink-0 text-tv-2xl font-bold">{TV_LIVE_DATA_COPY.title}</h1>
           <Row focusId="ld-strap">

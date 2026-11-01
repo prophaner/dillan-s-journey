@@ -259,3 +259,69 @@ describe("pairing support", () => {
     expect(isPlaceholderEmail("luis@example.com")).toBe(false);
   });
 });
+
+describe("TV canvas fit (handoff §2, review fix)", () => {
+  it("every fr grid track on the TV is minmax(0,…): content never pushes a column off-canvas", async () => {
+    const { readdirSync, readFileSync } = await import("node:fs");
+    const dir = "src/v1/tv";
+    const bad = readdirSync(dir)
+      .filter((f) => f.endsWith(".tsx"))
+      .flatMap((f) =>
+        [...readFileSync(`${dir}/${f}`, "utf8").matchAll(/grid-cols-\[([^\]]+)\]/g)]
+          .filter((m) => /(^|_)[0-9.]+fr/.test(m[1] as string))
+          .map((m) => `${f}: ${m[0]}`),
+      );
+    expect(bad).toEqual([]);
+  });
+});
+
+describe("TV session marker and auto-lock across reloads (review fix)", () => {
+  it("resumes the persisted idle clock instead of a fresh 15 minutes", () => {
+    let t = 1_000_000;
+    let locked = 0;
+    const seen: number[] = [];
+    const a = new AutoLock({
+      now: () => t,
+      exempt: () => false,
+      onWarn: () => {},
+      onClearWarn: () => {},
+      onLock: () => locked++,
+      onActivity: (at) => seen.push(at),
+    });
+    a.start(t - (AUTO_LOCK_MS - 1_000));
+    t += 2_000;
+    a.tick();
+    expect(locked).toBe(1);
+    a.stop();
+    a.activity();
+    expect(seen).toEqual([t]);
+  });
+
+  it("markerIdleExpired / isTvSessionFor", async () => {
+    const { markerIdleExpired, isTvSessionFor, TV_SESSION_KEY } = await import("@/v1/tv/marker");
+    expect(markerIdleExpired({ userId: "u", grantId: null }, 1e12)).toBe(false);
+    expect(
+      markerIdleExpired({ userId: "u", grantId: null, lastActiveAt: 0 }, AUTO_LOCK_MS - 1),
+    ).toBe(false);
+    expect(markerIdleExpired({ userId: "u", grantId: null, lastActiveAt: 0 }, AUTO_LOCK_MS)).toBe(
+      true,
+    );
+    localStorage.setItem(TV_SESSION_KEY, JSON.stringify({ userId: "u1", grantId: "g" }));
+    expect(isTvSessionFor("u1")).toBe(true);
+    expect(isTvSessionFor("u2")).toBe(false);
+    localStorage.removeItem(TV_SESSION_KEY);
+    expect(isTvSessionFor("u1")).toBe(false);
+  });
+});
+
+describe("S13 detail overflow line (review fix)", () => {
+  it("counts the exercise rows that end below the clipped list", async () => {
+    const { hiddenRowCount, TV_PROFILE_COPY } = await import("@/v1/tv/screens-history");
+    const rows = [0, 130, 260, 390, 520].map((top) => ({ top, height: 118 }));
+    expect(hiddenRowCount(400, rows)).toBe(2);
+    expect(hiddenRowCount(700, rows)).toBe(0);
+    expect(hiddenRowCount(0, rows)).toBe(0); // not laid out yet
+    expect(TV_PROFILE_COPY.moreExercises(1)).toMatch(/^\+1 more exercise · /);
+    expect(TV_PROFILE_COPY.moreExercises(3)).toMatch(/^\+3 more exercises · /);
+  });
+});

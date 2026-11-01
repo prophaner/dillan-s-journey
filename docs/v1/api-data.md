@@ -52,18 +52,18 @@ Parked brief-v2 tables (`sessions`, `set_logs`, `routine_*`, …) are untouched 
 
 | RPC | Purpose |
 |---|---|
-| `session_start(p_command_id, p_template_id, p_live_data, p_timezone, p_client_at?, p_is_demo?)` | Creates the `preparing` session with the template snapshot and zone snapshot. Idempotent on command id. `session_running` if another unfinished session exists (a preflight left unstarted 30 min is discarded instead). |
+| `session_start(p_command_id, p_template_id, p_live_data, p_timezone, p_client_at?, p_is_demo?)` | Creates the `preparing` session with the template snapshot and zone snapshot. Idempotent on command id (the preflights keep one id per live-data choice, so the other button never replays a start). `session_running` if another unfinished session exists (a preflight left unstarted 30 min is discarded instead). `p_timezone` is the starting device's zone (`start_timezone`, the calendar day); weeks use the profile zone. |
 | `session_command(p_session_id, p_command_id, p_expected_revision, p_source, p_kind, p_payload?, p_client_at?)` | Kinds: `start`, `pause`, `resume`, `complete_set` (reps, weight), `skip_set`, `undo`, `skip_rest`, `end`, `discard`. Applied at server `now()`; stale revision rejected except pause/resume/end that are still valid; ended is terminal. `end` writes the summary. |
-| `session_note_save(p_session_id, p_text, p_expected_revision)` | Autosave with revision check (0/null creates). |
-| `session_hr_finalize(p_session_id, p_zone_ms[5], p_unmeasured_ms, p_algorithm_version, p_sources_used?)` | Saves zone totals; enforces Σzones + unmeasured = active ±1 s. Called by `finalizeSessionHr`. |
+| `session_note_save(p_session_id, p_text, p_expected_revision)` | Autosave with revision check (0/null creates). Refused to a paired TV (`device_session_forbidden`): notes are edited on the phone. |
+| `session_hr_finalize(p_session_id, p_zone_ms[5], p_unmeasured_ms, p_algorithm_version, p_sources_used?)` | Saves zone totals; enforces Σzones + unmeasured = active ±1 s. Called by `finalizeSessionHr`. A final summary that is not dirty and ended more than 5 min ago returns `already_final` (saved history is never rewritten after the late-sample window). |
 | `server_time()` | Server clock for offset estimation (relay and viewers). |
 | `hr_request(p_minutes default 10)` | Opens/extends (or with 0 closes) the HR demand window; preflight calls it on open and every 2 min. |
 | `hr_forget_sensor()` | Forgets the paired strap; the relay disconnects. |
 | `hr_ingest(p_source_id, p_stream_id, p_expected_user_id, p_source_kind, p_mode, p_connected_at, p_sensor, p_claim, p_samples, p_source_name?, p_platform?)` | Relay heartbeat + samples (≤30 per call). Dedupes on `(stream_id, seq)`, clamps clock skew, attaches samples to the active session (started < 6 h ago) including late backfill after End (marks the summary dirty), keeps `hr_live` monotonic, returns `stop_requested`/`superseded`/`revoked` signals and per-sample rejections. Per-source rate limit. |
-| `pairing_preview(p_code)` | Phone: who/what the TV request is (device label, created time, intended user). |
+| `pairing_preview(p_code)` | Phone: who/what the TV request is (device label, created time, intended user). `for_name` is only the first word of that user's display name (`v1_first_name`): the TV request is unauthenticated, so its `for_user_id` is untrusted. |
 | `approve_pairing(p_code, p_confirm_other_user?)` / `deny_pairing(p_code)` | Phone approves/denies. Per-user (10 wrong codes / 10 min) and global (100 / 10 min) wrong-guess limits. |
 | `device_grant_register(p_device_id, p_label?)` | TV, right after `verifyOtp`: records its own auth session as a grant (needs a pairing consumed in the last 10 min). |
-| `device_grant_touch(p_device_id)` | TV on load and every 60 s; false once revoked or its auth session is gone. |
+| `device_grant_touch(p_device_id, p_active?)` | TV on load (`p_active` false) and every 60 s (`p_active` = the TV was used since the last check). False once revoked or its auth session is gone. Server-side auto-lock: with `device_grants.last_active_at` older than 15 min and no active/paused workout it revokes the grant, deletes the TV's auth session and returns `{valid:false, reason:'idle'}`. |
 | `revoke_device_grant(p_grant_id)` | Lock / remove / revoke: deletes the TV's `auth.sessions` row (refresh token dies at once; an access token can live ≤1 h, hence the 60 s touch). |
 | `delete_my_v1_data()` | Deletes every V1 row the caller owns (see Deletion). Refused to a TV. |
 
@@ -99,8 +99,13 @@ Supabase Realtime `postgres_changes`, RLS-filtered, one subscription per signed-
 - Nothing is broadcast on device-wide or public channels; there is no client Broadcast.
 - `hr_live`/`hr_sensors` have a surrogate primary key so Realtime DELETE events (which skip
   RLS) never carry a user id; clients ignore `hr_live` DELETE events.
-- Viewers re-select rows and `server_time()` on every (re)subscribe and on `visibilitychange`;
-  rows with `rev` ≤ the cached one are ignored.
+- Realtime never replays changes missed while a channel was joining or the socket was down, so
+  every `api.realtime.on*` takes an `onSubscribed` callback that runs on the first join and on
+  every rejoin (`SUBSCRIBED`): the session controller re-reads its row, the current-session query
+  is invalidated, and heart-rate viewers re-select `hr_live`/`hr_sensors` and take a
+  `server_time()` sample. They also re-read on `visibilitychange`; rows with `rev` ≤ the cached
+  one are ignored. The TV also re-reads its session every 45 s as a backstop (a visible Fire TV
+  fires no focus/online event on a Wi-Fi blip).
 - Lock / switch user / revoke: `removeAllChannels()` before the blank frame.
 - The channel is per user, not per session (deliberate, h10-design §5.5): heart rate is needed
   before a session exists. Every row still carries `rev`, `measured_at` and `active_session_id`.

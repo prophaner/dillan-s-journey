@@ -16,6 +16,15 @@
 //    returning to Program/Choose restores the row. [data-autofocus="force"] marks an explicit
 //    selection (Calendar opened on a given day) and wins over the list memory.
 //  - data-focus-up/down/left/right="<focus-id>" routes that direction explicitly (S09 focus order).
+//  - A screen moves focus on purpose (OK on a Calendar day with several sessions → its first
+//    session) by dispatching requestTvFocus(el, id): a bubbling "tv-focus" event the engine handles.
+
+export const TV_FOCUS_EVENT = "tv-focus";
+
+/** Ask the focus engine (an ancestor of `from`) to focus the element with this data-focus-id. */
+export function requestTvFocus(from: Element, id: string) {
+  from.dispatchEvent(new CustomEvent<string>(TV_FOCUS_EVENT, { bubbles: true, detail: id }));
+}
 
 export type Direction = "up" | "down" | "left" | "right";
 
@@ -122,6 +131,7 @@ export class FocusEngine {
 
   /** Watch the DOM: re-render → keep or restore focus deterministically. */
   attach() {
+    this.root.addEventListener(TV_FOCUS_EVENT, this.onFocusRequest);
     if (typeof MutationObserver === "undefined") return;
     this.observer = new MutationObserver(() => this.sync());
     this.observer.observe(this.root, {
@@ -141,8 +151,23 @@ export class FocusEngine {
   }
 
   detach() {
+    this.root.removeEventListener(TV_FOCUS_EVENT, this.onFocusRequest);
     this.observer?.disconnect();
     this.observer = null;
+  }
+
+  private onFocusRequest = (e: Event) => {
+    const id = (e as CustomEvent<unknown>).detail;
+    if (typeof id === "string") this.focusId(id);
+  };
+
+  /** Focus the candidate with this data-focus-id; false when it is not focusable now. */
+  focusId(id: string): boolean {
+    const target = this.candidates().find((el) => el.getAttribute("data-focus-id") === id);
+    if (!target) return false;
+    this.movedSinceAuto = true;
+    this.setFocus(target);
+    return true;
   }
 
   get focused(): HTMLElement | null {

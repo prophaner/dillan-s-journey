@@ -158,3 +158,35 @@ describe("notes autosave", () => {
     n.dispose();
   });
 });
+
+describe("a failed note read (review fix)", () => {
+  it("is an error with a retry, never an empty editable note", async () => {
+    await api.notes.save(sessionId, "existing note", 0);
+    const s = { fail: true };
+    const a: DillanApi = {
+      ...api,
+      notes: {
+        ...api.notes,
+        get: async (id) => {
+          if (s.fail) throw new TypeError("Failed to fetch");
+          return api.notes.get(id);
+        },
+      },
+    };
+    const n = new NoteAutosave({ api: a, userId: MOCK_LUIS, sessionId, listenOnline: false });
+    await n.load();
+    expect(n.getSnapshot()).toMatchObject({
+      loaded: false,
+      text: "",
+      status: { kind: "load_error" },
+    });
+    expect(statusText(n.getSnapshot().status)).toBe(NOTE_COPY.loadError);
+    n.input("typed over nothing");
+    expect(n.getSnapshot().text).toBe("");
+    expect(readPendingNotes(MOCK_LUIS)[sessionId]).toBeUndefined();
+    s.fail = false;
+    await n.load();
+    expect(n.getSnapshot()).toMatchObject({ loaded: true, text: "existing note" });
+    n.dispose();
+  });
+});

@@ -148,6 +148,8 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
   }
 
   const iso = (ms = now()) => new Date(ms).toISOString();
+  const firstName = (userId: string): string | null =>
+    (db.users.find((x) => x.id === userId)?.display_name ?? "").trim().split(/\s+/)[0] || null;
 
   function user(): MockUser {
     const u = db.users.find((x) => x.id === me);
@@ -663,9 +665,8 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
         const l = lookupPairing(code);
         if (!("p" in l) || !l.p) return { ok: false, error: l.error };
         const p = l.p;
-        const forName = p.for_user_id
-          ? (db.users.find((x) => x.id === p.for_user_id)?.display_name ?? null)
-          : null;
+        // Like v1_first_name: an unauthenticated TV picks for_user_id, so only the first name.
+        const forName = p.for_user_id ? firstName(p.for_user_id) : null;
         return {
           ok: true,
           device_label: p.device_label,
@@ -681,7 +682,7 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
         if (!("p" in l) || !l.p) return { ok: false, error: l.error };
         const p = l.p;
         if (p.for_user_id && p.for_user_id !== u.id && !confirmOtherUser) {
-          const forName = db.users.find((x) => x.id === p.for_user_id)?.display_name ?? null;
+          const forName = firstName(p.for_user_id);
           return { ok: false, error: "for_other_user", for_name: forName };
         }
         p.status = "approved";
@@ -751,6 +752,7 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
           session_id: newId(),
           created_at: iso(),
           last_seen_at: iso(),
+          last_active_at: iso(),
           revoked_at: null,
         };
         db.grants.push(grant);
@@ -767,14 +769,27 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
           persist();
         }
       },
-      async checkGrant(deviceId) {
+      async checkGrant(deviceId, active = false) {
         db = load() ?? db;
         if (!me) return { valid: false, grantId: null };
         const g = db.grants.find(
           (x) => x.user_id === me && x.device_id === deviceId && !x.revoked_at,
         );
         if (!g) return { valid: false, grantId: null };
+        // Same rule as device_grant_touch: 15 min with no reported activity and no running
+        // workout revokes the grant.
+        const running = db.sessions.some(
+          (s) => s.user_id === me && (s.state === "active" || s.state === "paused"),
+        );
+        const lastActive = g.last_active_at ? Date.parse(g.last_active_at) : now();
+        if (!active && !running && now() - lastActive > 15 * 60_000) {
+          g.revoked_at = iso();
+          persist();
+          writeSession(null);
+          return { valid: false, grantId: null };
+        }
         g.last_seen_at = iso();
+        if (active || running) g.last_active_at = iso();
         persist();
         return { valid: true, grantId: g.id };
       },
@@ -786,17 +801,28 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
         }
         writeSession(null);
       },
+      isTvSession() {
+        // The mock TV keeps its own sign-in (MOCK_TV_SESSION_KEY): a phone tab is never the TV's.
+        return false;
+      },
     },
 
     realtime: {
-      onSession(userId, cb) {
+      onSession(userId, cb, onSubscribed) {
         const l = { userId, cb };
         sessionListeners.add(l);
-        return () => sessionListeners.delete(l);
+        // Joined: like a real channel, report SUBSCRIBED asynchronously.
+        let live = true;
+        if (onSubscribed) queueMicrotask(() => live && onSubscribed());
+        return () => {
+          live = false;
+          sessionListeners.delete(l);
+        };
       },
-      onHrLive(userId, cb) {
+      onHrLive(userId, cb, onSubscribed) {
         // The relay tab's row (mock hr_ingest) or the simulated Demo relay, checked every second.
         if (typeof window === "undefined") return () => {};
+        if (onSubscribed) queueMicrotask(onSubscribed);
         const tick = () => {
           if (me !== userId) return;
           const row = liveFor(userId);
@@ -805,8 +831,9 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
         const t = window.setInterval(tick, 1000);
         return () => window.clearInterval(t);
       },
-      onHrSensor(userId, cb) {
+      onHrSensor(userId, cb, onSubscribed) {
         if (typeof window === "undefined") return () => {};
+        if (onSubscribed) queueMicrotask(onSubscribed);
         let last = "";
         const tick = () => {
           if (me !== userId) return;
@@ -916,6 +943,8 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
         for (const k of Object.keys(db.commands))
           if (k.startsWith(`${u.id}:`)) delete db.commands[k];
         persist();
+        // Pending note text and queued set commands of the deleted sessions can never save.
+        clearLocalUserData(u.id);
         return { sessions: mine.length, templates: tpl };
       },
       async deleteAccount() {

@@ -273,6 +273,8 @@ export interface DeviceGrantRow {
   session_id: string | null;
   created_at: string;
   last_seen_at: string;
+  /** last activity the TV reported (device_grant_touch p_active); drives the server-side lock */
+  last_active_at?: string;
   revoked_at: string | null;
 }
 

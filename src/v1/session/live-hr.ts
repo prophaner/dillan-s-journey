@@ -11,6 +11,7 @@ import { activeIntervals } from "@/v1/core/timing";
 import type { EngineState, ZoneCutoffs } from "@/v1/core/types";
 import { accountZones, zoneOf, type ZoneNumber, type ZoneTotals } from "@/v1/core/zones";
 import { useApi } from "@/v1/data/client";
+import { serverClockFor } from "./server-clock";
 import { useNow } from "./use-session";
 
 export interface LiveHr {
@@ -91,8 +92,17 @@ export function useLiveHr(userId: string): LiveHr {
       });
     };
     reselect();
-    const offLive = api.realtime.onHrLive(userId, take);
-    const offSensor = api.realtime.onHrSensor(userId, takeSensor);
+    // Realtime does not replay what was missed while a channel was joining or down: re-read the
+    // rows on every (re)join. reselect() is idempotent, so two channels joining is harmless.
+    const rejoined = () => {
+      if (!on) return;
+      reselect();
+      void serverClockFor(api.hr)
+        .sample()
+        .catch(() => undefined);
+    };
+    const offLive = api.realtime.onHrLive(userId, take, rejoined);
+    const offSensor = api.realtime.onHrSensor(userId, takeSensor, () => on && reselect());
     // A TV waking from sleep never shows stale data as Live: re-read when visible again.
     const onVis = () => {
       if (document.visibilityState === "visible") reselect();

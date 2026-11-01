@@ -20,6 +20,8 @@ export type NoteStatus =
   | { kind: "saving" }
   | { kind: "saved"; at: number }
   | { kind: "error" }
+  /** the note could not be read: the field stays read-only until a retry reads it */
+  | { kind: "load_error" }
   | { kind: "conflict"; serverText: string; serverRevision: number };
 
 export const NOTE_COPY = {
@@ -29,6 +31,8 @@ export const NOTE_COPY = {
   saved: (time: string) => `Saved ${time}`,
   error: "Not saved — we kept your note on this device",
   retry: "Retry now",
+  loadError: "Couldn't load your note. Check your connection.",
+  loadRetry: "Try again",
   conflict: "This note was changed on another device.",
   keepMine: "Keep this version",
   useTheirs: "Use the other version",
@@ -173,6 +177,7 @@ export class NoteAutosave {
     if (this.o.listenOnline !== false && typeof window !== "undefined" && !this.off) {
       const on = () => {
         if (this.status.kind === "error") void this.saveNow();
+        else if (this.status.kind === "load_error") void this.load();
       };
       window.addEventListener("online", on);
       this.off = () => window.removeEventListener("online", on);
@@ -208,6 +213,15 @@ export class NoteAutosave {
     } else if (pending) {
       clearPendingNote(this.o.userId, this.o.sessionId, this.store);
     }
+    if (!reached && !pending) {
+      // Unknown, not empty: an editable blank field would claim there is no note, and a save
+      // from revision 0 would end in a conflict the user never caused.
+      this.text = "";
+      this.loaded = false;
+      this.status = { kind: "load_error" };
+      this.emit();
+      return;
+    }
     this.loaded = true;
     this.emit();
     // App start retry for text that was kept on this device.
@@ -215,6 +229,7 @@ export class NoteAutosave {
   }
 
   input(text: string) {
+    if (this.status.kind === "load_error") return;
     const t = text.slice(0, NOTE_MAX);
     this.text = t;
     if (this.status.kind !== "conflict") this.status = { kind: "dirty" };

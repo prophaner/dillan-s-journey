@@ -107,7 +107,9 @@ export function CalendarPage({
         trailing={<AvatarLink name={profile?.display_name ?? ""} />}
       />
       <RunningBanner className="mb-3" />
-      <Card className="px-3 sm:px-[18px]">
+      {/* 7 day columns of >= 44 px need 308 px: below 375 px wide the card bleeds to the screen
+          edges with a 4 px inset (320 px: 44.6 px columns), acceptance 35. */}
+      <Card className="px-3 max-[374px]:-mx-margin max-[374px]:rounded-none max-[374px]:border-x-0 max-[374px]:px-1 sm:px-[18px]">
         <div className="flex items-center justify-between gap-2">
           <button
             type="button"

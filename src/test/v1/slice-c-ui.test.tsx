@@ -237,6 +237,32 @@ describe("recovery after reload", () => {
     expect(await screen.findByText("Home")).toBeInTheDocument();
   });
 
+  it("a scanned TV pairing link is not hijacked by the running workout (review fix)", async () => {
+    const tpl = (await api.templates.list())[0]!;
+    const r = await api.sessions.start({ templateId: tpl.id, liveData: false, timezone: "UTC" });
+    await api.sessions.command({
+      sessionId: r.session!.id,
+      kind: "start",
+      expectedRevision: 1,
+      source: "phone",
+    });
+    const router = harness(
+      {
+        "/approve-tv": () => (
+          <>
+            <AppStart userId={MOCK_LUIS} />
+            <p>Approve</p>
+          </>
+        ),
+        "/session/$id": () => <p>Dashboard</p>,
+      },
+      "/approve-tv?code=DLN-7RGZ",
+    );
+    expect(await screen.findByText("Approve")).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(router.state.location.pathname).toBe("/approve-tv");
+  });
+
   it("does not redirect for a session that was never started", async () => {
     const tpl = (await api.templates.list())[0]!;
     await api.sessions.start({ templateId: tpl.id, liveData: false, timezone: "UTC" });

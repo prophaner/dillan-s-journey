@@ -338,6 +338,7 @@ function ProfileBody({ profile }: { profile: Profile }) {
           try {
             const r = await api.account.deleteMyData();
             clearDraft(user.id);
+            clearLocalUserData(user.id);
             await qc.invalidateQueries({ queryKey: ["v1", user.id] });
             toast({ text: `Deleted ${r.templates} workouts and ${r.sessions} sessions` });
           } catch {

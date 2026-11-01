@@ -8,6 +8,9 @@ export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async ({ location }) => {
     const api = await getApi();
     const user = await api.auth.getUser();
+    // A paired TV's session is device-scoped: the phone app (notes, account actions, no
+    // auto-lock) never runs on it. This browser is a TV; send it back to the TV surface.
+    if (user && api.tv.isTvSession(user.id)) throw redirect({ to: "/tv" });
     if (user) return { user };
     // Signed out: log in first, then come back here (handoff acceptance 5: the TV code is kept).
     throw redirect({ to: "/auth", search: { redirect: location.href } });

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { FocusEngine, pickInDirection, type Rect } from "@/v1/tv/focus";
+import { FocusEngine, pickInDirection, requestTvFocus, type Rect } from "@/v1/tv/focus";
 
 // jsdom has no layout: every focusable gets its rect from data-rect="left,top,width,height".
 const rectOf = (el: HTMLElement): Rect => {
@@ -252,5 +252,39 @@ describe("FocusEngine", () => {
     engine.sync();
     engine.activate();
     expect(clicks).toBe(1);
+  });
+});
+
+describe("S12 Calendar: a Saturday with two sessions (review fix)", () => {
+  // Mon..Sun columns (Sunday last, next to the list); the selected day is Saturday.
+  const grid = () =>
+    ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+      .map((d, i) => btn(`day-${d}`, `${i * 108},200,100,100`, d === "sat" ? "data-autofocus" : ""))
+      .join("") +
+    // the row above (Saturday's geometric "right" neighbour is next week's Sunday, not the list)
+    btn("day-prev-sun", "648,90,100,100");
+  const sessions = () =>
+    btn("cal-session-1", "900,100,600,90", 'data-focus-left="day-sat"') +
+    btn("cal-session-2", "900,210,600,90", 'data-focus-left="day-sat"');
+
+  it("geometry alone never reaches the list from Saturday", () => {
+    const { engine } = mount(`<div data-screen="cal">${grid()}${sessions()}</div>`);
+    engine.sync();
+    expect(engine.focusedId()).toBe("day-sat");
+    engine.move("right");
+    expect(engine.focusedId()).not.toMatch(/^cal-session/);
+  });
+
+  it("OK (requestTvFocus) moves into the list; Left returns to the same day", () => {
+    const { root, engine } = mount(`<div data-screen="cal">${grid()}${sessions()}</div>`);
+    engine.attach();
+    expect(engine.focusedId()).toBe("day-sat");
+    requestTvFocus(root.querySelector('[data-focus-id="day-sat"]') as Element, "cal-session-1");
+    expect(engine.focusedId()).toBe("cal-session-1");
+    engine.move("down");
+    expect(engine.focusedId()).toBe("cal-session-2");
+    engine.move("left");
+    expect(engine.focusedId()).toBe("day-sat");
+    engine.detach();
   });
 });

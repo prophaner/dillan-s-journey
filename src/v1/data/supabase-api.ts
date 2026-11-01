@@ -5,6 +5,7 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { clearLocalUserData } from "@/v1/session/local-data";
+import { isTvSessionFor } from "@/v1/tv/marker";
 import { isPlaceholderEmail } from "@/v1/core/placeholder-email";
 import type { Json } from "@/integrations/supabase/types";
 import type {
@@ -238,6 +239,17 @@ async function withNotes(rows: SummaryJoin[]): Promise<HistoryItem[]> {
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
+}
+
+/**
+ * Channel status callback: SUBSCRIBED fires on the first join and again on every rejoin after the
+ * socket drops (supabase-js re-sends the join). Postgres changes are not replayed, so the caller
+ * re-reads its rows there.
+ */
+export function resubscribed(onSubscribed?: () => void) {
+  return (status: string) => {
+    if (status === "SUBSCRIBED") onSubscribed?.();
+  };
 }
 
 export function createSupabaseApi(): DillanApi {
@@ -650,10 +662,13 @@ export function createSupabaseApi(): DillanApi {
           /* the code expires by itself in 5 minutes */
         }
       },
-      async checkGrant(deviceId) {
+      async checkGrant(deviceId, active = false) {
         const { data: s } = await supabase.auth.getSession();
         if (!s.session) return { valid: false, grantId: null };
-        const res = await supabase.rpc("device_grant_touch", { p_device_id: deviceId });
+        const res = await supabase.rpc("device_grant_touch", {
+          p_device_id: deviceId,
+          p_active: active,
+        });
         if (res.error) {
           // Auth errors mean the session is gone (revoked); anything else is "can't tell". The
           // HTTP status lives on the response, not on the PostgREST error body.
@@ -676,10 +691,14 @@ export function createSupabaseApi(): DillanApi {
         await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
         wipeSupabaseAuthStorage();
       },
+      isTvSession(userId) {
+        // One auth storage for /tv and the phone routes: the TV marker decides.
+        return isTvSessionFor(userId);
+      },
     },
 
     realtime: {
-      onSession(userId, cb) {
+      onSession(userId, cb, onSubscribed) {
         const ch: RealtimeChannel = supabase
           .channel(`v1-sessions-${userId}-${newId()}`)
           .on(
@@ -694,10 +713,10 @@ export function createSupabaseApi(): DillanApi {
               if (p.new && "id" in p.new) cb(p.new as unknown as WorkoutSessionRow);
             },
           )
-          .subscribe();
+          .subscribe(resubscribed(onSubscribed));
         return () => void supabase.removeChannel(ch);
       },
-      onHrLive(userId, cb) {
+      onHrLive(userId, cb, onSubscribed) {
         const ch: RealtimeChannel = supabase
           .channel(`v1-hr-${userId}-${newId()}`)
           .on(
@@ -709,10 +728,10 @@ export function createSupabaseApi(): DillanApi {
               if (p.eventType !== "DELETE") cb(p.new as unknown as HrLiveRow);
             },
           )
-          .subscribe();
+          .subscribe(resubscribed(onSubscribed));
         return () => void supabase.removeChannel(ch);
       },
-      onHrSensor(userId, cb) {
+      onHrSensor(userId, cb, onSubscribed) {
         const ch: RealtimeChannel = supabase
           .channel(`v1-hrs-${userId}-${newId()}`)
           .on(
@@ -722,7 +741,7 @@ export function createSupabaseApi(): DillanApi {
               if (p.eventType !== "DELETE") cb(p.new as unknown as HrSensorRow);
             },
           )
-          .subscribe();
+          .subscribe(resubscribed(onSubscribed));
         return () => void supabase.removeChannel(ch);
       },
     },
@@ -856,6 +875,9 @@ export function createSupabaseApi(): DillanApi {
           templates?: number;
         } | null;
         if (data?.ok === false) throw new Error(data.error ?? "delete_failed");
+        // Pending note text and queued set commands of the deleted sessions can never save:
+        // they must not stay on the device either.
+        clearLocalUserData(await uid());
         return { sessions: data?.sessions ?? 0, templates: data?.templates ?? 0 };
       },
       async deleteAccount() {

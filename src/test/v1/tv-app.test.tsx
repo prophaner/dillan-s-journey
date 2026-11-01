@@ -372,6 +372,58 @@ describe("TV surface on the mock backend", () => {
     expect(localStorage.getItem(TV_SESSION_KEY)).toBeNull();
   }, 15_000);
 
+  it("reopened after 15 idle minutes (Silk closed without locking): locked, nothing private shown", async () => {
+    await pairAsLuis();
+    cleanup();
+    const m = JSON.parse(localStorage.getItem(TV_SESSION_KEY) ?? "{}");
+    expect(typeof m.lastActiveAt).toBe("number");
+    localStorage.setItem(
+      TV_SESSION_KEY,
+      JSON.stringify({ ...m, lastActiveAt: Date.now() - 16 * 60_000 }),
+    );
+    renderTv();
+    await screen.findByRole("button", { name: TV_COPY.getStarted }, { timeout: 3000 });
+    expect(document.body.textContent).not.toMatch(/Upper Body|Hi, Luis/);
+    expect(await tv.auth.getUser()).toBeNull();
+    expect(localStorage.getItem(TV_SESSION_KEY)).toBeNull();
+    // the grant is revoked, not just hidden
+    expect((await phone.devices.list()).some((x) => x.device_id.startsWith("tv-"))).toBe(false);
+  }, 15_000);
+
+  it("the server revokes an idle grant even when the TV's own marker looks fresh", async () => {
+    await pairAsLuis();
+    cleanup();
+    const g = db.grants.find((x) => x.device_id.startsWith("tv-") && !x.revoked_at)!;
+    g.last_active_at = new Date(Date.now() - 16 * 60_000).toISOString();
+    renderTv();
+    await screen.findByRole("button", { name: TV_COPY.getStarted }, { timeout: 3000 });
+    expect(await tv.auth.getUser()).toBeNull();
+  }, 15_000);
+
+  it("a running workout is exempt: a stale idle clock does not lock it on reload", async () => {
+    await pairAsLuis();
+    cleanup();
+    const tpl = (await phone.templates.list())[0]!;
+    const s = await phone.sessions.start({ templateId: tpl.id, liveData: false, timezone: "UTC" });
+    await phone.sessions.command({
+      sessionId: s.session!.id,
+      kind: "start",
+      expectedRevision: s.session!.revision,
+      source: "phone",
+    });
+    const m = JSON.parse(localStorage.getItem(TV_SESSION_KEY) ?? "{}");
+    localStorage.setItem(
+      TV_SESSION_KEY,
+      JSON.stringify({ ...m, lastActiveAt: Date.now() - 30 * 60_000 }),
+    );
+    renderTv();
+    expect(
+      await screen.findByText("Paused while Dillan was in the background", undefined, {
+        timeout: 4000,
+      }),
+    ).toBeInTheDocument();
+  }, 15_000);
+
   it("a grant revoked while the TV is showing private data locks it on the 60 s check", async () => {
     const ticks: Array<() => void> = [];
     const real = globalThis.setInterval;
