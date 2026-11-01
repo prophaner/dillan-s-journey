@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest";
 import { MOCK_FLAG_KEY, mockRequested } from "@/v1/data/client";
 import { createMockApi } from "@/v1/data/mock-api";
 import { MOCK_LUIS, MOCK_MAYA, seedMockDb } from "@/v1/data/mock-fixtures";
-import { authErrorCode, isAuthRejection } from "@/v1/data/supabase-api";
+import { authErrorCode, ingestArgs, isAuthRejection } from "@/v1/data/supabase-api";
+import type { HrIngestRequest } from "@/v1/core/hr";
 import {
   maskContact,
   normalizeEmail,
@@ -179,6 +180,40 @@ describe("TV grant check: auth rejections lock the TV", () => {
     // anything else is "can't tell" (offline, 5xx), not a lock
     expect(isAuthRejection(0)).toBe(false);
     expect(isAuthRejection(500, "XX000")).toBe(false);
+  });
+});
+
+describe("hr_ingest arguments", () => {
+  const base: HrIngestRequest = {
+    p_source_id: "11111111-1111-4111-8111-111111111111",
+    p_stream_id: "22222222-2222-4222-8222-222222222222",
+    p_expected_user_id: "33333333-3333-4333-8333-333333333333",
+    p_source_kind: "web_ble",
+    p_mode: "live",
+    p_connected_at: null,
+    p_sensor: null,
+    p_claim: false,
+    p_samples: [],
+  };
+
+  it("passes p_connected_at: null through as null (hr_ingest then keeps the stored value)", () => {
+    const args = ingestArgs(base);
+    expect(args.p_connected_at).toBeNull();
+    // also over the keepalive fetch path, which serializes the same object
+    expect(JSON.parse(JSON.stringify(args)).p_connected_at).toBeNull();
+  });
+
+  it("passes a known connection time through unchanged", () => {
+    const at = "2026-11-01T12:00:00.000Z";
+    expect(ingestArgs({ ...base, p_connected_at: at }).p_connected_at).toBe(at);
+  });
+
+  it("omits p_source_name / p_platform when absent (SQL defaults them to null)", () => {
+    const args = ingestArgs(base);
+    expect("p_source_name" in args).toBe(false);
+    expect("p_platform" in args).toBe(false);
+    const named = ingestArgs({ ...base, p_source_name: "Luis's phone", p_platform: "android" });
+    expect(named).toMatchObject({ p_source_name: "Luis's phone", p_platform: "android" });
   });
 });
 

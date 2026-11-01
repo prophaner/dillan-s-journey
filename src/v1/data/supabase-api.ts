@@ -148,16 +148,21 @@ export function isAuthRejection(status: number, code?: string | null): boolean {
   return status === 401 || status === 403 || code === "PGRST301" || code === "PGRST303";
 }
 
-/** hr_ingest arguments as the RPC expects them (jsonb for sensor and samples). */
-function ingestArgs(req: HrIngestRequest) {
+/** hr_ingest arguments as the RPC expects them (jsonb for sensor and samples). Exported for tests. */
+export function ingestArgs(req: HrIngestRequest) {
   return {
     p_source_id: req.p_source_id,
     p_stream_id: req.p_stream_id,
     p_expected_user_id: req.p_expected_user_id,
     p_source_kind: req.p_source_kind,
     p_mode: req.p_mode,
-    // The database requires a connection time; when the relay doesn't know it yet, use now.
-    p_connected_at: req.p_connected_at ?? new Date().toISOString(),
+    // Sent unchanged, null included. The relay sends null when it is not connected or does not
+    // know its server clock offset yet; hr_ingest then keeps the stored hr_live.connected_at.
+    // Never substitute "now": that would move connected_at forward and make health.ts treat the
+    // current connection's readings as from a previous one (viewer stuck "waiting").
+    // The cast only satisfies the generated type: plpgsql parameters are nullable, but Supabase's
+    // type generator marks them non-null.
+    p_connected_at: req.p_connected_at as string,
     p_sensor: req.p_sensor as unknown as Json,
     p_claim: req.p_claim,
     p_samples: req.p_samples as unknown as Json,
