@@ -509,6 +509,36 @@ describe("TV surface on the mock backend", () => {
     expect(screen.queryByText("Paused while Dillan was in the background")).toBeNull();
   }, 15_000);
 
+  it("all sets done: the OK hint names End workout; the summary says Saved automatically once", async () => {
+    await pairAsLuis();
+    const id = await startActive();
+    // skip every set from the phone until the workout is after its last set
+    for (let step = 0; step < 40; step++) {
+      const row = (await tv.sessions.recover(id))!;
+      const r = await tv.sessions.command({
+        sessionId: id,
+        kind: "skip_set",
+        payload: { step },
+        expectedRevision: row.revision,
+        source: "phone",
+      });
+      if (!r.ok) break;
+    }
+    fireEvent.click(await screen.findByRole("button", { name: "Back to workout" }));
+    await screen.findByRole("button", { name: "End workout" });
+    const hints = () =>
+      Array.from(document.querySelectorAll("footer kbd")).map((k) => [
+        k.textContent,
+        k.parentElement?.textContent?.slice((k.textContent ?? "").length),
+      ]);
+    expect(hints()).toContainEqual(["OK", "End workout"]);
+    expect(hints()).not.toContainEqual(["OK", "Complete set"]);
+    fireEvent.click(screen.getByRole("button", { name: "End workout" }));
+    await screen.findByRole("button", { name: "Done" }, { timeout: 5000 });
+    expect(screen.getAllByText(/Saved automatically\./)).toHaveLength(1);
+    expect(screen.getByText(/typing with a remote is no fun\.$/)).toBeInTheDocument();
+  }, 15_000);
+
   it("a held OK (auto-repeat) acts once: no extra sets, no skipped rest", async () => {
     // jsdom has no layout; give every focusable a box so the focus engine can focus
     vi.spyOn(Element.prototype, "getClientRects").mockImplementation(

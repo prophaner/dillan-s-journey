@@ -28,6 +28,7 @@ import { ZONE_COPY } from "@/v1/ui/zone-pieces";
 import { formatClock } from "@/v1/ui/timezones";
 import { cn } from "@/lib/utils";
 import { useTv } from "./context";
+import { dashboardHints } from "./dashboard-hints";
 import { TV_HR_COPY, TvHrSheet, useHrStateToast } from "./hr-pieces";
 import { tvMemoryStorage } from "./memory-store";
 import { TvNoteText } from "./screens-history";
@@ -48,7 +49,8 @@ import {
 export const TV_SESSION_COPY = {
   restoredPause: "Paused while Dillan was in the background",
   switchUser: "Switch user",
-  notesNone: "Add notes from your phone — typing with a remote is no fun. Saved automatically.",
+  // "Saved automatically." is said once, under Done (handoff §5; mockup tv-15-summary).
+  notesNone: "Add notes from your phone — typing with a remote is no fun.",
   saved: "Saved automatically.",
   done: "Done",
 } as const;
@@ -509,13 +511,7 @@ function TvDashboard({
             </div>
           </TvPanel>
         </div>
-        <TvHints
-          items={[
-            ["OK", resting ? DASH_COPY.skipRest : DASH_COPY.complete],
-            ["◀ ▶", "Skip / Pause / End"],
-            ["Back", "Pause (never ends the workout)"],
-          ]}
-        />
+        <TvHints items={dashboardHints({ resting, hasStep: !!(step && ex) })} />
       </div>
 
       {paused && (

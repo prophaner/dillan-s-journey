@@ -187,6 +187,12 @@
     .tv-root [data-focus] { transition: none; }
   }
 }
+/* Dev-only mock badge (mock-badge.tsx): below lg it is a strip at the top; reserve its height so
+   it never covers a control. Not set on the TV, which keeps its fixed layout. */
+:root { --dev-mock-h: 40px; }
+@media (width < 64rem) {
+  html.dev-mock body { padding-top: calc(var(--safe-t) + var(--dev-mock-h)); }
+}
 @utility screen-x { padding-left: var(--margin); padding-right: var(--margin); }
 @utility pb-nav { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 24px); }
 @utility press {

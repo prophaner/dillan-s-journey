@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useRouterState } from "@tanstack/react-router";
 import { getApi } from "@/v1/data/client";
 import type { MockHrMode } from "@/v1/data/mock-hr";
 
@@ -23,6 +24,9 @@ function DevMockBadge() {
   const [on, setOn] = useState(false);
   const [mode, setMode] = useState<MockHrMode>("live");
   const [hr, setHr] = useState<typeof import("@/v1/data/mock-hr") | null>(null);
+  const isTv = useRouterState({
+    select: (st) => st.location.pathname === "/tv" || st.location.pathname.startsWith("/tv/"),
+  });
   useEffect(() => {
     let live = true;
     void getApi().then(async (a) => {
@@ -46,9 +50,25 @@ function DevMockBadge() {
       window.removeEventListener("storage", onStorage);
     };
   }, []);
+  // Phone/web below lg: the badge sits in a strip at the top and the page is pushed down by the
+  // same height (styles.css, html.dev-mock), so it never covers a control: not the bottom nav,
+  // not sticky actions like Complete set / Skip set, not a header button. The TV keeps its fixed
+  // 16:9 layout and shows the badge in the bottom-right corner.
+  useEffect(() => {
+    if (!on || isTv) return;
+    document.documentElement.classList.add("dev-mock");
+    return () => document.documentElement.classList.remove("dev-mock");
+  }, [on, isTv]);
   if (!on) return null;
   return (
-    <div className="fixed bottom-[calc(var(--nav-h)+var(--safe-b)+8px)] right-2 z-[70] flex items-center gap-2 lg:bottom-4">
+    <div
+      data-testid="mock-badge"
+      className={
+        isTv
+          ? "fixed bottom-4 right-2 z-[70] flex items-center gap-2"
+          : "fixed inset-x-0 top-0 z-[70] flex h-[calc(var(--safe-t)+var(--dev-mock-h))] items-center justify-end gap-2 border-b border-line bg-bg px-2 pt-[var(--safe-t)] lg:inset-x-auto lg:top-auto lg:right-2 lg:bottom-4 lg:h-auto lg:border-0 lg:bg-transparent lg:px-0 lg:pt-0"
+      }
+    >
       {hr && (
         <label className="flex items-center gap-1 rounded-chip border-2 border-hold bg-hold-tint px-2 py-0.5 text-footnote font-bold text-hold">
           <span>HR sim (DEMO)</span>
