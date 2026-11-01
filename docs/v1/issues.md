@@ -7,7 +7,7 @@ credentials can provide; nothing in the code can close them. Optional items can 
 
 | # | Blocker | Needs | Where |
 |---|---|---|---|
-| B1 | Migration 0006 is not applied to the live database; the live app has no V1 tables | Owner approval + apply | `setup-owner.md` §1 |
+| B1 | Migration 0006 is not applied to the live database; the live app has no V1 tables | **Approved by the owner 2026-11-01** ("0006 approved"). Remaining: merge, then apply | `setup-owner.md` §1 |
 | B2 | Email sign-in sends no 6-digit code until the templates contain `{{ .Token }}`; built-in email sender may not reach a second household member | Owner: Auth templates, OTP expiry 600 s, custom SMTP | `setup-owner.md` §2 |
 | B3 | SMS sign-in (F01) is not configured; the app shows "SMS isn't set up yet" | Owner: SMS provider account and credentials | `setup-owner.md` §3 |
 | B4 | Fire TV OS and browser unknown (Gate G0). If it runs Vega OS with no usable browser, `/tv` cannot run on it | Owner: TV model + OS line; Silk installed | `spike/CHECKLIST.md` §0, `physical-test-checklist.md` §1 |
@@ -17,7 +17,7 @@ credentials can provide; nothing in the code can close them. Optional items can 
 | B8 | Two-user demo (acceptance 38) not run | Two people, TV, strap | `setup-owner.md` §11 |
 | B9 | Branch not merged; Lovable sync and Publish happen only after the owner merges | Owner | `runbook.md` §1 |
 | B10 | Owner acknowledgement of the deviations marked **(ack)** below | Owner | this file |
-| B11 | Drizzle journal entry + snapshot for 0006 must be added when it is applied (deliberately absent so `drizzle-kit migrate` skips it) | Owner approval first | `build-plan.md` "Slice A review follow-ups" |
+| B11 | Drizzle journal entry + snapshot for 0006 must be added when it is applied (deliberately absent so `drizzle-kit migrate` skips it) | Approved; add on apply | `build-plan.md` "Slice A review follow-ups" |
 | B12 | Security review of the full branch (build-plan Slice F) before merge | Reviewer run | — |
 
 ## Optional improvements (not blocking)
