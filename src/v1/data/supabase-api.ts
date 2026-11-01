@@ -156,7 +156,8 @@ function ingestArgs(req: HrIngestRequest) {
     p_expected_user_id: req.p_expected_user_id,
     p_source_kind: req.p_source_kind,
     p_mode: req.p_mode,
-    p_connected_at: req.p_connected_at,
+    // The database requires a connection time; when the relay doesn't know it yet, use now.
+    p_connected_at: req.p_connected_at ?? new Date().toISOString(),
     p_sensor: req.p_sensor as unknown as Json,
     p_claim: req.p_claim,
     p_samples: req.p_samples as unknown as Json,
