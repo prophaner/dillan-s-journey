@@ -10,6 +10,29 @@ entry under "Tooling" so the history stays complete; they are not slices.
 - 0002/0003: prescriptions reference exercises by id; backfill for existing routines
   (0003 landed at 0f55c7b, approved by the owner; see DECISIONS 2026-10-15)
 
+### V1 release candidate (branch `claude/v1-release`, not merged, not released)
+Commits 061c278..HEAD. Narrow V1 scope replaces brief-v2 (parked: routes removed, tables and lib
+files kept, build-plan D2). Sources of truth: `docs/v1/`. Verified on hardware: no. Migration
+0006 (`drizzle/migrations/0006_v1_core.sql`) is a draft awaiting owner approval; not applied.
+
+- Sign in or register with a 6-digit email code (SMS once a provider is configured); name,
+  timezone, units, weekly goal; log out here or everywhere; delete my data / delete account.
+- Program: workouts with straight sets and supersets, validation, draft autosave, soft delete.
+- Workout Now: choose, preflight with heart-rate readiness or "Continue without live data",
+  dashboard with set logging, rest, pause/resume/end, offline queue, summary with active vs
+  elapsed time, zones, Unmeasured and coverage.
+- Home: completed sessions vs weekly goal, "+N ended early", active minutes, same-point
+  comparison with last week, 4-week trend. Calendar with per-day sessions and notes; session
+  detail from the snapshot; notes autosave.
+- Fire TV `/tv` in Silk: remote-only navigation, pairing by approving a code on the phone,
+  switch user / lock / auto-lock with a blank frame, remembered names opt-in.
+- `/relay`: Polar H10 over Web Bluetooth (Chrome on Android, Chrome/Edge on a computer) sends
+  heart rate to the backend; phone and TV show Live / Delayed / No recent reading; demo strap
+  labelled DEMO and stored separately.
+- Docs (Slice F): `docs/v1/README.md`, `setup-owner.md`, `api-data.md`, `runbook.md`,
+  `physical-test-checklist.md`, `issues.md`; `.env.example`; roadmap V1 section; AGENTS.md and
+  CLAUDE.md point to `docs/v1/`.
+
 ### 2026-10-16 — Profile and Settings shells, migration 0005, with states fixes
 Commits 133775c..a4e8574 (migration 0005 at a4e8574, approved by the owner; Lovable build a4e8574).
 Accepted with known issues (listed below): the owner paused Lovable spending for manual phone testing.

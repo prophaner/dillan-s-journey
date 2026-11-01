@@ -1,0 +1,737 @@
+// The TV surface (/tv): a 1920×1080 dark canvas scaled to the screen with a 64 px safe area, the
+// D-pad focus engine, the remote key map, Back per screen, pairing and shared-device safety.
+//
+// Phases: boot → out (first run / chooser / pairing) → in (one signed-in user) → blank → out.
+//  - A Supabase session counts on the TV only when this TV paired it (marker in localStorage) and
+//    its device grant is still valid (device_grant_touch on load and every 60 s; revoked → lock).
+//  - Lock / switch / remove / auto-lock / revoked: blank frame (private views unmount), react-query
+//    cleared, grant revoked, Realtime channels removed, local sign-out, auth storage wiped, blank
+//    for ≥ BLANK_MIN_MS, then the chooser (lock.ts).
+//  - Auto-lock after 15 min without remote/controller activity outside an active/paused workout.
+//  - After a reload with an active workout the TV pauses it and shows Paused (acceptance 21); so
+//    does coming back after the page was hidden without a reload (F6).
+//  - Back arrives as a key or as history popstate (Silk); window.dillan.onBack() serves a future
+//    wrapper and returns false when the app wants to exit.
+//  - Held keys: arrows repeat, OK/Back/Play-Pause/Menu act once per press (a held OK must not
+//    complete sets and skip rest in a loop).
+//  - User data on the TV lives in memory only (session command queue: tvMemoryStorage) and every
+//    per-user key is cleared on lock.
+
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import type { AuthUser, DillanApi } from "@/v1/data/api";
+import { qk, useCurrentSession, useProfile } from "@/v1/data/queries";
+import { clearLocalUserData } from "@/v1/session/local-data";
+import { serverClockFor } from "@/v1/session/server-clock";
+import { UserProvider } from "@/v1/ui/user-context";
+import { AUTO_LOCK_TICK_MS, AUTO_LOCK_TOAST, AutoLock } from "./autolock";
+import { TvSignedInProvider, type SessionHandle, type TvSignedIn } from "./context";
+import {
+  firstNameOf,
+  forgetProfile,
+  isRemembered,
+  rememberProfile,
+  rememberedProfiles,
+  touchProfile,
+  tvDevice,
+  type RememberedProfile,
+} from "./device";
+import { FocusEngine } from "./focus";
+import { tvKeyOf } from "./keys";
+import { runLock } from "./lock";
+import { markActivity, markerIdleExpired, readMarker, writeMarker } from "./marker";
+import { clearTvMemory } from "./memory-store";
+import { backFor, EXIT_TOAST, TV_SESSION_POLL_MS, type TvModal, type TvScreen } from "./screens";
+import { TvChoose, TvHome, TvPreflight, TvProgram } from "./screens-main";
+import { TvCalendar, TvDetail, TvProfile, TvRunningDialog } from "./screens-history";
+import { TvLiveData } from "./screens-live-data";
+import { TvSession } from "./session-screen";
+import { Chooser, FirstRun, Pairing, TV_COPY } from "./signed-out";
+
+export const TV_W = 1920;
+export const TV_H = 1080;
+export const GRANT_CHECK_MS = 60_000;
+export { TV_SESSION_KEY } from "./marker";
+const TOAST_MS = 4_000;
+
+type Phase =
+  | { kind: "boot" }
+  | { kind: "blank" }
+  | { kind: "out" }
+  | { kind: "in"; user: AuthUser; grantId: string | null; restore: boolean };
+
+type OutScreen =
+  | { name: "first_run" }
+  | { name: "chooser" }
+  | { name: "pairing"; forUser: RememberedProfile | null };
+
+// ---- history guard (Back as popstate) ----
+const GUARD = "dillanTvGuard";
+
+function onGuardEntry(): boolean {
+  return !!(window.history.state as Record<string, unknown> | null)?.[GUARD];
+}
+
+/** One guard entry on top of /tv (never stacked). */
+function armBackGuard() {
+  if (onGuardEntry()) return;
+  try {
+    window.history.pushState({ ...(window.history.state ?? {}), [GUARD]: 1 }, "");
+  } catch {
+    /* sandboxed */
+  }
+}
+
+/** Fixed 1920×1080 canvas, scaled to fit and letterboxed (handoff §2). */
+export function TvStage({ children }: { children: ReactNode }) {
+  const [box, setBox] = useState({ scale: 1, x: 0, y: 0 });
+  useLayoutEffect(() => {
+    const fit = () => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const scale = Math.min(w / TV_W, h / TV_H) || 1;
+      setBox({ scale, x: (w - TV_W * scale) / 2, y: (h - TV_H * scale) / 2 });
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, []);
+  return (
+    <div data-theme="dark" className="fixed inset-0 overflow-hidden bg-bg">
+      <div
+        className="absolute left-0 top-0 origin-top-left overflow-hidden"
+        style={{
+          width: TV_W,
+          height: TV_H,
+          transform: `translate(${box.x}px, ${box.y}px) scale(${box.scale})`,
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+interface SignedInApi {
+  back(): boolean;
+  playPause(): void;
+  menu(): void;
+  activity(): void;
+}
+
+export function TvApp({ api }: { api: DillanApi }) {
+  const qc = useQueryClient();
+  const device = useMemo(() => tvDevice(), []);
+  const clock = useMemo(() => serverClockFor(api.hr), [api]);
+  const [phase, setPhase] = useState<Phase>({ kind: "boot" });
+  const [profiles, setProfiles] = useState<RememberedProfile[]>(() => rememberedProfiles());
+  const [out, setOut] = useState<OutScreen>(() =>
+    rememberedProfiles().length ? { name: "chooser" } : { name: "first_run" },
+  );
+  const [toast, setToast] = useState<string | null>(null);
+  const canvas = useRef<HTMLDivElement>(null);
+  const engine = useRef<FocusEngine | null>(null);
+  const signedIn = useRef<SignedInApi | null>(null);
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+  const outRef = useRef(out);
+  outRef.current = out;
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const locking = useRef(false);
+
+  const showToast = useCallback((msg: string | null, sticky = false) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(msg);
+    if (msg && !sticky) toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
+  }, []);
+
+  const chooserOrFirstRun = useCallback((): OutScreen => {
+    const list = rememberedProfiles();
+    setProfiles(list);
+    return list.length ? { name: "chooser" } : { name: "first_run" };
+  }, []);
+
+  // ---- boot: is there a session this TV paired, with a valid grant? ----
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      const user = await api.auth.getUser().catch(() => null);
+      const marker = readMarker();
+      if (!user || !marker || marker.userId !== user.id) {
+        // A session this TV did not pair (e.g. the phone app in the same browser) is never shown.
+        if (live) setPhase({ kind: "out" });
+        return;
+      }
+      // Not activity: the server revokes a grant left idle for 15 minutes (no running workout).
+      const g = await api.tv.checkGrant(device.id, false).catch(() => null);
+      if (!live) return;
+      const wipeAndOut = async (grantId: string | null) => {
+        qc.clear();
+        clearTvMemory();
+        clearLocalUserData(user.id);
+        await api.tv.lock(grantId).catch(() => undefined);
+        writeMarker(null);
+        if (live) {
+          setOut(chooserOrFirstRun());
+          setPhase({ kind: "out" });
+        }
+      };
+      if (g && !g.valid) {
+        await wipeAndOut(null);
+        return;
+      }
+      // Closed or reloaded without locking and idle past the limit (the server may be unreachable,
+      // or not know the latest activity): lock before anything private is shown, unless a
+      // workout is running (it is exempt from auto-lock).
+      if (markerIdleExpired(marker, Date.now())) {
+        const cur = await api.sessions.current().catch(() => null);
+        if (!live) return;
+        if (!cur || (cur.state !== "active" && cur.state !== "paused")) {
+          await wipeAndOut(g?.grantId ?? marker.grantId);
+          return;
+        }
+      }
+      setPhase({ kind: "in", user, grantId: g?.grantId ?? marker.grantId, restore: true });
+    })();
+    return () => {
+      live = false;
+    };
+  }, [api, device.id, chooserOrFirstRun, qc]);
+
+  // ---- lock / switch / remove ----
+  const lock = useCallback(
+    async (opts: { forget?: boolean } = {}) => {
+      const p = phaseRef.current;
+      if (locking.current || p.kind !== "in") return;
+      locking.current = true;
+      showToast(null);
+      try {
+        await runLock({
+          blank: () => setPhase({ kind: "blank" }),
+          clearCaches: () => {
+            qc.clear();
+            // queued set results and note drafts never outlive the user on a shared TV
+            clearTvMemory();
+            clearLocalUserData(p.user.id);
+          },
+          signOut: () => api.tv.lock(p.grantId),
+          forget: () => {
+            if (opts.forget) forgetProfile(p.user.id);
+          },
+          done: () => {
+            writeMarker(null);
+            setOut(chooserOrFirstRun());
+            setPhase({ kind: "out" });
+          },
+        });
+      } finally {
+        locking.current = false;
+      }
+    },
+    [api, qc, showToast, chooserOrFirstRun],
+  );
+
+  const onSignedIn = useCallback(
+    (user: AuthUser, grantId: string) => {
+      if (!grantId) {
+        // Never trust a TV session without its device grant (it would not be TV-scoped).
+        void api.tv.lock(null).catch(() => undefined);
+        return;
+      }
+      writeMarker({ userId: user.id, grantId, lastActiveAt: Date.now() });
+      setPhase({ kind: "in", user, grantId, restore: false });
+    },
+    [api],
+  );
+
+  // ---- Back (keys, popstate, wrapper) ----
+  const doBack = useCallback((): boolean => {
+    const p = phaseRef.current;
+    if (p.kind === "in") return signedIn.current?.back() ?? true;
+    if (p.kind !== "out") return true;
+    const o = outRef.current;
+    if (o.name === "pairing") {
+      setOut(chooserOrFirstRun()); // unmounting Pairing cancels the live code
+      return true;
+    }
+    return false; // first run / chooser: the shell may exit
+  }, [chooserOrFirstRun]);
+
+  useEffect(() => {
+    const w = window as Window & { dillan?: { onBack?: () => boolean } };
+    w.dillan = { ...(w.dillan ?? {}), onBack: () => doBack() };
+    return () => {
+      if (w.dillan) delete w.dillan.onBack;
+    };
+  }, [doBack]);
+
+  // History guard: Silk may deliver the remote's Back as popstate instead of a key. One guard
+  // entry sits on top of /tv; every pop is a Back. When the app handles it the guard goes back at
+  // once. When the app wants to exit (exit toast, chooser, first run) the guard stays down so an
+  // immediate second Back leaves the page, and it is re-armed on the next remote key or pointer
+  // press, or when the exit toast times out: a later Back is the app's again. Never stacks guards
+  // (remounts, StrictMode).
+  useEffect(() => {
+    armBackGuard();
+    let rearm: ReturnType<typeof setTimeout> | null = null;
+    const onPop = () => {
+      signedIn.current?.activity();
+      if (rearm) clearTimeout(rearm);
+      rearm = null;
+      if (doBack()) armBackGuard();
+      else rearm = setTimeout(armBackGuard, TOAST_MS);
+    };
+    const onPointer = () => armBackGuard();
+    window.addEventListener("popstate", onPop);
+    window.addEventListener("pointerdown", onPointer, true);
+    return () => {
+      if (rearm) clearTimeout(rearm);
+      window.removeEventListener("popstate", onPop);
+      window.removeEventListener("pointerdown", onPointer, true);
+    };
+  }, [doBack]);
+
+  // ---- remote keys ----
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const k = tvKeyOf(e);
+      if (!k) return;
+      e.preventDefault();
+      const p = phaseRef.current;
+      if (p.kind === "blank" || p.kind === "boot") return;
+      // A held button auto-repeats: only arrows may act more than once per press.
+      if (e.repeat && k !== "up" && k !== "down" && k !== "left" && k !== "right") return;
+      // Any key but Back means the user stayed: Back is the app's again (see the history guard).
+      if (k !== "back") armBackGuard();
+      signedIn.current?.activity();
+      if (toast === AUTO_LOCK_TOAST) showToast(null);
+      const fe = engine.current;
+      switch (k) {
+        case "up":
+        case "down":
+        case "left":
+        case "right":
+          fe?.move(k);
+          return;
+        case "select":
+          fe?.activate();
+          return;
+        case "back":
+          doBack();
+          return;
+        case "playpause":
+          signedIn.current?.playPause();
+          return;
+        case "menu":
+          signedIn.current?.menu();
+          return;
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [doBack, toast, showToast]);
+
+  // ---- focus engine on the canvas ----
+  useEffect(() => {
+    if (!canvas.current) return;
+    const fe = new FocusEngine(canvas.current);
+    engine.current = fe;
+    fe.attach();
+    return () => {
+      fe.detach();
+      engine.current = null;
+    };
+  }, []);
+
+  let body: ReactNode;
+  if (phase.kind === "boot") body = <div data-screen="boot" className="h-full" />;
+  else if (phase.kind === "blank")
+    // Blank frame between users: background only (no private node survives into the chooser).
+    body = (
+      <div data-screen="blank" data-testid="tv-blank" className="grid h-full place-items-center">
+        <p className="text-tv-sm text-text-3">{TV_COPY.switching}</p>
+      </div>
+    );
+  else if (phase.kind === "out") {
+    if (out.name === "first_run")
+      body = (
+        <FirstRun device={device} onStart={() => setOut({ name: "pairing", forUser: null })} />
+      );
+    else if (out.name === "chooser")
+      body = (
+        <Chooser
+          profiles={profiles}
+          onChoose={(p) => setOut({ name: "pairing", forUser: p })}
+          onAdd={() => setOut({ name: "pairing", forUser: null })}
+        />
+      );
+    else
+      body = (
+        <Pairing
+          key={out.forUser?.userId ?? "new"}
+          api={api}
+          device={device}
+          forUser={out.forUser}
+          origin={window.location.origin}
+          onSignedIn={onSignedIn}
+          onCancel={() => setOut(chooserOrFirstRun())}
+          now={() => clock.now()}
+        />
+      );
+  } else
+    body = (
+      <UserProvider user={phase.user}>
+        <SignedIn
+          key={phase.user.id}
+          api={api}
+          user={phase.user}
+          restore={phase.restore}
+          handle={signedIn}
+          toast={showToast}
+          onLock={lock}
+        />
+      </UserProvider>
+    );
+
+  return (
+    <TvStage>
+      <div
+        ref={canvas}
+        data-theme="dark"
+        className="tv-root relative flex h-full w-full flex-col overflow-hidden bg-bg p-tv-safe font-ui text-tv-base text-text"
+      >
+        {body}
+        {toast && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="absolute bottom-tv-safe right-tv-safe z-50 max-w-[760px] rounded-tv-md bg-text px-8 py-5 text-tv-base font-bold text-bg"
+          >
+            {toast}
+          </div>
+        )}
+      </div>
+    </TvStage>
+  );
+}
+
+function SignedIn({
+  api,
+  user,
+  restore,
+  handle,
+  toast,
+  onLock,
+}: {
+  api: DillanApi;
+  user: AuthUser;
+  restore: boolean;
+  handle: React.MutableRefObject<SignedInApi | null>;
+  toast: (msg: string | null, sticky?: boolean) => void;
+  onLock: (opts?: { forget?: boolean }) => Promise<void>;
+}) {
+  const device = useMemo(() => tvDevice(), []);
+  const current = useCurrentSession(user.id, { pollMs: TV_SESSION_POLL_MS });
+  const profile = useProfile(user.id);
+  const [screen, setScreen] = useState<TvScreen>({ name: "home" });
+  const [modal, setModal] = useState<TvModal | null>(null);
+  const [restoredPause, setRestoredPause] = useState(false);
+  const [remembered, setRememberedState] = useState(() => isRemembered(user.id));
+  const [landed, setLanded] = useState(false);
+  const sessionHandle = useRef<SessionHandle | null>(null);
+  const setSessionHandle = useCallback((h: SessionHandle | null) => {
+    sessionHandle.current = h;
+  }, []);
+  const row = current.data;
+  const liveSessionId = row && (row.state === "active" || row.state === "paused") ? row.id : null;
+  const liveRef = useRef(liveSessionId);
+  liveRef.current = liveSessionId;
+
+  // Landing: a running workout first. After a reload an active one is paused (acceptance 21).
+  useEffect(() => {
+    if (landed || !current.isFetched) return;
+    setLanded(true);
+    const r = current.data;
+    if (!r || (r.state !== "active" && r.state !== "paused")) return;
+    if (restore && r.state === "active") {
+      void api.sessions
+        .command({ sessionId: r.id, kind: "pause", expectedRevision: r.revision, source: "tv" })
+        .then((res) => {
+          if (res.ok || res.session?.state === "paused") setRestoredPause(true);
+        })
+        .catch(() => undefined);
+    }
+    setScreen({ name: "session", sessionId: r.id });
+  }, [landed, current.isFetched, current.data, restore, api]);
+
+  // F6 without a reload: Silk sent to the background (Fire TV Home) keeps the page alive. An
+  // active workout is paused when the page is hidden (or, if that request could not go out, on
+  // return), and on return the TV shows S10 Paused with Resume focused and the reason.
+  const qc = useQueryClient();
+  useEffect(() => {
+    let wasHidden = false;
+    let pausedByUs = false;
+    let live = true;
+    const pauseActive = async (): Promise<boolean> => {
+      const r = await api.sessions.current().catch(() => null);
+      if (!r || r.state !== "active") return false;
+      const res = await api.sessions
+        .command({ sessionId: r.id, kind: "pause", expectedRevision: r.revision, source: "tv" })
+        .catch(() => null);
+      return !!res && (res.ok || res.session?.state === "paused");
+    };
+    const onVis = () => {
+      if (document.visibilityState === "hidden") {
+        wasHidden = true;
+        void pauseActive().then((ok) => {
+          if (ok) pausedByUs = true;
+        });
+        return;
+      }
+      if (!wasHidden) return;
+      wasHidden = false;
+      void (async () => {
+        if (await pauseActive()) pausedByUs = true;
+        if (!pausedByUs || !live) return;
+        pausedByUs = false;
+        const r = await api.sessions.current().catch(() => null);
+        if (!live || !r || r.state !== "paused") return;
+        void qc.invalidateQueries({ queryKey: qk.current(user.id) });
+        setRestoredPause(true);
+        setModal(null);
+        setScreen({ name: "session", sessionId: r.id });
+      })();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      live = false;
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [api, qc, user.id]);
+
+  // Remembered tile: keep its name and last-active time fresh (never opts in by itself).
+  const name = profile.data?.display_name ?? null;
+  useEffect(() => {
+    touchProfile(user.id, name);
+  }, [user.id, name]);
+
+  // Opting in needs a first name to show on the tile (D24); until the profile has one the toggle
+  // is disabled and the screen says why.
+  const canRemember = !!firstNameOf(name ?? "");
+  const setRemembered = useCallback(
+    (on: boolean) => {
+      if (on) {
+        if (!firstNameOf(name ?? "")) return;
+        rememberProfile(user.id, name ?? "");
+      } else forgetProfile(user.id);
+      setRememberedState(isRemembered(user.id));
+    },
+    [user.id, name],
+  );
+  const clearRestoredPause = useCallback(() => setRestoredPause(false), []);
+
+  // ---- auto-lock ----
+  const autolock = useMemo(
+    () =>
+      new AutoLock({
+        exempt: () => liveRef.current != null,
+        onWarn: () => toast(AUTO_LOCK_TOAST, true),
+        onClearWarn: () => toast(null),
+        onLock: () => void onLock(),
+        onActivity: (at) => markActivity(user.id, at),
+      }),
+    [toast, onLock, user.id],
+  );
+  useEffect(() => {
+    // Resume the persisted idle clock: a reload never grants a fresh 15 minutes.
+    autolock.start(readMarker()?.lastActiveAt);
+    return () => autolock.stop();
+  }, [autolock]);
+  // Phone-controller events (Realtime session updates) count as activity too.
+  useEffect(() => {
+    if (row) autolock.activity();
+  }, [row, autolock]);
+
+  // ---- server-side half: the grant is re-checked every 60 s ----
+  useEffect(() => {
+    let live = true;
+    const check = async () => {
+      // Report whether the TV was used since the last check (a running workout counts).
+      const active = autolock.idleMs() < GRANT_CHECK_MS + AUTO_LOCK_TICK_MS;
+      const g = await api.tv.checkGrant(device.id, active).catch(() => null);
+      if (live && g && !g.valid) void onLock();
+    };
+    const t = setInterval(() => void check(), GRANT_CHECK_MS);
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, [api, device.id, onLock, autolock]);
+
+  const go = useCallback((s: TvScreen) => {
+    setModal(null);
+    setScreen(s);
+  }, []);
+
+  const requestSwitch = useCallback(() => {
+    if (liveRef.current) setModal({ kind: "running", then: "switch" });
+    else void onLock();
+  }, [onLock]);
+  const requestLock = useCallback(() => {
+    setModal(liveRef.current ? { kind: "running", then: "lock" } : { kind: "lock" });
+  }, []);
+  const requestRemove = useCallback(() => {
+    setModal(liveRef.current ? { kind: "running", then: "remove" } : { kind: "remove" });
+  }, []);
+  const endRunningThen = useCallback(
+    (then: "switch" | "lock" | "remove") => {
+      setModal(null);
+      void (async () => {
+        try {
+          const r = await api.sessions.current();
+          if (r && r.state !== "ended") {
+            const res = await api.sessions.command({
+              sessionId: r.id,
+              kind: r.state === "preparing" ? "discard" : "end",
+              expectedRevision: r.revision,
+              source: "tv",
+            });
+            if (!res.ok && res.session?.state !== "ended") throw new Error(res.error);
+            if (res.session?.live_data && res.session.outcome !== "discarded")
+              await api.sessions.finalize(r.id).catch(() => null);
+          }
+        } catch {
+          toast("Couldn't end the workout. Check the connection and try again.");
+          return;
+        }
+        await onLock({ forget: then === "remove" });
+      })();
+    },
+    [api, onLock, toast],
+  );
+
+  const ctx: TvSignedIn = {
+    api,
+    device,
+    user,
+    screen,
+    go,
+    modal,
+    openModal: setModal,
+    toast: (m) => toast(m),
+    liveSessionId,
+    restoredPause,
+    clearRestoredPause,
+    setSessionHandle,
+    requestSwitch,
+    requestLock,
+    requestRemove,
+    endRunningThen,
+    lockNow: (o) => {
+      setModal(null);
+      void onLock(o);
+    },
+    remembered,
+    canRemember,
+    setRemembered,
+  };
+
+  // What the app's key handler and Back can reach.
+  handle.current = {
+    activity: () => autolock.activity(),
+    back: () => {
+      const a = backFor(screen, {
+        modal,
+        sessionState: screen.name === "session" ? (sessionHandle.current?.state ?? null) : null,
+        liveSessionId,
+      });
+      switch (a.kind) {
+        case "close_modal":
+          setModal(null);
+          return true;
+        case "go":
+          go(a.screen);
+          return true;
+        case "pause":
+          sessionHandle.current?.pause();
+          return true;
+        case "noop":
+          return true;
+        case "exit_toast":
+          toast(EXIT_TOAST);
+          return false;
+        case "exit":
+          return false;
+        case "cancel_pairing":
+          return true;
+      }
+    },
+    playPause: () => {
+      if (screen.name === "session" && !modal) sessionHandle.current?.togglePause();
+      // S08: Play/Pause equals Start only while Start is enabled (heart rate Live).
+      if (screen.name === "preflight" && !modal)
+        document
+          .querySelector<HTMLButtonElement>(
+            '[data-focus-id="pre-start"]:not([disabled]):not([aria-disabled="true"])',
+          )
+          ?.click();
+    },
+    menu: () => go({ name: "profile" }),
+  };
+  useEffect(
+    () => () => {
+      handle.current = null;
+    },
+    [handle],
+  );
+
+  let body: ReactNode;
+  if (!landed) body = <div data-screen="landing" className="h-full" />;
+  else
+    switch (screen.name) {
+      case "home":
+        body = <TvHome />;
+        break;
+      case "program":
+        body = <TvProgram />;
+        break;
+      case "choose":
+        body = <TvChoose />;
+        break;
+      case "preflight":
+        body = <TvPreflight key={screen.templateId} templateId={screen.templateId} />;
+        break;
+      case "session":
+        body = <TvSession key={screen.sessionId} sessionId={screen.sessionId} />;
+        break;
+      case "calendar":
+        body = <TvCalendar month={screen.month} day={screen.day} />;
+        break;
+      case "detail":
+        body = <TvDetail key={screen.sessionId} sessionId={screen.sessionId} day={screen.day} />;
+        break;
+      case "profile":
+        body = <TvProfile />;
+        break;
+      case "live_data":
+        body = <TvLiveData />;
+        break;
+      default:
+        body = <TvHome />;
+    }
+
+  return (
+    <TvSignedInProvider value={ctx}>
+      {body}
+      {modal?.kind === "running" && <TvRunningDialog then={modal.then} />}
+    </TvSignedInProvider>
+  );
+}

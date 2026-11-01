@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dillan V1 · Clickable prototype (phone + TV)</title>
+<link rel="icon" href="brand/dillan-mark.svg" type="image/svg+xml">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="proto-bar">
+    <div class="brand"><img src="brand/dillan-mark.svg" alt=""> Dillan V1 <span class="tag">clickable prototype</span></div>
+    <div class="seg" id="layout" role="group" aria-label="Devices shown">
+      <button data-layout="both">Phone + TV</button><button data-layout="phone">Phone only</button><button data-layout="tv">TV only</button>
+    </div>
+    <div class="seg" id="pwidth" role="group" aria-label="Phone width">
+      <button data-w="390">390</button><button data-w="320">320</button><button data-w="desktop">Desktop</button>
+    </div>
+    <span class="spacer"></span>
+    <select id="jump" class="link" aria-label="Jump to a screen" style="background:#1F1E1B">
+      <option value="">Jump to screen…</option>
+      <optgroup label="Phone">
+        <option value="phone:welcome">S01 Welcome / chooser</option><option value="phone:approve">S03 Approve a TV</option><option value="phone:home">S04 Home</option><option value="phone:program">S05 Program</option><option value="phone:editor:firstWorkout">S06 Editor (Upper Body A)</option><option value="phone:choose">S07 Choose workout</option><option value="phone:preflight:firstWorkout">S08 Preflight</option><option value="phone:calendar">S12 Calendar</option><option value="phone:session:recent">S13 Session detail</option><option value="phone:health">S14 Live data & zones</option><option value="phone:account">S15 Profile</option>
+      </optgroup>
+      <optgroup label="TV">
+        <option value="tv:chooser">S01 Who's training?</option><option value="tv:home">S04 Home</option><option value="tv:program">S05 Program</option><option value="tv:choose">S07 Choose workout</option><option value="tv:preflight:firstWorkout">S08 Preflight</option><option value="tv:calendar">S12 Calendar</option><option value="tv:session:recent">S13 Session detail</option><option value="tv:account">S15 Profile</option>
+      </optgroup>
+    </select>
+    <button class="link" id="toggle-drawer">Prototype controls</button>
+  </div>
+
+  <div class="proto-stage" id="stage"></div>
+  <div class="proto-hint">TV: <kbd>←</kbd><kbd>↑</kbd><kbd>→</kbd><kbd>↓</kbd> move · <kbd>Enter</kbd> select · <kbd>Backspace</kbd> back. Phone: click or tap. Clicking a TV element also activates it. Both devices share one account store, like the real product — when the TV asks to sign in, approve it on the phone panel.</div>
+
+  <aside class="proto-drawer" id="drawer" aria-label="Prototype controls">
+    <h3>Prototype controls</h3>
+    <p class="note">These simulate the iPhone companion feed and failure modes. None of this UI exists in the product.</p>
+    <label for="sensor-mode">Companion / Watch feed</label>
+    <select id="sensor-mode">
+      <option value="not_connected">Not connected</option>
+      <option value="setup_required">Setup required (Health access)</option>
+      <option value="waiting">Waiting for first reading (auto → Live in 6 s)</option>
+      <option value="live">Live</option>
+      <option value="delayed">Stop readings (→ Delayed at 10 s → No recent reading at 30 s)</option>
+      <option value="disconnected_phone">Disconnected: phone → dashboard</option>
+      <option value="disconnected_watch">Disconnected: Watch → phone</option>
+      <option value="reconnecting">Reconnecting (auto → Live in 8 s)</option>
+    </select>
+    <p class="note" id="sensor-now" style="margin-top:6px"></p>
+    <button class="full" id="age-reading">Age the last reading by 12 s (forces Delayed)</button>
+    <label for="approval">Phone approval outcome</label>
+    <select id="approval"><option value="approve">Approve</option><option value="deny">Deny</option><option value="expire">Expire during approval</option></select>
+    <button class="full" id="approve-pair">Approve the TV code (simulates the phone)</button>
+    <button class="full" id="expire-pair">Expire the current TV code now</button>
+    <button class="full" id="idle-tv">Simulate 15 min TV idle (auto-lock)</button>
+    <div class="row" style="margin-top:12px"><input type="checkbox" id="fail-save"><label for="fail-save">Notes save fails (shows error + local retention)</label></div>
+    <div class="row"><input type="checkbox" id="reduced"><label for="reduced">Reduced motion</label></div>
+    <label>Data</label>
+    <button class="full" id="reset-example">Reset to example data (Luis + Maya)</button>
+    <button class="full danger" id="reset-empty">Reset to empty (brand-new devices)</button>
+  </aside>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

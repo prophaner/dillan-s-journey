@@ -1,0 +1,226 @@
+{
+  "_doc": "Shared by src/test/v1/engine.test.ts (TypeScript reducer) and src/test/v1/sql.test.ts (public.v1_engine_apply). Times are ms after T0. 'rev' is the expected_revision sent (default: the current revision). 'expect' is 'ok' or the error code. 'after' / 'final' list fields to check; time fields there are relative to T0.",
+  "T0": 1793000000000,
+  "blocks": {
+    "straight3": [
+      {
+        "type": "straight",
+        "id": "b1",
+        "sets": 3,
+        "rest_s": 60,
+        "exercise": { "id": "e1", "name": "Goblet Squat", "reps": 8, "rep_mode": "total", "weight": 40, "unit": "lb", "load_basis": "total_external", "instructions": "" }
+      }
+    ],
+    "superset2x3": [
+      {
+        "type": "superset",
+        "id": "b1",
+        "rounds": 3,
+        "rest_s": 90,
+        "exercises": [
+          { "id": "e1", "name": "Half-kneeling Press", "reps": 8, "rep_mode": "per_side", "weight": 20, "unit": "lb", "load_basis": "per_implement", "instructions": "" },
+          { "id": "e2", "name": "Band Pull-apart", "reps": 15, "rep_mode": "total", "weight": null, "unit": "lb", "load_basis": null, "instructions": "Light band." }
+        ]
+      }
+    ],
+    "mixed": [
+      {
+        "type": "straight",
+        "id": "b1",
+        "sets": 2,
+        "rest_s": 0,
+        "exercise": { "id": "e1", "name": "Pull-up", "reps": 6, "rep_mode": "total", "weight": null, "unit": "kg", "load_basis": null, "instructions": "" }
+      },
+      {
+        "type": "superset",
+        "id": "b2",
+        "rounds": 2,
+        "rest_s": 45,
+        "exercises": [
+          { "id": "e2", "name": "Row", "reps": 10, "rep_mode": "per_side", "weight": 22.5, "unit": "kg", "load_basis": "per_implement", "instructions": "" },
+          { "id": "e3", "name": "Dead Bug", "reps": 10, "rep_mode": "per_side", "weight": null, "unit": "kg", "load_basis": null, "instructions": "" }
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "straight sets complete: rest after each set except the last, outcome completed",
+      "blocks": "straight3",
+      "commands": [
+        { "at": 0, "kind": "start", "expect": "ok", "after": { "state": "active", "started_at": 0, "revision": 2 } },
+        { "at": 30000, "kind": "complete_set", "payload": { "step": 0 }, "expect": "ok", "after": { "cursor": 1, "rest_started_at": 30000, "rest_ends_at": 90000 } },
+        { "at": 100000, "kind": "complete_set", "payload": { "step": 1, "reps": 7, "weight": 45 }, "expect": "ok", "after": { "rest_ends_at": 160000 } },
+        { "at": 200000, "kind": "complete_set", "payload": { "step": 2 }, "expect": "ok", "after": { "cursor": 3, "rest_ends_at": null } },
+        { "at": 210000, "kind": "end", "expect": "ok" }
+      ],
+      "final": { "state": "ended", "outcome": "completed", "ended_at": 210000, "paused_ms": 0, "revision": 6, "rest_ends_at": null }
+    },
+    {
+      "name": "superset rests only after the last member and never after the final round",
+      "blocks": "superset2x3",
+      "commands": [
+        { "at": 0, "kind": "start", "expect": "ok" },
+        { "at": 10000, "kind": "complete_set", "payload": { "step": 0 }, "expect": "ok", "after": { "rest_ends_at": null } },
+        { "at": 20000, "kind": "complete_set", "payload": { "step": 1 }, "expect": "ok", "after": { "rest_ends_at": 110000 } },
+        { "at": 30000, "kind": "skip_rest", "expect": "ok", "after": { "rest_ends_at": null, "rest_started_at": null } },
+        { "at": 40000, "kind": "complete_set", "payload": { "step": 2 }, "expect": "ok", "after": { "rest_ends_at": null } },
+        { "at": 50000, "kind": "complete_set", "payload": { "step": 3 }, "expect": "ok", "after": { "rest_ends_at": 140000 } },
+        { "at": 60000, "kind": "complete_set", "payload": { "step": 4 }, "expect": "ok", "after": { "rest_ends_at": null } },
+        { "at": 70000, "kind": "complete_set", "payload": { "step": 5 }, "expect": "ok", "after": { "rest_ends_at": null, "cursor": 6 } },
+        { "at": 80000, "kind": "complete_set", "payload": { "step": 6 }, "expect": "no_step" },
+        { "at": 90000, "kind": "end", "expect": "ok" }
+      ],
+      "final": { "outcome": "completed" }
+    },
+    {
+      "name": "pause during rest freezes it; resume extends rest_ends_at by the pause",
+      "blocks": "straight3",
+      "commands": [
+        { "at": 0, "kind": "start", "expect": "ok" },
+        { "at": 10000, "kind": "complete_set", "payload": { "step": 0 }, "expect": "ok", "after": { "rest_ends_at": 70000 } },
+        { "at": 20000, "kind": "pause", "expect": "ok", "after": { "state": "paused", "paused_at": 20000 } },
+        { "at": 25000, "kind": "complete_set", "payload": { "step": 1 }, "expect": "invalid_state" },
+        { "at": 25000, "kind": "skip_rest", "expect": "invalid_state" },
+        { "at": 50000, "kind": "resume", "expect": "ok", "after": { "state": "active", "paused_at": null, "paused_ms": 30000, "rest_ends_at": 100000 } },
+        { "at": 60000, "kind": "pause", "expect": "ok" },
+        { "at": 70000, "kind": "resume", "expect": "ok", "after": { "paused_ms": 40000, "rest_ends_at": 110000 } }
+      ],
+      "final": { "state": "active", "pauses": [ { "from": 20000, "to": 50000 }, { "from": 60000, "to": 70000 } ] }
+    },
+    {
+      "name": "stale revision: set commands rejected, pause/resume/end still applied when valid",
+      "blocks": "straight3",
+      "commands": [
+        { "at": 0, "kind": "start", "expect": "ok" },
+        { "at": 1000, "kind": "complete_set", "payload": { "step": 0 }, "rev": 1, "expect": "stale_revision" },
+        { "at": 2000, "kind": "skip_rest", "rev": 1, "expect": "stale_revision" },
+        { "at": 3000, "kind": "pause", "rev": 1, "expect": "ok", "after": { "revision": 3 } },
+        { "at": 4000, "kind": "pause", "rev": 2, "expect": "stale_revision" },
+        { "at": 4000, "kind": "pause", "expect": "invalid_state" },
+        { "at": 5000, "kind": "resume", "rev": 2, "expect": "ok", "after": { "revision": 4, "paused_ms": 2000 } },
+        { "at": 6000, "kind": "resume", "rev": 3, "expect": "stale_revision" },
+        { "at": 9000, "kind": "end", "rev": 1, "expect": "ok" }
+      ],
+      "final": { "state": "ended", "outcome": "partial", "revision": 5 }
+    },
+    {
+      "name": "ended is terminal",
+      "blocks": "straight3",
+      "commands": [
+        { "at": 0, "kind": "start", "expect": "ok" },
+        { "at": 5000, "kind": "end", "expect": "ok" },
+        { "at": 6000, "kind": "end", "expect": "session_ended" },
+        { "at": 6000, "kind": "resume", "expect": "session_ended" },
+        { "at": 6000, "kind": "complete_set", "payload": { "step": 0 }, "expect": "session_ended" },
+        { "at": 6000, "kind": "discard", "expect": "session_ended" },
+        { "at": 6000, "kind": "start", "expect": "session_ended" }
+      ],
+      "final": { "state": "ended", "outcome": "partial", "ended_at": 5000, "revision": 3 }
+    },
+    {
+      "name": "skip is not zero reps; zero reps is done; any skip makes the session partial",
+      "blocks": "straight3",
+      "commands": [
+        { "at": 0, "kind": "start", "expect": "ok" },
+        { "at": 1000, "kind": "skip_set", "payload": { "step": 0 }, "expect": "ok", "after": { "rest_ends_at": 61000 } },
+        { "at": 2000, "kind": "complete_set", "payload": { "step": 1, "reps": 0 }, "expect": "ok" },
+        { "at": 3000, "kind": "complete_set", "payload": { "step": 2, "weight": null }, "expect": "ok" },
+        { "at": 4000, "kind": "end", "expect": "ok" }
+      ],
+      "final": {
+        "outcome": "partial",
+        "results": {
+          "0.0.0": { "status": "skipped", "reps": null, "weight": null, "at": 1000 },
+          "0.0.1": { "status": "done", "reps": 0, "weight": 40, "at": 2000 },
+          "0.0.2": { "status": "done", "reps": 8, "weight": null, "at": 3000 }
+        }
+      }
+    },
+    {
+      "name": "undo during rest returns to the previous set and clears rest",
+      "blocks": "straight3",
+      "commands": [
+        { "at": 0, "kind": "start", "expect": "ok" },
+        { "at": 1000, "kind": "undo", "expect": "nothing_to_undo" },
+        { "at": 2000, "kind": "complete_set", "payload": { "step": 0 }, "expect": "ok", "after": { "cursor": 1, "rest_ends_at": 62000 } },
+        { "at": 3000, "kind": "undo", "expect": "ok", "after": { "cursor": 0, "rest_ends_at": null, "rest_started_at": null, "results": {} } },
+        { "at": 4000, "kind": "complete_set", "payload": { "step": 1 }, "expect": "step_mismatch" },
+        { "at": 5000, "kind": "complete_set", "payload": { "step": 0, "reps": 9 }, "expect": "ok" }
+      ],
+      "final": { "cursor": 1, "results": { "0.0.0": { "status": "done", "reps": 9, "weight": 40, "at": 5000 } } }
+    },
+    {
+      "name": "end early marks unreached sets not_reached and is partial",
+      "blocks": "mixed",
+      "commands": [
+        { "at": 0, "kind": "start", "expect": "ok" },
+        { "at": 1000, "kind": "complete_set", "payload": { "step": 0 }, "expect": "ok", "after": { "rest_ends_at": null } },
+        { "at": 2000, "kind": "complete_set", "payload": { "step": 1 }, "expect": "ok", "after": { "rest_ends_at": null } },
+        { "at": 3000, "kind": "complete_set", "payload": { "step": 2, "weight": 25 }, "expect": "ok", "after": { "rest_ends_at": null } },
+        { "at": 4000, "kind": "end", "expect": "ok" }
+      ],
+      "final": {
+        "outcome": "partial",
+        "results": {
+          "0.0.0": { "status": "done", "reps": 6, "weight": null, "at": 1000 },
+          "0.0.1": { "status": "done", "reps": 6, "weight": null, "at": 2000 },
+          "1.0.0": { "status": "done", "reps": 10, "weight": 25, "at": 3000 },
+          "1.1.0": { "status": "not_reached", "reps": null, "weight": null, "at": null },
+          "1.0.1": { "status": "not_reached", "reps": null, "weight": null, "at": null },
+          "1.1.1": { "status": "not_reached", "reps": null, "weight": null, "at": null }
+        }
+      }
+    },
+    {
+      "name": "end while paused closes the open pause at the effective time",
+      "blocks": "straight3",
+      "commands": [
+        { "at": 0, "kind": "start", "expect": "ok" },
+        { "at": 10000, "kind": "pause", "expect": "ok" },
+        { "at": 25000, "kind": "end", "expect": "ok" }
+      ],
+      "final": { "state": "ended", "paused_ms": 15000, "paused_at": null, "ended_at": 25000, "pauses": [ { "from": 10000, "to": 25000 } ] }
+    },
+    {
+      "name": "preparing: cannot end, can discard; discarded has no not_reached fill",
+      "blocks": "straight3",
+      "commands": [
+        { "at": 0, "kind": "end", "expect": "invalid_state" },
+        { "at": 0, "kind": "pause", "expect": "invalid_state" },
+        { "at": 0, "kind": "complete_set", "payload": { "step": 0 }, "expect": "invalid_state" },
+        { "at": 1000, "kind": "discard", "expect": "ok" }
+      ],
+      "final": { "state": "ended", "outcome": "discarded", "started_at": null, "ended_at": 1000, "results": {} }
+    },
+    {
+      "name": "validation errors",
+      "blocks": "straight3",
+      "commands": [
+        { "at": 0, "kind": "start", "expect": "ok" },
+        { "at": 0, "kind": "start", "expect": "invalid_state" },
+        { "at": 0, "kind": "fly", "expect": "unknown_kind" },
+        { "at": 0, "kind": "skip_rest", "expect": "no_rest" },
+        { "at": 0, "kind": "resume", "expect": "invalid_state" },
+        { "at": 0, "kind": "complete_set", "payload": { "step": 0, "reps": 201 }, "expect": "invalid_payload" },
+        { "at": 0, "kind": "complete_set", "payload": { "step": 0, "reps": 2.5 }, "expect": "invalid_payload" },
+        { "at": 0, "kind": "complete_set", "payload": { "step": 0, "weight": -1 }, "expect": "invalid_payload" },
+        { "at": 0, "kind": "complete_set", "payload": { "step": 0, "weight": 12.37 }, "expect": "invalid_payload" },
+        { "at": 0, "kind": "complete_set", "payload": {}, "expect": "step_mismatch" },
+        { "at": 0, "kind": "skip_set", "payload": { "step": 1 }, "expect": "step_mismatch" }
+      ],
+      "final": { "state": "active", "revision": 2, "cursor": 0 }
+    },
+    {
+      "name": "discard an active session",
+      "blocks": "superset2x3",
+      "commands": [
+        { "at": 0, "kind": "start", "expect": "ok" },
+        { "at": 1000, "kind": "complete_set", "payload": { "step": 0 }, "expect": "ok" },
+        { "at": 2000, "kind": "pause", "expect": "ok" },
+        { "at": 4000, "kind": "discard", "expect": "ok" }
+      ],
+      "final": { "outcome": "discarded", "paused_ms": 2000 }
+    }
+  ]
+}

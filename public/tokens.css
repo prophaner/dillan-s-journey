@@ -32,6 +32,15 @@
   --hold-tint:    #FBEED3;
   --unknown:      #8F8A80;  /* unknown / not yet measured — dashed borders only, never text (3.1:1) */
 
+  /* ---- V1 heart-rate zone ramp (design/v1/docs/04-design-system.md). Zone color never appears
+     without the zone number and its bounds in text. Light values are text-safe on chalk. ---- */
+  --z1: #3F6E9A;  --z1-tint: #DEE9F3;
+  --z2: #1F7A6E;  --z2-tint: #D7EEEA;
+  --z3: #6B7A1E;  --z3-tint: #E9EEC9;
+  --z4: #B45A12;  --z4-tint: #FBE4D0;
+  --z5: #9A3B2E;  --z5-tint: #F6DDD6;  /* deep clay, not alarm red */
+  --zu: var(--unknown); --zu-tint: #ECE9E2;  /* unmeasured */
+
   /* ---- Semantic aliases ---- */
   --bg:           var(--chalk);
   --surface:      var(--paper);
@@ -99,6 +108,12 @@
   --hold:      #E6B04F;
   --hold-tint: #352915;
   --unknown:   #7D786F;
+  --z1: #7FA9D6;  --z1-tint: #1B2836;
+  --z2: #5FC4B4;  --z2-tint: #163029;
+  --z3: #B9C95A;  --z3-tint: #2A2F14;
+  --z4: #F0924A;  --z4-tint: #3A2412;
+  --z5: #E07A66;  --z5-tint: #3A1F1B;
+  --zu-tint: #2A2926;
   --accent:    var(--spot);
 }
 

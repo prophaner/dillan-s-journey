@@ -67,6 +67,18 @@
   --color-hold: var(--hold);
   --color-hold-tint: var(--hold-tint);
   --color-unknown: var(--unknown);
+  --color-z1: var(--z1);
+  --color-z1-tint: var(--z1-tint);
+  --color-z2: var(--z2);
+  --color-z2-tint: var(--z2-tint);
+  --color-z3: var(--z3);
+  --color-z3-tint: var(--z3-tint);
+  --color-z4: var(--z4);
+  --color-z4-tint: var(--z4-tint);
+  --color-z5: var(--z5);
+  --color-z5-tint: var(--z5-tint);
+  --color-zu: var(--zu);
+  --color-zu-tint: var(--zu-tint);
 
   /* shadcn aliases so any stock component stays on-brand */
   --color-background: var(--bg);
@@ -120,6 +132,24 @@
   --spacing-safe-b: var(--safe-b);
   --spacing-safe-t: var(--safe-t);
   --spacing-sidebar: 240px;
+
+  /* TV surface (tokens.css "TV surface") */
+  --text-tv-xs: var(--tv-t-xs);
+  --text-tv-sm: var(--tv-t-sm);
+  --text-tv-base: var(--tv-t-base);
+  --text-tv-md: var(--tv-t-md);
+  --text-tv-lg: var(--tv-t-lg);
+  --text-tv-xl: var(--tv-t-xl);
+  --text-tv-2xl: var(--tv-t-2xl);
+  --text-tv-3xl: var(--tv-t-3xl);
+  --text-tv-metric: var(--tv-t-metric);
+  --spacing-tv-safe: var(--tv-safe);
+  --spacing-tv-tap: var(--tv-tap);
+  --spacing-tv-tile: var(--tv-chooser-tile);
+  --spacing-tv-qr: var(--tv-qr);
+  --radius-tv-sm: var(--tv-r-sm);
+  --radius-tv-md: var(--tv-r-md);
+  --radius-tv-lg: var(--tv-r-lg);
 }
 
 @layer base {
@@ -141,11 +171,35 @@
 }
 
 @utility tabular { font-variant-numeric: tabular-nums; }
+
+/* TV: D-pad focus ring (5 px + soft halo, outside the element so layout never shifts), no hover,
+   no native outline (the focus engine draws [data-focused]). */
+@layer components {
+  .tv-root { cursor: none; }
+  .tv-root :focus-visible { outline: none; }
+  .tv-root [data-focused] {
+    box-shadow:
+      0 0 0 var(--tv-focus-w) var(--text),
+      0 0 0 calc(var(--tv-focus-w) + 5px) color-mix(in oklab, var(--text) 25%, transparent);
+  }
+  .tv-root [data-focus] { transition: box-shadow var(--dur-quick) var(--ease-settle); }
+  @media (prefers-reduced-motion: reduce) {
+    .tv-root [data-focus] { transition: none; }
+  }
+}
+/* Dev-only mock badge (mock-badge.tsx): below lg it is a strip at the top; reserve its height so
+   it never covers a control. Not set on the TV, which keeps its fixed layout. */
+:root { --dev-mock-h: 40px; }
+@media (width < 64rem) {
+  html.dev-mock body { padding-top: calc(var(--safe-t) + var(--dev-mock-h)); }
+}
 @utility screen-x { padding-left: var(--margin); padding-right: var(--margin); }
 @utility pb-nav { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 24px); }
 @utility press {
   transition: transform 120ms var(--ease-settle), opacity 120ms var(--ease-settle);
   &:active { transform: scale(0.98); opacity: 0.85; }
+  /* Acceptance 37: no CSS transition longer than 0 ms under reduced motion. */
+  @media (prefers-reduced-motion: reduce) { transition: none; }
 }
 
 /* Spot drop: the dot settles into the cradle when a set is logged. */
