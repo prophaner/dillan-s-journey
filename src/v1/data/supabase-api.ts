@@ -161,9 +161,9 @@ function ingestArgs(req: HrIngestRequest) {
     p_sensor: req.p_sensor as unknown as Json,
     p_claim: req.p_claim,
     p_samples: req.p_samples as unknown as Json,
-    // Optional in the database signature: omit rather than send null.
-    p_source_name: req.p_source_name ?? undefined,
-    p_platform: req.p_platform ?? undefined,
+    // Optional in the database signature: include only when present (exactOptionalPropertyTypes).
+    ...(req.p_source_name != null ? { p_source_name: req.p_source_name } : {}),
+    ...(req.p_platform != null ? { p_platform: req.p_platform } : {}),
   };
 }
 
