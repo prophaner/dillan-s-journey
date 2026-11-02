@@ -6,6 +6,11 @@
 
 import { createSupabaseApi } from "./supabase-api";
 import type { DillanApi } from "./api";
+import { captureAuthCallback, settleAuthCallback } from "./auth-callback";
+
+// An email sign-in link lands with tokens (or an error) in the URL: read and strip them now,
+// before the router reads the location and before the Supabase client is first created.
+captureAuthCallback();
 
 export const MOCK_FLAG_KEY = "dillan.mock";
 
@@ -60,7 +65,10 @@ export function getApi(): Promise<DillanApi> {
             : m.createMockApi();
         }
       }
-      current = api ?? createSupabaseApi();
+      const chosen = api ?? createSupabaseApi();
+      // Finish an email-link sign-in before any route asks who is signed in.
+      await settleAuthCallback(chosen);
+      current = chosen;
       return current;
     })();
   }

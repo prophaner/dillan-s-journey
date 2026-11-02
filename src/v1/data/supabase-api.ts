@@ -6,6 +6,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { clearLocalUserData } from "@/v1/session/local-data";
 import { isTvSessionFor } from "@/v1/tv/marker";
+import { emailRedirectUrl } from "./auth-callback";
 import { isPlaceholderEmail } from "@/v1/core/placeholder-email";
 import type { Json } from "@/integrations/supabase/types";
 import type {
@@ -278,12 +279,22 @@ export function createSupabaseApi(): DillanApi {
         }
         return null;
       },
-      async sendOtp(channel, contact) {
+      async sendOtp(channel, contact, opts) {
         const { error } =
           channel === "email"
             ? await supabase.auth.signInWithOtp({
                 email: contact,
-                options: { shouldCreateUser: true },
+                options: {
+                  shouldCreateUser: true,
+                  // The link returns to this origin's /auth (preview or published) plus a
+                  // same-origin ?redirect= (safeRedirect), never to a host from user input.
+                  // The host must be in Auth's redirect allow-list as <host>/** (query string).
+                  ...(typeof window !== "undefined"
+                    ? {
+                        emailRedirectTo: emailRedirectUrl(window.location.origin, opts?.returnTo),
+                      }
+                    : {}),
+                },
               })
             : await supabase.auth.signInWithOtp({
                 phone: contact,
@@ -299,6 +310,16 @@ export function createSupabaseApi(): DillanApi {
         const user = toUser(data?.user);
         if (error || !user)
           return { ok: false, error: error ? authErrorCode(error, channel) : "unknown" };
+        return { ok: true, user };
+      },
+      async signInWithLink({ accessToken, refreshToken }) {
+        const { data, error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        const user = toUser(data?.user);
+        if (error || !user)
+          return { ok: false, error: error ? authErrorCode(error, "email") : "unknown" };
         return { ok: true, user };
       },
       async signOut(opts) {
