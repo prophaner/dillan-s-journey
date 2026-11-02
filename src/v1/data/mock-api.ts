@@ -15,6 +15,7 @@ import type {
   ZoneConfig,
 } from "@/v1/core/types";
 import { validateTemplate } from "@/v1/core/validate";
+import { emailRedirectUrl, MOCK_LINK_PREFIX } from "./auth-callback";
 import { isValidTimeZone } from "@/v1/core/week";
 import { validCutoffs } from "@/v1/core/zones";
 import {
@@ -57,6 +58,24 @@ export const MOCK_SESSION_KEY = "dillan.mock.session";
 /** The TV tab signs in on its own (two tabs = phone + TV in one browser). */
 export const MOCK_TV_SESSION_KEY = "dillan.mock.session.tv";
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+/** Mock sign-in links carry this "access token" followed by the email address. */
+export { MOCK_LINK_PREFIX };
+
+/** The link a mock "email" would carry: same landing as Supabase (implicit flow, /auth#...). */
+export function mockEmailLink(email: string, origin?: string, returnTo?: string): string {
+  const o = origin ?? (typeof window !== "undefined" ? window.location.origin : "http://localhost");
+  const landing = new URL(emailRedirectUrl(o, returnTo));
+  landing.searchParams.set("mock", "1");
+  const h = new URLSearchParams({
+    access_token: MOCK_LINK_PREFIX + email,
+    refresh_token: "mock",
+    token_type: "bearer",
+    expires_in: "3600",
+    type: "magiclink",
+  });
+  landing.hash = h.toString();
+  return landing.toString();
+}
 
 export interface MockOptions {
   storage?: Storage | null;
@@ -72,7 +91,9 @@ export interface MockOptions {
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
-export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): void; db(): MockDb } {
+export function createMockApi(
+  opts: MockOptions = {},
+): DillanApi & { reset(): void; db(): MockDb; lastEmailLink(): string | null } {
   const storage = opts.storage === undefined ? safeLocalStorage() : opts.storage;
   const now = opts.now ?? (() => Date.now());
   const sessionKey = opts.sessionKey ?? MOCK_SESSION_KEY;
@@ -83,6 +104,7 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
   const hrSince = opts.hrSince ?? (() => readMockHrSince(storage));
   const hrGaps = () => (opts.hrMode ? [] : readMockHrGaps(storage));
   const authListeners = new Set<(u: AuthUser | null) => void>();
+  let lastLink: string | null = null;
   const sessionListeners = new Set<{ userId: string; cb: (r: WorkoutSessionRow) => void }>();
 
   function safeLocalStorage(): Storage | null {
@@ -252,7 +274,33 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
     return { p };
   }
 
-  const api: DillanApi & { reset(): void; db(): MockDb } = {
+  function signInContact(
+    channel: "email" | "sms",
+    contact: string,
+  ): { ok: true; user: AuthUser } | { ok: false; error: "invalid_contact" } {
+    const c = channel === "email" ? normalizeEmail(contact) : normalizePhone(contact);
+    if (!c) return { ok: false, error: "invalid_contact" };
+    let u = db.users.find((x) => (channel === "email" ? x.email === c : x.phone === c));
+    if (!u) {
+      u = {
+        id: newId(),
+        email: channel === "email" ? c : null,
+        phone: channel === "sms" ? c : null,
+        display_name: "",
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+        weight_unit: "lb",
+        weekly_goal: 3,
+        name_done: false,
+        version: 1,
+      };
+      db.users.push(u);
+      persist();
+    }
+    writeSession(u.id);
+    return { ok: true, user: { id: u.id, email: u.email, phone: u.phone } };
+  }
+
+  const api: DillanApi & { reset(): void; db(): MockDb; lastEmailLink(): string | null } = {
     kind: "mock",
     reset() {
       db = seedMockDb(now());
@@ -260,37 +308,30 @@ export function createMockApi(opts: MockOptions = {}): DillanApi & { reset(): vo
       writeSession(null);
     },
     db: () => db,
+    lastEmailLink: () => lastLink,
 
     auth: {
       async getUser() {
         return authUser();
       },
-      async sendOtp(channel, contact) {
+      async sendOtp(channel, contact, opts) {
         const ok = channel === "email" ? normalizeEmail(contact) : normalizePhone(contact);
+        if (ok && channel === "email") {
+          // The real email carries a sign-in link: the mock makes one (open it to test the link
+          // landing); the 6-digit code path keeps working too.
+          lastLink = mockEmailLink(ok, undefined, opts?.returnTo);
+          if (import.meta.env.DEV && import.meta.env.MODE !== "test")
+            console.info(`[mock] sign-in link for ${ok}: ${lastLink}`);
+        }
         return ok ? { ok: true } : { ok: false, error: "invalid_contact" };
       },
       async verifyOtp(channel, contact, code) {
         if (!/^\d{6}$/.test(code) || code === "000000") return { ok: false, error: "invalid_code" };
-        const c = channel === "email" ? normalizeEmail(contact) : normalizePhone(contact);
-        if (!c) return { ok: false, error: "invalid_contact" };
-        let u = db.users.find((x) => (channel === "email" ? x.email === c : x.phone === c));
-        if (!u) {
-          u = {
-            id: newId(),
-            email: channel === "email" ? c : null,
-            phone: channel === "sms" ? c : null,
-            display_name: "",
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-            weight_unit: "lb",
-            weekly_goal: 3,
-            name_done: false,
-            version: 1,
-          };
-          db.users.push(u);
-          persist();
-        }
-        writeSession(u.id);
-        return { ok: true, user: { id: u.id, email: u.email, phone: u.phone } };
+        return signInContact(channel, contact);
+      },
+      async signInWithLink({ accessToken }) {
+        if (!accessToken.startsWith(MOCK_LINK_PREFIX)) return { ok: false, error: "invalid_code" };
+        return signInContact("email", accessToken.slice(MOCK_LINK_PREFIX.length));
       },
       async signOut() {
         writeSession(null);

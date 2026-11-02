@@ -81,37 +81,28 @@ Then in the app: sign in, open **Program**, create a workout, open **Home**: no 
 **Rollback:** see `docs/v1/runbook.md` §3. Never run a down script without deciding it
 yourself; it deletes all V1 data.
 
-## 2. Email codes (required)
+## 2. Email sign-in (done with Lovable defaults)
 
-V1 sign-in asks for a **6-digit code**. Supabase's default emails contain only a link.
+This project runs on **Lovable Cloud**, so there is no Supabase dashboard; auth settings live in
+Lovable → **More → Users → Auth settings**, and emails come from Lovable's sender
+(`no-reply@auth.lovable.cloud`), which delivers to anyone, not only team members (hourly cap).
 
-Supabase dashboard → **Authentication → Email Templates**. Edit **both** "Magic Link" (returning
-users) and "Confirm signup" (first sign-in):
+**Default email (owner's choice, 2026-11-01):** Lovable's default sign-in email has a heading
+"One-time login link" and a **Log In** button, with **no 6-digit code**. The app therefore asks
+the user to open the link on the same device; it sends the link back to the site the user started
+on, then signs them in. A "Have a code?" path stays for a future custom template.
 
-- Subject: `Your Dillan code`
-- Body:
+**Later, optional: branded code-only email.** Needs a custom email domain (paid Lovable plan,
+DNS records shown in Lovable → **More → Emails**). Then ask Lovable to generate the auth email
+templates and change "Magic link" and "Confirm signup" to: subject `Your Dillan code`, heading
+"Your Dillan code", "Enter this code to register or log in:", the code `{{ .Token }}` large,
+"If you didn't ask for it, ignore this email." No link.
 
-  ```html
-  <h2>Your Dillan code</h2>
-  <p>Enter this code to register or log in:</p>
-  <p style="font-size:28px;font-weight:700;letter-spacing:4px">{{ .Token }}</p>
-  <p>If you didn't ask for it, ignore this email.</p>
-  ```
+**Optional: expiry.** Lovable → More → Users → Auth settings → Email → "Email OTP expiration
+(seconds)" = `600` (default 3600). Lovable's agent cannot change this setting.
 
-  The template **must** contain `{{ .Token }}`. Do not include `{{ .ConfirmationURL }}`.
-
-**OTP expiry:** Authentication → Providers → **Email** → "Email OTP Expiration" = `600`
-(seconds; default 3600). Keep "Email OTP Length" at 6 if that field is shown.
-
-**Email sender.** Supabase's built-in sender is for testing: it has a very low hourly limit and
-may only deliver to project team members. For a second household member to receive codes,
-set up **custom SMTP** (Authentication → SMTP settings / Emails → SMTP), for example Resend,
-Postmark or Amazon SES (free tiers cover a household). Fields: host, port (465 or 587),
-username, password (the provider's SMTP key — a secret, store it only there), sender email,
-sender name `Dillan`. If Lovable Cloud already sends auth email for you, test it with the second
-person's address before relying on it.
-
-**Check:** on `{host}/auth`, enter your email, receive a 6-digit code, sign in.
+**Check:** on `{host}/auth`, enter your email, open the link from the email on the same device,
+land signed in. Done by the owner in the preview on 2026-11-01.
 
 ## 3. SMS codes (optional; app works by email until then)
 
@@ -162,11 +153,19 @@ another signed-in tab of the same user follow within a second or two.
 
 ## 6. Site URL and redirects (required)
 
-V1 never sends sign-in links, but Supabase still validates these:
+The email sign-in link returns to the site the person started on, as
+`<host>/auth?redirect=<path>` (for example `/auth?redirect=%2Fapprove-tv%3Fcode%3DABCD` when
+approving a TV). Auth only honors that address if it is allowed; otherwise the link falls back to
+the Site URL and lands on Home instead of the TV approval.
 
-- Authentication → **URL Configuration** → **Site URL**: `https://dillan-s-journey.lovable.app`
-- **Redirect URLs**: add `https://dillan-s-journey.lovable.app/**` and, if you use a custom
-  domain later, `https://<your-domain>/**`. Keep any Lovable preview entries Lovable added.
+- **Site URL**: `https://dillan-s-journey.lovable.app`
+- **Redirect URLs** (if Lovable's auth settings show this list): `https://dillan-s-journey.lovable.app/**`
+  (the `/**` wildcard is needed for the `?redirect=` query) and, if you use a custom domain
+  later, `https://<your-domain>/**`. Keep any Lovable preview entries Lovable added.
+
+**Check:** on the phone, scan a TV's QR code, send the link, open it: you land on the TV
+approval screen. A link this browser did not ask for (for example opened inside the Gmail app)
+first asks "Continue with this sign-in link?" naming the email; that is expected.
 
 ## 7. Server secret for TV pairing and Delete account (check only)
 

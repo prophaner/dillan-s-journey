@@ -1,24 +1,24 @@
 # Dillan V1 — issue list
 
-Updated 2026-10-31 (Slice F). Blockers need something only the owner, hardware or external
+Updated 2026-11-01. Blockers need something only the owner, hardware or external
 credentials can provide; nothing in the code can close them. Optional items can ship later.
 
 ## Blockers (before V1 can be called released)
 
 | # | Blocker | Needs | Where |
 |---|---|---|---|
-| B1 | Migration 0006 is not applied to the live database; the live app has no V1 tables | **Approved by the owner 2026-11-01** ("0006 approved"). Remaining: merge, then apply | `setup-owner.md` §1 |
-| B2 | Email sign-in sends no 6-digit code until the templates contain `{{ .Token }}`; built-in email sender may not reach a second household member | Owner: Auth templates, OTP expiry 600 s, custom SMTP | `setup-owner.md` §2 |
+| B1 | ~~Migration 0006 is not applied to the live database~~ | **Done 2026-11-01.** Applied in checksum-guarded chunks; live schema fingerprint matches the reviewed file | `setup-owner.md` §1 |
+| B2 | Lovable Cloud's default sign-in email contains only a "Log In" link, no 6-digit code. Custom templates need a custom email domain (paid plan). The owner chose the defaults for now (2026-11-01), so the app signs in by link and still accepts a code if a future template sends one | Done in app (`claude/email-link-signin`). Owner, later: custom email domain for branded code-only emails. The OTP expiry is a Lovable Auth setting the agent cannot change | `setup-owner.md` §2 |
 | B3 | SMS sign-in (F01) is not configured; the app shows "SMS isn't set up yet" | Owner: SMS provider account and credentials | `setup-owner.md` §3 |
-| B4 | Fire TV OS and browser unknown (Gate G0). If it runs Vega OS with no usable browser, `/tv` cannot run on it | Owner: TV model + OS line; Silk installed | `spike/CHECKLIST.md` §0, `physical-test-checklist.md` §1 |
+| B4 | Fire TV OS and browser unknown (Gate G0). If it runs Vega OS with no usable browser, `/tv` cannot run on it | Owner (2026-11-01): assume the latest Fire OS line (Fire OS 8, Android-based) with Silk. To confirm on the device: Settings → My Fire TV → About. A Vega OS device (for example the Fire TV Stick 4K Select) invalidates this assumption | `spike/CHECKLIST.md` §0, `physical-test-checklist.md` §1 |
 | B5 | Polar H10 → Web Bluetooth → TV path never run on hardware (secure pairing on firmware 4.x unverified per relay OS; latency unmeasured) | Strap, relay device, TV | `spike/CHECKLIST.md`, `physical-test-checklist.md` §2, §4 |
 | B6 | Silk behavior unverified: key codes, Back as popstate, wake lock, 1920×1080 scaling, Realtime reconnect (checked in desktop Chrome only) | Fire TV | `physical-test-checklist.md` §3 |
 | B7 | Phone checks on real devices (sign-in, offline, lock screen, 320 px) not done | Owner's phones | `physical-test-checklist.md` §5 |
 | B8 | Two-user demo (acceptance 38) not run | Two people, TV, strap | `setup-owner.md` §11 |
-| B9 | Branch not merged; Lovable sync and Publish happen only after the owner merges | Owner | `runbook.md` §1 |
-| B10 | Owner acknowledgement of the deviations marked **(ack)** below | Owner | this file |
-| B11 | Drizzle journal entry + snapshot for 0006 must be added when it is applied (deliberately absent so `drizzle-kit migrate` skips it) | Approved; add on apply | `build-plan.md` "Slice A review follow-ups" |
-| B12 | Security review of the full branch (build-plan Slice F) before merge | Reviewer run | — |
+| B9 | ~~Branch not merged~~ | **Done 2026-11-01.** PRs 9 and 10 merged; owner published | `runbook.md` §1 |
+| B10 | ~~Owner acknowledgement of the deviations marked **(ack)** below~~ | **Done 2026-11-01.** Owner acknowledged X2 and X3 | this file |
+| B11 | ~~Drizzle journal entry + snapshot for 0006~~ | **Done.** Lovable added journal idx 6 (`727b6f6`); the snapshot is a placeholder | `build-plan.md` "Slice A review follow-ups" |
+| B12 | Security review of the full V1 code | Owner (2026-11-01): run after V1 is more functional | — |
 
 ## Optional improvements (not blocking)
 
@@ -51,8 +51,8 @@ D-numbers are in `docs/v1/build-plan.md`.
 | # | Deviation | From | Why |
 |---|---|---|---|
 | X1 | Polar H10 via `/relay` (Web Bluetooth) replaces the Apple Watch / iPhone companion; no Swift code, no HealthKit (D1) | Brief F03, architecture, data path | Owner chose H10; web only. `docs/v1/h10-design.md` governs |
-| X2 | **(ack)** Heart-rate Realtime is per user, not per session | Brief "session-scoped realtime channel" | HR is needed before a session exists; rows carry `rev`, `measured_at`, `active_session_id` (h10-design §5.5) |
-| X3 | **(ack)** Session tokens in localStorage, not secure cookies; TV wipes them on lock (D10) | Brief "avoid long-lived bearer tokens in local storage", handoff 4.1 | Matches working auth; cookie migration is separate (O5) |
+| X2 | **(acknowledged 2026-11-01)** Heart-rate Realtime is per user, not per session | Brief "session-scoped realtime channel" | HR is needed before a session exists; rows carry `rev`, `measured_at`, `active_session_id` (h10-design §5.5) |
+| X3 | **(acknowledged 2026-11-01)** Session tokens in localStorage, not secure cookies; TV wipes them on lock (D10) | Brief "avoid long-lived bearer tokens in local storage", handoff 4.1 | Matches working auth; cookie migration is separate (O5) |
 | X4 | TV runs in Silk, no packaged APK (D11) | Brief "thin TV wrapper" | No confirmed device OS yet; brief says don't claim an untested APK |
 | X5 | Skipped sets make a session "partial" (UI "Ended early") (D13) | Handoff 4.4 | Brief: completed only when every prescribed set is done |
 | X6 | Progress counts completed sessions only; partial shown separately as "+N ended early" (D14) | Handoff 4.6 | Brief progress rule |

@@ -197,12 +197,28 @@ export interface DillanApi {
 
   auth: {
     getUser(): Promise<AuthUser | null>;
-    sendOtp(channel: OtpChannel, contact: string): Promise<AuthResult>;
+    /**
+     * `returnTo` (email only): where the link should continue after sign-in; it travels in the
+     * link itself (as /auth?redirect=, same-origin paths only).
+     */
+    sendOtp(
+      channel: OtpChannel,
+      contact: string,
+      opts?: { returnTo?: string | undefined },
+    ): Promise<AuthResult>;
     verifyOtp(
       channel: OtpChannel,
       contact: string,
       code: string,
     ): Promise<AuthResult<{ user: AuthUser }>>;
+    /**
+     * Finishes an email sign-in link: adopts the session the link returned in the URL
+     * (src/v1/data/auth-callback.ts reads and strips it; never called on a TV-marked browser).
+     */
+    signInWithLink(tokens: {
+      accessToken: string;
+      refreshToken: string;
+    }): Promise<AuthResult<{ user: AuthUser }>>;
     /**
      * Ends this device's session only. `everywhere` also revokes every other session of the
      * user, approved TVs included (an explicit, separate action in Profile).

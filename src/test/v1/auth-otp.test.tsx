@@ -21,9 +21,11 @@ function setup(patch?: (api: DillanApi) => void) {
   return { api, onDone };
 }
 
+/** Email: send the link, then take the secondary "Have a 6-digit code?" path. */
 async function toCodeStep(email = "luis@example.com") {
   fireEvent.change(screen.getByLabelText("Email address"), { target: { value: email } });
-  fireEvent.click(screen.getByRole("button", { name: "Send code" }));
+  fireEvent.click(screen.getByRole("button", { name: AUTH_COPY.sendLink }));
+  fireEvent.click(await screen.findByRole("button", { name: AUTH_COPY.haveCode }));
   return (await screen.findByLabelText("6-digit code")) as HTMLInputElement;
 }
 
@@ -31,7 +33,7 @@ describe("S02 contact step", () => {
   it("shows an inline error (no native bubble) for an invalid email and stays on the step", async () => {
     setup();
     fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "ana@example" } });
-    fireEvent.click(screen.getByRole("button", { name: "Send code" }));
+    fireEvent.click(screen.getByRole("button", { name: AUTH_COPY.sendLink }));
     expect(await screen.findByText("That doesn't look like an email address.")).toBeInTheDocument();
     expect(screen.getByLabelText("Email address")).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByLabelText("Email address").closest("form")).toHaveAttribute("novalidate");
@@ -72,9 +74,7 @@ describe("S02 code step (handoff 4.1, acceptance 2-3)", () => {
   it("a wrong code clears all six boxes, refocuses and shows the mismatch; typing clears it", async () => {
     setup();
     const input = await toCodeStep();
-    expect(screen.getByText(/Enter the 6-digit code we sent to/)).toHaveTextContent(
-      "luis@example.com",
-    );
+    expect(screen.getByText(/We sent a sign-in link to/)).toHaveTextContent("luis@example.com");
     fireEvent.change(input, { target: { value: "000000" } }); // auto-submits at 6 digits
     expect(await screen.findByText(AUTH_COPY.mismatch)).toBeInTheDocument();
     expect(input.value).toBe("");
@@ -106,7 +106,7 @@ describe("S02 code step (handoff 4.1, acceptance 2-3)", () => {
     const send = vi.spyOn(api.auth, "sendOtp");
     vi.useFakeTimers({ shouldAdvanceTime: true });
     await toCodeStep();
-    const btn = screen.getByRole("button", { name: AUTH_COPY.resendIn(30) });
+    const btn = screen.getByRole("button", { name: AUTH_COPY.resendLinkIn(30) });
     expect(btn).toBeDisabled();
     // Let the countdown effect register its interval before time moves (flaky under load).
     await act(async () => {});
@@ -114,15 +114,15 @@ describe("S02 code step (handoff 4.1, acceptance 2-3)", () => {
       vi.advanceTimersByTime(10_000);
     });
     // shouldAdvanceTime also lets real time pass, so a loaded test run may already show 19.
-    expect(screen.getByRole("button", { name: /^Resend code \((19|20)\)$/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Resend link \((19|20)\)$/ })).toBeDisabled();
     act(() => {
       vi.advanceTimersByTime(20_500);
     });
-    const ready = screen.getByRole("button", { name: AUTH_COPY.resend });
+    const ready = screen.getByRole("button", { name: AUTH_COPY.resendLink });
     expect(ready).toBeEnabled();
     vi.useRealTimers();
     fireEvent.click(ready);
-    await screen.findByRole("button", { name: AUTH_COPY.resendIn(30) });
+    await screen.findByRole("button", { name: AUTH_COPY.resendLinkIn(30) });
     expect(send).toHaveBeenCalledTimes(2);
   });
 

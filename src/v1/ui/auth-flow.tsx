@@ -1,17 +1,25 @@
 // S01 Welcome + S02 Register or log in (phone/desktop). One flow for new and returning people:
-// the screens never say whether an account exists (brief: auth privacy). Email OTP and SMS OTP
-// (6 digits); new accounts finish with the name step.
+// the screens never say whether an account exists (brief: auth privacy). Email sends a sign-in
+// link (the default Lovable Cloud email has only a link; a 6-digit code still works if a custom
+// template includes one); SMS sends a 6-digit code. New accounts finish with the name step.
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ChevronLeft, Tv } from "lucide-react";
 import { useApi } from "@/v1/data/client";
 import {
   normalizeEmail,
   normalizePhone,
   type AuthErrorCode,
+  type AuthUser,
   type OtpChannel,
   type Profile,
 } from "@/v1/data/api";
+import {
+  clearLinkRequest,
+  rememberLinkRequest,
+  type LinkErrorKind,
+  type PendingLink,
+} from "@/v1/data/auth-callback";
 import type { Unit } from "@/v1/core/types";
 import { DButton } from "@/components/dillan/button";
 import { Banner } from "@/components/dillan/surfaces";
@@ -29,10 +37,22 @@ export const AUTH_COPY = {
   headline: "Your workouts, on the big screen.",
   body: "Your home-gym workouts, your heart rate on the big screen, your history in one place.",
   title: "Register or log in",
+  welcomeFoot: "We send a sign-in link or code. No passwords.",
+  emailHelp: "We email you a sign-in link. No passwords.",
+  sendLink: "Send link",
+  sendCode: "Send code",
+  checkEmail: "Check your email",
+  /** Rendered as: linkSent + <strong>{email}</strong> + "." + linkOpenHere */
+  linkSent: "We sent a sign-in link to ",
+  linkOpenHere: "Open it on this device to sign in.",
+  linkHelp: "Check spam if it hasn't arrived. Use the newest email we sent.",
+  haveCode: "Have a 6-digit code? Enter it",
   codePrompt: (contact: string) => `Enter the 6-digit code we sent to ${contact}`,
   mismatch: "That code didn't match. Try again or resend.",
   resendIn: (s: number) => `Resend code (${s})`,
   resend: "Resend code",
+  resendLinkIn: (s: number) => `Resend link (${s})`,
+  resendLink: "Resend link",
   nameTitle: "What should we call you?",
   nameHelp: "Shown on the shared TV. No surname needed.",
   tvNeedsLogin: "Approving a TV links it to your account, so we need to know it's you.",
@@ -46,6 +66,79 @@ export const AUTH_COPY = {
   useDifferent: "Use a different email or number",
 } as const;
 
+/** What a failed email link shows on the email step (never the provider's raw text). */
+export const LINK_ERRORS = {
+  expired: "That sign-in link has expired or was already used. Send a new one.",
+  invalid: "That sign-in link didn't work. Send a new one.",
+  network: "Couldn't finish signing in. Check your connection, then send a new link.",
+  tv_device:
+    "This browser is set up as a Dillan TV, so email links don't sign in here. Open the link on your phone.",
+} as const satisfies Record<LinkErrorKind, string>;
+
+/** A link waiting on the person (src/v1/data/auth-callback.ts: pendingLink). */
+export const LINK_PENDING_COPY = {
+  confirmTitle: "Continue with this sign-in link?",
+  /** Rendered as: confirmBody + <strong>{email}</strong> + ". " + confirmCheck */
+  confirmBody: "This link signs in as ",
+  confirmCheck: "Continue only if that's your email and you just asked for a link.",
+  confirmSwitch: "Another account is signed in on this browser; continuing replaces it.",
+  confirm: "Continue",
+  notMe: "Not me",
+  retryTitle: "Couldn't finish signing in",
+  retryBody: "Check your connection, then try again. Your link still works.",
+  retry: "Try again",
+  newLink: "Send a new link",
+} as const;
+
+/** Confirm an unexpected email link, or retry one that hit a network error. */
+export function LinkPending({
+  pending,
+  onContinue,
+  onCancel,
+}: {
+  pending: PendingLink;
+  onContinue: () => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const c = LINK_PENDING_COPY;
+  const confirm = pending.reason === "confirm";
+  return (
+    <div className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col justify-center gap-5 px-margin py-10">
+      <Wordmark height={40} className="mx-auto" />
+      <h1 className="text-title2 font-bold leading-tight">
+        {confirm ? c.confirmTitle : c.retryTitle}
+      </h1>
+      {confirm ? (
+        <>
+          <p className="text-body text-text-2">
+            {c.confirmBody}
+            <strong className="text-text [overflow-wrap:anywhere]">{pending.email}</strong>.{" "}
+            {c.confirmCheck}
+          </p>
+          {pending.switching && <Banner>{c.confirmSwitch}</Banner>}
+        </>
+      ) : (
+        <p className="text-body text-text-2">{c.retryBody}</p>
+      )}
+      <DButton
+        variant="primary"
+        loading={busy}
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          void onContinue().finally(() => setBusy(false));
+        }}
+      >
+        {confirm ? c.confirm : c.retry}
+      </DButton>
+      <DButton variant="quiet" disabled={busy} onClick={onCancel}>
+        {confirm ? c.notMe : c.newLink}
+      </DButton>
+    </div>
+  );
+}
+
 const SEND_ERRORS: Record<AuthErrorCode, string> = {
   invalid_contact: "Check the address or number and try again.",
   sms_not_configured: AUTH_COPY.smsNotSetUp,
@@ -58,21 +151,31 @@ const SEND_ERRORS: Record<AuthErrorCode, string> = {
 export function AuthFlow({
   initialStep = "welcome",
   forTv = false,
+  returnTo,
+  linkError = null,
+  initialEmail = "",
   onDone,
   onProfileSaved,
 }: {
   initialStep?: AuthStep;
   forTv?: boolean;
+  /** where to continue after sign-in; remembered so the tab the email link opens can follow */
+  returnTo?: string | undefined;
+  /** an email link that failed to sign in on this page load */
+  linkError?: LinkErrorKind | null;
+  initialEmail?: string;
   onDone: () => void;
   onProfileSaved?: (p: Profile) => void;
 }) {
   const api = useApi();
-  const [step, setStep] = useState<AuthStep>(initialStep);
+  const [step, setStep] = useState<AuthStep>(linkError ? "contact" : initialStep);
   const [channel, setChannel] = useState<OtpChannel>("email");
-  const [contact, setContact] = useState("");
+  const [contact, setContact] = useState(initialEmail);
   const [sentTo, setSentTo] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(linkError ? LINK_ERRORS[linkError] : null);
   const [busy, setBusy] = useState(false);
+  /** Email: the code entry is a secondary path (the default email has only a link). */
+  const [showCode, setShowCode] = useState(false);
 
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState<string | null>(null);
@@ -81,6 +184,10 @@ export function AuthFlow({
   const [now, setNow] = useState(() => Date.now());
   const codeRef = useRef<HTMLInputElement>(null);
   const contactRef = useRef<HTMLInputElement>(null);
+  const finishing = useRef(false);
+
+  const isEmail = channel === "email";
+  const codeVisible = !isEmail || showCode;
 
   const wait = Math.max(0, Math.ceil((resendAt - now) / 1000));
   useEffect(() => {
@@ -90,14 +197,52 @@ export function AuthFlow({
   }, [step, wait]);
 
   useEffect(() => {
-    if (step === "code") codeRef.current?.focus();
+    if (step === "code" && codeVisible) codeRef.current?.focus();
     if (step === "contact") contactRef.current?.focus();
-  }, [step]);
+  }, [step, codeVisible]);
+
+  /** The same steps after any sign-in (code, or the link opened in another tab). */
+  const finishSignIn = useCallback(async () => {
+    if (finishing.current) return;
+    finishing.current = true;
+    setBusy(true);
+    clearLinkRequest();
+    const profile = await api.profile.get().catch(() => null);
+    setBusy(false);
+    if (profile?.needs_name) setStep("name");
+    else onDone();
+  }, [api, onDone]);
+
+  // While waiting on "Check your email": the link may be opened in another tab of this browser.
+  // That tab signs in; this one hears about it (Supabase broadcasts auth changes across tabs; a
+  // focus check covers browsers without that) and continues. A paired TV's session never counts.
+  useEffect(() => {
+    if (step !== "code") return;
+    const seen = (u: AuthUser | null) => {
+      if (u && !api.tv.isTvSession(u.id)) void finishSignIn();
+    };
+    const off = api.auth.onChange(seen);
+    const check = () => {
+      if (document.visibilityState !== "visible" || finishing.current) return;
+      void api.auth
+        .getUser()
+        .then(seen)
+        .catch(() => {});
+    };
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      off();
+      window.removeEventListener("focus", check);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [api, step, finishSignIn]);
 
   const send = async (to: string) => {
     setBusy(true);
+    if (channel === "email") rememberLinkRequest({ email: to, returnTo: returnTo ?? null });
     const r = await api.auth
-      .sendOtp(channel, to)
+      .sendOtp(channel, to, channel === "email" ? { returnTo } : undefined)
       .catch(() => ({ ok: false as const, error: "network" as const }));
     setBusy(false);
     if (!r.ok) {
@@ -126,7 +271,10 @@ export function AuthFlow({
       return;
     }
     setError(null);
-    if (await send(norm)) setStep("code");
+    if (await send(norm)) {
+      setShowCode(false);
+      setStep("code");
+    }
   };
 
   const verify = async (value: string) => {
@@ -151,16 +299,13 @@ export function AuthFlow({
       window.setTimeout(() => codeRef.current?.focus(), 0);
       return;
     }
-    const profile = await api.profile.get().catch(() => null);
-    setBusy(false);
-    if (profile?.needs_name) setStep("name");
-    else onDone();
+    await finishSignIn();
   };
 
   const resend = async () => {
     if (wait > 0 || busy) return;
     await send(sentTo);
-    codeRef.current?.focus();
+    if (codeVisible) codeRef.current?.focus();
   };
 
   if (step === "name")
@@ -172,6 +317,7 @@ export function AuthFlow({
         }}
         onExit={async () => {
           await api.auth.signOut().catch(() => {});
+          finishing.current = false;
           setCode("");
           setCodeError(null);
           setError(null);
@@ -199,7 +345,7 @@ export function AuthFlow({
           <DButton variant="primary" className="mt-10" onClick={() => setStep("contact")} autoFocus>
             {AUTH_COPY.title}
           </DButton>
-          <p className="mt-4 text-footnote text-text-2">We send a 6-digit code. No passwords.</p>
+          <p className="mt-4 text-footnote text-text-2">{AUTH_COPY.welcomeFoot}</p>
         </div>
       ) : (
         <>
@@ -218,8 +364,8 @@ export function AuthFlow({
             </button>
             <h1 className="min-w-0 flex-1 text-title2 font-bold leading-tight">
               {step === "code"
-                ? channel === "email"
-                  ? "Check your email"
+                ? isEmail
+                  ? AUTH_COPY.checkEmail
                   : "Check your messages"
                 : AUTH_COPY.title}
             </h1>
@@ -241,12 +387,12 @@ export function AuthFlow({
                 }}
               />
               <Field
-                label={channel === "email" ? "Email address" : "Mobile number (with country code)"}
+                label={isEmail ? "Email address" : "Mobile number (with country code)"}
                 htmlFor="contact"
                 error={error}
                 help={
-                  channel === "email"
-                    ? `We send a 6-digit code. No passwords. ${AUTH_COPY.sameContact}`
+                  isEmail
+                    ? `${AUTH_COPY.emailHelp} ${AUTH_COPY.sameContact}`
                     : `We only text a code — never marketing. ${AUTH_COPY.sameContact}`
                 }
               >
@@ -254,17 +400,17 @@ export function AuthFlow({
                   ref={contactRef}
                   id="contact"
                   name="contact"
-                  type={channel === "email" ? "email" : "tel"}
-                  inputMode={channel === "email" ? "email" : "tel"}
-                  autoComplete={channel === "email" ? "email" : "tel"}
-                  placeholder={channel === "email" ? "you@example.com" : "+1 561 555 0100"}
+                  type={isEmail ? "email" : "tel"}
+                  inputMode={isEmail ? "email" : "tel"}
+                  autoComplete={isEmail ? "email" : "tel"}
+                  placeholder={isEmail ? "you@example.com" : "+1 561 555 0100"}
                   value={contact}
                   invalid={!!error}
                   onChange={(e) => setContact(e.target.value)}
                 />
               </Field>
               <DButton type="submit" variant="primary" loading={busy} disabled={busy}>
-                Send code
+                {isEmail ? AUTH_COPY.sendLink : AUTH_COPY.sendCode}
               </DButton>
             </form>
           )}
@@ -278,48 +424,73 @@ export function AuthFlow({
                 void verify(code);
               }}
             >
-              <p className="text-body text-text-2">
-                {AUTH_COPY.codePrompt("")}
-                <strong className="text-text [overflow-wrap:anywhere]">{sentTo}</strong>.
-              </p>
-              <CodeInput
-                ref={codeRef}
-                value={code}
-                invalid={!!codeError}
-                disabled={busy || attempts >= MAX_CODE_ATTEMPTS}
-                describedBy="otp-status"
-                onChange={(v) => {
-                  setCode(v);
-                  if (codeError && attempts < MAX_CODE_ATTEMPTS) setCodeError(null);
-                }}
-                onComplete={(v) => void verify(v)}
-              />
-              <p
-                id="otp-status"
-                aria-live="polite"
-                className={
-                  codeError ? "text-subhead font-medium text-hold" : "text-subhead text-text-2"
-                }
-              >
-                {codeError ?? AUTH_COPY.codeHelp}
-              </p>
-              <DButton
-                type="submit"
-                variant="primary"
-                loading={busy}
-                disabled={busy || code.length !== 6 || attempts >= MAX_CODE_ATTEMPTS}
-              >
-                Verify
-              </DButton>
+              {isEmail ? (
+                <>
+                  <p className="text-body text-text-2">
+                    {AUTH_COPY.linkSent}
+                    <strong className="text-text [overflow-wrap:anywhere]">{sentTo}</strong>.{" "}
+                    {AUTH_COPY.linkOpenHere}
+                  </p>
+                  {!showCode && <p className="text-subhead text-text-2">{AUTH_COPY.linkHelp}</p>}
+                </>
+              ) : (
+                <p className="text-body text-text-2">
+                  {AUTH_COPY.codePrompt("")}
+                  <strong className="text-text [overflow-wrap:anywhere]">{sentTo}</strong>.
+                </p>
+              )}
+              {codeVisible ? (
+                <>
+                  <CodeInput
+                    ref={codeRef}
+                    value={code}
+                    invalid={!!codeError}
+                    disabled={busy || attempts >= MAX_CODE_ATTEMPTS}
+                    describedBy="otp-status"
+                    onChange={(v) => {
+                      setCode(v);
+                      if (codeError && attempts < MAX_CODE_ATTEMPTS) setCodeError(null);
+                    }}
+                    onComplete={(v) => void verify(v)}
+                  />
+                  <p
+                    id="otp-status"
+                    aria-live="polite"
+                    className={
+                      codeError ? "text-subhead font-medium text-hold" : "text-subhead text-text-2"
+                    }
+                  >
+                    {codeError ?? AUTH_COPY.codeHelp}
+                  </p>
+                  <DButton
+                    type="submit"
+                    variant="primary"
+                    loading={busy}
+                    disabled={busy || code.length !== 6 || attempts >= MAX_CODE_ATTEMPTS}
+                  >
+                    Verify
+                  </DButton>
+                </>
+              ) : (
+                <DButton variant="quiet" disabled={busy} onClick={() => setShowCode(true)}>
+                  {AUTH_COPY.haveCode}
+                </DButton>
+              )}
               <DButton
                 variant={attempts >= MAX_CODE_ATTEMPTS ? "secondary" : "quiet"}
                 disabled={wait > 0 || busy}
                 onClick={() => void resend()}
               >
-                {wait > 0 ? AUTH_COPY.resendIn(wait) : AUTH_COPY.resend}
+                {isEmail
+                  ? wait > 0
+                    ? AUTH_COPY.resendLinkIn(wait)
+                    : AUTH_COPY.resendLink
+                  : wait > 0
+                    ? AUTH_COPY.resendIn(wait)
+                    : AUTH_COPY.resend}
               </DButton>
               <p className="flex flex-wrap items-center justify-center gap-x-2 text-subhead text-text-2">
-                {channel === "email" ? "Wrong address?" : "Wrong number?"}
+                {isEmail ? "Wrong address?" : "Wrong number?"}
                 <button
                   type="button"
                   className="min-h-11 px-2 font-bold text-text"
